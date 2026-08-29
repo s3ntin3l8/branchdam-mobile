@@ -80,4 +80,29 @@ class ImportConfirmationNotifierTest {
         ImportConfirmationNotifier.clearPendingItems()
         assertTrue(ImportConfirmationNotifier.getPendingItems().isEmpty())
     }
+
+    @Test
+    fun testSkipActionSuppressesAndClearsPendingItems() {
+        val item1 = MediaItem(
+            id = 10L,
+            contentUri = "content://media/external/images/media/10",
+            filePath = "/storage/emulated/0/DCIM/Camera/IMG_0010.JPG",
+            displayName = "IMG_0010.JPG",
+            mimeType = "image/jpeg",
+            sizeBytes = 1024L,
+            dateTakenUnix = 1700000010L,
+            isRaw = false
+        )
+        ImportConfirmationNotifier.stagePendingItems(listOf(item1))
+        assertFalse(ImportConfirmationNotifier.isItemSuppressed("content://media/external/images/media/10"))
+
+        ImportConfirmationNotifier.handleAction(
+            context = null,
+            action = ImportConfirmationNotifier.ACTION_SKIP,
+            itemIds = arrayOf("content://media/external/images/media/10")
+        )
+
+        assertTrue(ImportConfirmationNotifier.isItemSuppressed("content://media/external/images/media/10"))
+        assertTrue(ImportConfirmationNotifier.getPendingItems().isEmpty())
+    }
 }

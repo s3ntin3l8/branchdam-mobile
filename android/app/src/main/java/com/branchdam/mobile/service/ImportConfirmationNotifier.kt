@@ -89,20 +89,23 @@ object ImportConfirmationNotifier {
     ) {
         createNotificationChannel(context)
 
+        val allStagedIds = (itemIds.toList() + pendingItemsMap.keys).distinct().toTypedArray()
+        val totalCount = if (allStagedIds.isNotEmpty()) allStagedIds.size else newItemCount
+
         val importIntent = Intent(context, ImportConfirmationReceiver::class.java).apply {
             action = ACTION_IMPORT_NOW
-            putExtra(EXTRA_ITEM_COUNT, newItemCount)
-            putExtra(EXTRA_ITEM_IDS, itemIds)
+            putExtra(EXTRA_ITEM_COUNT, totalCount)
+            putExtra(EXTRA_ITEM_IDS, allStagedIds)
         }
         val laterIntent = Intent(context, ImportConfirmationReceiver::class.java).apply {
             action = ACTION_LATER
-            putExtra(EXTRA_ITEM_COUNT, newItemCount)
-            putExtra(EXTRA_ITEM_IDS, itemIds)
+            putExtra(EXTRA_ITEM_COUNT, totalCount)
+            putExtra(EXTRA_ITEM_IDS, allStagedIds)
         }
         val skipIntent = Intent(context, ImportConfirmationReceiver::class.java).apply {
             action = ACTION_SKIP
-            putExtra(EXTRA_ITEM_COUNT, newItemCount)
-            putExtra(EXTRA_ITEM_IDS, itemIds)
+            putExtra(EXTRA_ITEM_COUNT, totalCount)
+            putExtra(EXTRA_ITEM_IDS, allStagedIds)
         }
 
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -114,7 +117,7 @@ object ImportConfirmationNotifier {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("New Photos Detected")
-            .setContentText("$newItemCount new photo(s) ready to import to branchDAM")
+            .setContentText("$totalCount new photo(s) ready to import to branchDAM")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .addAction(android.R.drawable.ic_menu_upload, "Import now", importPending)
@@ -125,8 +128,8 @@ object ImportConfirmationNotifier {
         notificationManager?.notify(NOTIFICATION_ID, builder.build())
     }
 
-    fun handleAction(context: Context, action: String?, itemIds: Array<String> = emptyArray()) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+    fun handleAction(context: Context?, action: String?, itemIds: Array<String> = emptyArray()) {
+        val notificationManager = context?.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.cancel(NOTIFICATION_ID)
 
         val targetIds = if (itemIds.isNotEmpty()) itemIds.toSet() else pendingItemsMap.keys
@@ -158,7 +161,7 @@ object ImportConfirmationNotifier {
                         )
                     }
                 }
-                // Enqueued, will upload on next periodic sync window
+                SyncScheduler.schedulePeriodicSync(context)
             }
             ACTION_SKIP -> {
                 suppressItems(targetIds)
