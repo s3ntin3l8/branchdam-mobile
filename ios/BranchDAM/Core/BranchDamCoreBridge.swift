@@ -70,7 +70,7 @@ public class BranchDamCoreBridge {
         #if canImport(BranchDamCore)
         var error: NSError?
         let res = BindingsEnqueueLineageEvent(parentUUID, childUUID, relationshipType, resolver, confidence, &error)
-        return (error == nil && res != nil) ? res! : ""
+        return error == nil ? res : ""
         #else
         return UUID().uuidString
         #endif
@@ -80,7 +80,7 @@ public class BranchDamCoreBridge {
         #if canImport(BranchDamCore)
         var error: NSError?
         let res = BindingsEnqueueDeleteEvent(nodeUUID, &error)
-        return (error == nil && res != nil) ? res! : ""
+        return error == nil ? res : ""
         #else
         return UUID().uuidString
         #endif
@@ -120,7 +120,8 @@ public class BranchDamCoreBridge {
     public func fetchNamingTemplate() -> String {
         #if canImport(BranchDamCore)
         var error: NSError?
-        if let res = BindingsFetchNamingTemplate(&error), error == nil {
+        let res = BindingsFetchNamingTemplate(&error)
+        if error == nil && !res.isEmpty {
             return res
         }
         return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
