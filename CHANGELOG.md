@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.2.0...branchdam-mobile-v0.3.0) (2026-08-29)
+
+
+### Features
+
+* **branding:** add Android adaptive icons, iOS AppIcon catalog, and in-app brand assets ([#38](https://github.com/s3ntin3l8/branchdam-mobile/issues/38)) ([da2c96b](https://github.com/s3ntin3l8/branchdam-mobile/commit/da2c96bcdfef7541140ae2586f73f0ee7c07f246)), closes [#31](https://github.com/s3ntin3l8/branchdam-mobile/issues/31)
+* **client:** update Go core client, mobile bindings, and Settings UI for POST /api/v1/agent/upload ([#35](https://github.com/s3ntin3l8/branchdam-mobile/issues/35)) ([4627a0e](https://github.com/s3ntin3l8/branchdam-mobile/commit/4627a0e5fef2413129f1c6ff490d9be9c3b25835)), closes [#30](https://github.com/s3ntin3l8/branchdam-mobile/issues/30)
+
+
+### Bug Fixes
+
+* **branding:** reference brand_teal color, use ic_brand_monogram drawable, and clean up imports ([#39](https://github.com/s3ntin3l8/branchdam-mobile/issues/39)) ([5d4c0f4](https://github.com/s3ntin3l8/branchdam-mobile/commit/5d4c0f4e80efd6f58011b57da69aff8c23e58e11))
+* **mobile:** wire camera model in upload pipeline and dynamic naming template fetch ([#37](https://github.com/s3ntin3l8/branchdam-mobile/issues/37)) ([1f2a9fd](https://github.com/s3ntin3l8/branchdam-mobile/commit/1f2a9fdd58ebd70928b022d9286a8511e2db6b67))
+
 ## [0.2.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.1.0...branchdam-mobile-v0.2.0) (2026-08-29)
 
 
