@@ -38,6 +38,7 @@ public struct QrPairingView: View {
     @State private var serverUrl: String = "http://192.168.1.100:8080"
     @State private var apiKey: String = ""
     @State private var namingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
+    @State private var syncOnMobileData: Bool = BackgroundSyncManager.shared.syncOnMobileData
 
     public init() {}
 
@@ -56,6 +57,16 @@ public struct QrPairingView: View {
                 Section(header: Text("Server Connection")) {
                     TextField("Server URL", text: $serverUrl)
                     SecureField("API Key", text: $apiKey)
+                }
+
+                Section(header: Text("Network Constraints")) {
+                    Toggle("Sync on Mobile Data / Cellular", isOn: $syncOnMobileData)
+                        .onChange(of: syncOnMobileData) { newValue in
+                            BackgroundSyncManager.shared.syncOnMobileData = newValue
+                        }
+                    Text("When disabled, sync only runs on unmetered Wi-Fi.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 Section(header: Text("Server Ingest Scheme")) {

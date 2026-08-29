@@ -52,9 +52,11 @@ fun QrPairingScreen(
     initialNamingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}",
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var manualUrl by remember { mutableStateOf("http://192.168.1.100:8080") }
     var manualKey by remember { mutableStateOf("") }
     var namingTemplate by remember { mutableStateOf(initialNamingTemplate) }
+    var syncOnMobileData by remember { mutableStateOf(com.branchdam.mobile.service.SyncScheduler.getSyncOnMobileData(context)) }
 
     Column(
         modifier = modifier
@@ -94,6 +96,30 @@ fun QrPairingScreen(
             supportingText = { Text("Synchronized via server handshake (POST /api/v1/agent/upload)") },
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Sync on Mobile Data", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Allow immediate sync over cellular/metered networks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = syncOnMobileData,
+                onCheckedChange = {
+                    syncOnMobileData = it
+                    com.branchdam.mobile.service.SyncScheduler.setSyncOnMobileData(context, it)
+                }
+            )
+        }
 
         Spacer(Modifier.height(24.dp))
 
