@@ -1,0 +1,368 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1000001 /* BranchDAMApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* BranchDAMApp.swift */; };
+		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
+		A1000003 /* BranchDamCoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* BranchDamCoreBridge.swift */; };
+		A1000004 /* PhotoKitObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* PhotoKitObserver.swift */; };
+		A1000005 /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* BackgroundSyncManager.swift */; };
+		A1000006 /* ApplePairDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* ApplePairDetector.swift */; };
+		A1000007 /* LivePhotoExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* LivePhotoExtractor.swift */; };
+		A1000008 /* AppleEditCorrelator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* AppleEditCorrelator.swift */; };
+		A1000009 /* AppleSafeSpaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* AppleSafeSpaceManager.swift */; };
+		A100000A /* AppleTrashSyncObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000A /* AppleTrashSyncObserver.swift */; };
+		A100000B /* AuditTriageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000B /* AuditTriageView.swift */; };
+		A100000C /* BrandMonogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C /* BrandMonogramView.swift */; };
+		A100000D /* QrPairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* QrPairingView.swift */; };
+		A100000E /* SafeSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* SafeSpaceView.swift */; };
+		A100000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000F /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A2000000 /* BranchDAM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BranchDAM.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000001 /* BranchDAMApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDAMApp.swift; sourceTree = "<group>"; };
+		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A2000003 /* BranchDamCoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDamCoreBridge.swift; sourceTree = "<group>"; };
+		A2000004 /* PhotoKitObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitObserver.swift; sourceTree = "<group>"; };
+		A2000005 /* BackgroundSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManager.swift; sourceTree = "<group>"; };
+		A2000006 /* ApplePairDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetector.swift; sourceTree = "<group>"; };
+		A2000007 /* LivePhotoExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePhotoExtractor.swift; sourceTree = "<group>"; };
+		A2000008 /* AppleEditCorrelator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleEditCorrelator.swift; sourceTree = "<group>"; };
+		A2000009 /* AppleSafeSpaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManager.swift; sourceTree = "<group>"; };
+		A200000A /* AppleTrashSyncObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTrashSyncObserver.swift; sourceTree = "<group>"; };
+		A200000B /* AuditTriageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditTriageView.swift; sourceTree = "<group>"; };
+		A200000C /* BrandMonogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMonogramView.swift; sourceTree = "<group>"; };
+		A200000D /* QrPairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrPairingView.swift; sourceTree = "<group>"; };
+		A200000E /* SafeSpaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeSpaceView.swift; sourceTree = "<group>"; };
+		A200000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A2000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2000011 /* BranchDamCoreHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BranchDamCoreHeader.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A3000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A4000001 /* BranchDamApp */ = {
+			isa = PBXGroup;
+			children = (
+				A4000002 /* BranchDAM */,
+				A4000007 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A4000002 /* BranchDAM */ = {
+			isa = PBXGroup;
+			children = (
+				A2000001 /* BranchDAMApp.swift */,
+				A2000002 /* ContentView.swift */,
+				A4000003 /* Core */,
+				A4000004 /* Ingest */,
+				A4000005 /* Lineage */,
+				A4000006 /* Triage */,
+				A4000008 /* UI */,
+				A200000F /* Assets.xcassets */,
+				A2000010 /* Info.plist */,
+			);
+			path = BranchDAM;
+			sourceTree = "<group>";
+		};
+		A4000003 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				A2000011 /* BranchDamCoreHeader.h */,
+				A2000003 /* BranchDamCoreBridge.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		A4000004 /* Ingest */ = {
+			isa = PBXGroup;
+			children = (
+				A2000004 /* PhotoKitObserver.swift */,
+				A2000005 /* BackgroundSyncManager.swift */,
+			);
+			path = Ingest;
+			sourceTree = "<group>";
+		};
+		A4000005 /* Lineage */ = {
+			isa = PBXGroup;
+			children = (
+				A2000006 /* ApplePairDetector.swift */,
+				A2000007 /* LivePhotoExtractor.swift */,
+				A2000008 /* AppleEditCorrelator.swift */,
+			);
+			path = Lineage;
+			sourceTree = "<group>";
+		};
+		A4000006 /* Triage */ = {
+			isa = PBXGroup;
+			children = (
+				A2000009 /* AppleSafeSpaceManager.swift */,
+				A200000A /* AppleTrashSyncObserver.swift */,
+			);
+			path = Triage;
+			sourceTree = "<group>";
+		};
+		A4000007 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A2000000 /* BranchDAM.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A4000008 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				A200000B /* AuditTriageView.swift */,
+				A200000C /* BrandMonogramView.swift */,
+				A200000D /* QrPairingView.swift */,
+				A200000E /* SafeSpaceView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A5000001 /* BranchDamApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A6000001 /* Build configuration list for PBXNativeTarget "BranchDamApp" */;
+			buildPhases = (
+				A3000002 /* Sources */,
+				A3000001 /* Frameworks */,
+				A3000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BranchDamApp;
+			productName = BranchDAM;
+			productReference = A2000000 /* BranchDAM.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A7000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A5000001 = {
+						CreatedOnToolsVersion = 16.0;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = A6000002 /* Build configuration list for PBXProject "BranchDamApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A4000001 /* BranchDamApp */;
+			productRefGroup = A4000007 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A5000001 /* BranchDamApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A3000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A100000F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A3000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000001 /* BranchDAMApp.swift in Sources */,
+				A1000002 /* ContentView.swift in Sources */,
+				A1000003 /* BranchDamCoreBridge.swift in Sources */,
+				A1000004 /* PhotoKitObserver.swift in Sources */,
+				A1000005 /* BackgroundSyncManager.swift in Sources */,
+				A1000006 /* ApplePairDetector.swift in Sources */,
+				A1000007 /* LivePhotoExtractor.swift in Sources */,
+				A1000008 /* AppleEditCorrelator.swift in Sources */,
+				A1000009 /* AppleSafeSpaceManager.swift in Sources */,
+				A100000A /* AppleTrashSyncObserver.swift in Sources */,
+				A100000B /* AuditTriageView.swift in Sources */,
+				A100000C /* BrandMonogramView.swift in Sources */,
+				A100000D /* QrPairingView.swift in Sources */,
+				A100000E /* SafeSpaceView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A8000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A8000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A8000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BranchDAM/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios;
+				PRODUCT_NAME = BranchDAM;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A8000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BranchDAM/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios;
+				PRODUCT_NAME = BranchDAM;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A6000001 /* Build configuration list for PBXNativeTarget "BranchDamApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8000003 /* Debug */,
+				A8000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A6000002 /* Build configuration list for PBXProject "BranchDamApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8000001 /* Debug */,
+				A8000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A7000001 /* Project object */;
+}
