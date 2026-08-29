@@ -164,3 +164,41 @@ func TestLocalMediaStateAndOffload(t *testing.T) {
 		t.Fatalf("expected false for unknown ID, got %v (err: %v)", unknownOffloaded, err)
 	}
 }
+
+func TestGetUploadItemByBlake3Hash(t *testing.T) {
+	q := newTestQueue(t)
+
+	hash := "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a// pragma: allowlist secret"
+
+	// Non-existent hash should return nil, nil
+	item, err := q.GetUploadItemByBlake3Hash(hash)
+	if err != nil {
+		t.Fatalf("unexpected error querying non-existent hash: %v", err)
+	}
+	if item != nil {
+		t.Fatalf("expected nil item, got %+v", item)
+	}
+
+	// Enqueue item
+	newItem := &UploadItem{
+		LocalPath:      "/sdcard/DCIM/Camera/PXL_100.dng",
+		TargetFilename: "PXL_100.dng",
+		FastHash:       "fast1234",
+		Blake3Hash:     hash,
+		CameraModel:    "pixel-fold",
+		SizeBytes:      1024,
+		CapturedAtUnix: 1724000100,
+	}
+	id, err := q.EnqueueUpload(newItem)
+	if err != nil {
+		t.Fatalf("EnqueueUpload failed: %v", err)
+	}
+
+	found, err := q.GetUploadItemByBlake3Hash(hash)
+	if err != nil {
+		t.Fatalf("GetUploadItemByBlake3Hash failed: %v", err)
+	}
+	if found == nil || found.ID != id || found.Blake3Hash != hash {
+		t.Fatalf("found item mismatch: %+v (expected id %d)", found, id)
+	}
+}

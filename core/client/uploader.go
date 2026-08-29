@@ -83,6 +83,18 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 		return nil, fmt.Errorf("failed to read upload response: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusConflict {
+		var dedupResp UploadResponse
+		if err := json.Unmarshal(respBody, &dedupResp); err == nil && dedupResp.NodeUUID != "" {
+			return nil, &DedupError{
+				DedupResponse: DedupResponse{
+					NodeUUID: dedupResp.NodeUUID,
+					FilePath: dedupResp.FilePath,
+				},
+			}
+		}
+	}
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("upload rejected with status %d: %s", resp.StatusCode, string(respBody))
 	}
@@ -90,6 +102,10 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	var uploadResp UploadResponse
 	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
 		return nil, fmt.Errorf("failed to decode upload response: %w", err)
+	}
+
+	if resp.Header.Get("X-Dedup") == "true" || resp.Header.Get("X-Dedup") == "1" || uploadResp.Status == "DEDUPLICATED" {
+		uploadResp.IsDedup = true
 	}
 
 	return &uploadResp, nil

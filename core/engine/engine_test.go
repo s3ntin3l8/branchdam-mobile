@@ -130,3 +130,107 @@ func TestEngineFullLifecycle(t *testing.T) {
 		t.Fatalf("expected media to be offloaded, got %v", isOffloaded)
 	}
 }
+
+func TestEnqueueLocalCapture_Dedup(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_dedup_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open queue: %v", err)
+	}
+	defer q.Close()
+
+	eng := New(q, nil)
+
+	testFilePath := filepath.Join(tempDir, "PXL_DUPLICATE.dng")
+	testData := []byte("identical payload across multiple scans")
+	if err := os.WriteFile(testFilePath, testData, 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// First enqueue
+	item1, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DUPLICATE.dng", 1724000000, "local_uri_dup_1")
+	if err != nil {
+		t.Fatalf("first EnqueueLocalCapture failed: %v", err)
+	}
+
+	// Verify count is 1
+	count, err := q.CountPendingUploads()
+	if err != nil || count != 1 {
+		t.Fatalf("expected count 1, got %d", count)
+	}
+
+	// Second enqueue with same file content (same BLAKE3 hash)
+	item2, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DUPLICATE.dng", 1724000000, "local_uri_dup_2")
+	if err != nil {
+		t.Fatalf("second EnqueueLocalCapture failed: %v", err)
+	}
+
+	// Should return the exact same item ID and not create duplicate queue row
+	if item1.ID != item2.ID {
+		t.Fatalf("expected item IDs to match for duplicate hash: %d != %d", item1.ID, item2.ID)
+	}
+
+	countAfter, err := q.CountPendingUploads()
+	if err != nil || countAfter != 1 {
+		t.Fatalf("expected count to remain 1 after duplicate enqueue, got %d", countAfter)
+	}
+}
+
+func TestSyncUploads_DedupResponse(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_sync_dedup.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open queue: %v", err)
+	}
+	defer q.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Dedup", "true")
+		_ = json.NewEncoder(w).Encode(client.UploadResponse{
+			OK:       true,
+			NodeUUID: "existing-server-node-uuid",
+			Status:   "EXISTS",
+		})
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "test", AgentID: "pixel"})
+	eng := New(q, c)
+
+	testFilePath := filepath.Join(tempDir, "PXL_SERVER_DUP.dng")
+	if err := os.WriteFile(testFilePath, []byte("server dup bytes"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_SERVER_DUP.dng", 1724000000, "local_uri_srv")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture failed: %v", err)
+	}
+
+	completedCount, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("SyncUploads failed: %v", err)
+	}
+	if completedCount != 1 {
+		t.Fatalf("expected 1 completed upload from server dedup, got %d", completedCount)
+	}
+
+	// Verify item in queue is marked completed with existing server node UUID
+	claimed, err := q.ClaimPendingUploads(10, 0, 5)
+	if err != nil {
+		t.Fatalf("ClaimPendingUploads failed: %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("expected 0 pending uploads after dedup complete, got %d", len(claimed))
+	}
+
+	state, err := q.GetUploadItemByBlake3Hash(item.Blake3Hash)
+	if err != nil || state == nil {
+		t.Fatalf("failed to get upload item: %v", err)
+	}
+	if state.Status != queue.UploadCompleted || state.NodeUUID != "existing-server-node-uuid" {
+		t.Fatalf("unexpected state after server dedup: %+v", state)
+	}
+}

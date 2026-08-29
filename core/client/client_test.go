@@ -238,3 +238,62 @@ func TestUploadStreamError(t *testing.T) {
 		t.Fatal("expected error on 422 Unprocessable Entity, got nil")
 	}
 }
+
+func TestUploadStream_DedupHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Dedup", "true")
+		resp := UploadResponse{
+			OK:       true,
+			NodeUUID: "existing-node-uuid",
+			Status:   "EXISTS",
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	resp, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("duplicate content")),
+		17,
+		"dup.jpg",
+		UploadOptions{},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.IsDedup || resp.NodeUUID != "existing-node-uuid" {
+		t.Fatalf("expected dedup response, got %+v", resp)
+	}
+}
+
+func TestUploadStream_DedupConflictError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"nodeUuid": "conflict-node-uuid",
+			"filePath": "/archive/conflict.jpg",
+		})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	_, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("duplicate content")),
+		17,
+		"conflict.jpg",
+		UploadOptions{},
+	)
+	if err == nil {
+		t.Fatal("expected error on 409 conflict, got nil")
+	}
+
+	dedup, ok := AsDedupResponse(err)
+	if !ok {
+		t.Fatalf("expected AsDedupResponse true, got false (err: %v)", err)
+	}
+	if dedup.NodeUUID != "conflict-node-uuid" {
+		t.Fatalf("unexpected node uuid: %s", dedup.NodeUUID)
+	}
+}

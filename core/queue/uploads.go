@@ -38,6 +38,39 @@ func (q *Queue) EnqueueUpload(item *UploadItem) (int64, error) {
 	return id, nil
 }
 
+// GetUploadItemByBlake3Hash returns the most recent pending or completed
+// queue item with the given BLAKE3 hash, or nil if none exists.
+// Used by EnqueueLocalCapture to gate duplicate enqueue.
+func (q *Queue) GetUploadItemByBlake3Hash(hash string) (*UploadItem, error) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	query := `
+	SELECT id, local_path, target_filename, target_dir, fast_hash, blake3_hash,
+	       camera_model, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
+	       error_msg, node_uuid, created_at_unix, updated_at_unix
+	FROM upload_queue
+	WHERE blake3_hash = ?
+	ORDER BY id DESC
+	LIMIT 1
+	`
+	var item UploadItem
+	var statusStr string
+	err := q.db.QueryRow(query, hash).Scan(
+		&item.ID, &item.LocalPath, &item.TargetFilename, &item.TargetDir, &item.FastHash, &item.Blake3Hash,
+		&item.CameraModel, &item.SizeBytes, &item.CapturedAtUnix, &statusStr, &item.RetryCount, &item.LastAttemptUnix,
+		&item.ErrorMsg, &item.NodeUUID, &item.CreatedAtUnix, &item.UpdatedAtUnix,
+	)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to query upload item by blake3 hash: %w", err)
+	}
+	item.Status = UploadStatus(statusStr)
+	return &item, nil
+}
+
 // ClaimPendingUploads retrieves pending upload items eligible for attempt, reclaiming stale in-progress items.
 func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetries int) ([]*UploadItem, error) {
 	q.mu.Lock()

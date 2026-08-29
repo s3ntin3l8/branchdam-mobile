@@ -44,6 +44,14 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		return nil, fmt.Errorf("failed to hash local file: %w", err)
 	}
 
+	// Dedup gate: check if this blake3Hash is already queued or uploaded
+	if existing, err := e.q.GetUploadItemByBlake3Hash(fullHash); err == nil && existing != nil {
+		if localID != "" {
+			_ = e.q.RecordLocalMedia(localID, existing.NodeUUID, fullHash, "ACTIVE")
+		}
+		return existing, nil
+	}
+
 	cam := ""
 	if len(cameraModel) > 0 && cameraModel[0] != "" {
 		cam = cameraModel[0]
@@ -117,6 +125,11 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		file.Close()
 
 		if err != nil {
+			if dedupResp, ok := client.AsDedupResponse(err); ok {
+				_ = e.q.MarkUploadComplete(item.ID, dedupResp.NodeUUID)
+				completedCount++
+				continue
+			}
 			_ = e.q.MarkUploadFailed(item.ID, err.Error(), 5)
 			continue
 		}
