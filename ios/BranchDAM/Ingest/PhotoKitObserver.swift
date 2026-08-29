@@ -5,8 +5,8 @@ public struct DiscoveredAsset: Equatable {
     public let localIdentifier: String
     public let filename: String
     public let creationDateUnix: Int64
-    public let isRaw: Boolean?
-    public let isVideo: Boolean?
+    public let isRaw: Bool?
+    public let isVideo: Bool?
     public let pixelWidth: Int
     public let pixelHeight: Int
 

@@ -4,8 +4,8 @@ public struct SafeSpaceCandidateVerdict: Codable, Equatable {
     public let localId: String
     public let nodeUuid: String
     public let blake3Hash: String
-    public let isVerified: Boolean?
-    public let isEligible: Boolean?
+    public let isVerified: Bool?
+    public let isEligible: Bool?
     public let tier: String?
 
     public init(localId: String, nodeUuid: String = "", blake3Hash: String = "", isVerified: Bool = false, isEligible: Bool = false, tier: String = "") {
