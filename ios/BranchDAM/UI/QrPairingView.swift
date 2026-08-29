@@ -44,6 +44,15 @@ public struct QrPairingView: View {
     public var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Spacer()
+                        BrandMonogramView(size: 64)
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
+
                 Section(header: Text("Server Connection")) {
                     TextField("Server URL", text: $serverUrl)
                     SecureField("API Key", text: $apiKey)
