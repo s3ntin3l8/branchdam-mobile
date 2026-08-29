@@ -65,25 +65,45 @@ func FetchNamingTemplate() (string, error) {
 	return resp.NamingTemplate, nil
 }
 
+// FileHashes contains hashes and size of a file.
+type FileHashes struct {
+	FastHash  string
+	FullHash  string
+	SizeBytes int64
+}
+
 // ComputeFileHashes calculates FastHash (16 hex) and FullHash BLAKE3-256 (64 hex).
-func ComputeFileHashes(filePath string) (fastHash string, fullHash string, sizeBytes int64, err error) {
+func ComputeFileHashes(filePath string) (*FileHashes, error) {
 	file, err := openFile(filePath)
 	if err != nil {
-		return "", "", 0, err
+		return nil, err
 	}
 	defer file.Close()
-	return hasher.HashReader(file)
+	fastHash, fullHash, sizeBytes, err := hasher.HashReader(file)
+	if err != nil {
+		return nil, err
+	}
+	return &FileHashes{
+		FastHash:  fastHash,
+		FullHash:  fullHash,
+		SizeBytes: sizeBytes,
+	}, nil
 }
 
 // EnqueueMedia enqueues a newly captured photo/video into the local queue.
-func EnqueueMedia(localPath, filename string, capturedAtUnix int64, localID string, cameraModel ...string) (int64, error) {
+func EnqueueMedia(localPath, filename string, capturedAtUnix int64, localID string, cameraModel string) (int64, error) {
 	engineMu.RLock()
 	defer engineMu.RUnlock()
 	if globalEngine == nil {
 		return 0, fmt.Errorf("core engine not initialized")
 	}
 
-	item, err := globalEngine.EnqueueLocalCapture(localPath, filename, capturedAtUnix, localID, cameraModel...)
+	var cameraModels []string
+	if cameraModel != "" {
+		cameraModels = append(cameraModels, cameraModel)
+	}
+
+	item, err := globalEngine.EnqueueLocalCapture(localPath, filename, capturedAtUnix, localID, cameraModels...)
 	if err != nil {
 		return 0, err
 	}
@@ -126,14 +146,20 @@ func EnqueueDeleteEvent(nodeUUID string) (string, error) {
 	return globalQueue.EnqueueEvent("EVENT_NODE_DELETED", string(payloadBytes))
 }
 
+// SyncResult contains counts for uploads and events processed in a batch.
+type SyncResult struct {
+	Uploaded   int
+	EventsSent int
+}
+
 // SyncBatch triggers an upload and event dispatch cycle with a timeout.
-func SyncBatch(timeoutSecs int, batchSize int) (uploaded int, eventsSent int, err error) {
+func SyncBatch(timeoutSecs int, batchSize int) (*SyncResult, error) {
 	engineMu.RLock()
 	eng := globalEngine
 	engineMu.RUnlock()
 
 	if eng == nil {
-		return 0, 0, fmt.Errorf("core engine not initialized")
+		return nil, fmt.Errorf("core engine not initialized")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
@@ -142,23 +168,32 @@ func SyncBatch(timeoutSecs int, batchSize int) (uploaded int, eventsSent int, er
 	uCount, uErr := eng.SyncUploads(ctx, batchSize)
 	eCount, eErr := eng.SyncEvents(ctx, batchSize)
 
+	res := &SyncResult{
+		Uploaded:   uCount,
+		EventsSent: eCount,
+	}
+
 	if uErr != nil {
-		return uCount, eCount, uErr
+		return res, uErr
 	}
 	if eErr != nil {
-		return uCount, eCount, eErr
+		return res, eErr
 	}
-	return uCount, eCount, nil
+	return res, nil
 }
 
 // IsMediaOffloaded checks whether local deletion of localID was an intentional offload.
-func IsMediaOffloaded(localID string) (bool, error) {
+func IsMediaOffloaded(localID string) bool {
 	engineMu.RLock()
 	defer engineMu.RUnlock()
 	if globalQueue == nil {
-		return false, fmt.Errorf("core engine not initialized")
+		return false
 	}
-	return globalQueue.IsMediaOffloaded(localID)
+	offloaded, err := globalQueue.IsMediaOffloaded(localID)
+	if err != nil {
+		return false
+	}
+	return offloaded
 }
 
 // SetMediaOffloaded flags local asset as offloaded to suppress deletion events.

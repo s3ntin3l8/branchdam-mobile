@@ -16,8 +16,18 @@ final class BranchDamCoreBridgeTests: XCTestCase {
 
     func testEnqueueMediaMock() {
         let bridge = BranchDamCoreBridge.shared
+        _ = bridge.initialize(
+            dbPath: NSTemporaryDirectory() + "test_queue.db",
+            baseURL: "http://localhost:8080",
+            apiKey: "test_key", // pragma: allowlist secret
+            agentID: "iphone-16-pro"
+        )
+        let tempFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("IMG_0001.DNG")
+        try? "test dng content".data(using: .utf8)?.write(to: tempFile)
+        defer { try? FileManager.default.removeItem(at: tempFile) }
+
         let uploadId = bridge.enqueueMedia(
-            localPath: "/var/mobile/Media/DCIM/IMG_0001.DNG",
+            localPath: tempFile.path,
             filename: "IMG_0001.DNG",
             capturedAtUnix: 1724000000,
             localID: "ph://asset-001"
@@ -41,5 +51,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         let bridge = BranchDamCoreBridge.shared
         let setResult = bridge.setMediaOffloaded(localID: "ph://asset-001", isOffloaded: true)
         XCTAssertTrue(setResult)
+        let isOffloaded = bridge.isMediaOffloaded(localID: "ph://asset-001")
+        XCTAssertTrue(isOffloaded)
     }
 }

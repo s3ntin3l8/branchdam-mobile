@@ -48,3 +48,31 @@ jobs:
 
       - name: Pre-commit
         uses: pre-commit/action@v3.0.1
+
+  test-ios:
+    name: iOS (Build & Test)
+    runs-on: macos-14
+    env:
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+
+      - name: Build Go Core xcframework
+        run: |
+          ./scripts/build-ios-framework.sh
+
+      - name: Run iOS Unit Tests
+        run: |
+          xcodebuild test \
+            -project ios/BranchDamApp.xcodeproj \
+            -scheme BranchDamApp \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO

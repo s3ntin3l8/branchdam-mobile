@@ -4,8 +4,8 @@ public struct SafeSpaceCandidateVerdict: Codable, Equatable {
     public let localId: String
     public let nodeUuid: String
     public let blake3Hash: String
-    public let isVerified: Boolean?
-    public let isEligible: Boolean?
+    public let isVerified: Bool?
+    public let isEligible: Bool?
     public let tier: String?
 
     public init(localId: String, nodeUuid: String = "", blake3Hash: String = "", isVerified: Bool = false, isEligible: Bool = false, tier: String = "") {
@@ -22,6 +22,7 @@ public class BranchDamCoreBridge {
     public static let shared = BranchDamCoreBridge()
 
     private var isInitialized = false
+    private var mockOffloadedMedia: [String: Bool] = [:]
 
     private init() {}
 
@@ -33,8 +34,9 @@ public class BranchDamCoreBridge {
         version: String = "0.1.0"
     ) -> Bool {
         #if canImport(BranchDamCore)
-        let res = InitCore(dbPath, baseURL, apiKey, agentID, version)
-        self.isInitialized = (res == 0)
+        var error: NSError?
+        let ok = BindingsInitCore(dbPath, baseURL, apiKey, agentID, version, &error)
+        self.isInitialized = ok && error == nil
         return self.isInitialized
         #else
         self.isInitialized = true
@@ -49,7 +51,10 @@ public class BranchDamCoreBridge {
         localID: String
     ) -> Int64 {
         #if canImport(BranchDamCore)
-        return EnqueueMedia(localPath, filename, capturedAtUnix, localID)
+        var outId: Int64 = 0
+        var error: NSError?
+        let ok = BindingsEnqueueMedia(localPath, filename, capturedAtUnix, localID, "", &outId, &error)
+        return (ok && error == nil) ? outId : 0
         #else
         return 1
         #endif
@@ -63,12 +68,9 @@ public class BranchDamCoreBridge {
         confidence: Double = 1.00
     ) -> String {
         #if canImport(BranchDamCore)
-        guard let cStr = EnqueueLineageEvent(parentUUID, childUUID, relationshipType, resolver, confidence) else {
-            return ""
-        }
-        let result = String(cString: cStr)
-        FreeCString(cStr)
-        return result
+        var error: NSError?
+        let res = BindingsEnqueueLineageEvent(parentUUID, childUUID, relationshipType, resolver, confidence, &error)
+        return error == nil ? res : ""
         #else
         return UUID().uuidString
         #endif
@@ -76,12 +78,9 @@ public class BranchDamCoreBridge {
 
     public func enqueueDeleteEvent(nodeUUID: String) -> String {
         #if canImport(BranchDamCore)
-        guard let cStr = EnqueueDeleteEvent(nodeUUID) else {
-            return ""
-        }
-        let result = String(cString: cStr)
-        FreeCString(cStr)
-        return result
+        var error: NSError?
+        let res = BindingsEnqueueDeleteEvent(nodeUUID, &error)
+        return error == nil ? res : ""
         #else
         return UUID().uuidString
         #endif
@@ -89,8 +88,11 @@ public class BranchDamCoreBridge {
 
     public func syncBatch(timeoutSecs: Int32 = 120, batchSize: Int32 = 10) -> (uploaded: Int32, eventsSent: Int32) {
         #if canImport(BranchDamCore)
-        let res = SyncBatch(timeoutSecs, batchSize)
-        return (uploaded: res, eventsSent: 0)
+        var error: NSError?
+        if let res = BindingsSyncBatch(Int(timeoutSecs), Int(batchSize), &error), error == nil {
+            return (uploaded: Int32(res.uploaded), eventsSent: Int32(res.eventsSent))
+        }
+        return (uploaded: 0, eventsSent: 0)
         #else
         return (uploaded: 0, eventsSent: 0)
         #endif
@@ -98,28 +100,31 @@ public class BranchDamCoreBridge {
 
     public func isMediaOffloaded(localID: String) -> Bool {
         #if canImport(BranchDamCore)
-        return GetMediaOffloaded(localID) == 1
+        return BindingsIsMediaOffloaded(localID)
         #else
-        return false
+        return mockOffloadedMedia[localID] ?? false
         #endif
     }
 
     public func setMediaOffloaded(localID: String, isOffloaded: Bool) -> Bool {
         #if canImport(BranchDamCore)
-        return SetMediaOffloaded(localID, isOffloaded ? 1 : 0) == 0
+        var error: NSError?
+        let ok = BindingsSetMediaOffloaded(localID, isOffloaded, &error)
+        return ok && error == nil
         #else
+        mockOffloadedMedia[localID] = isOffloaded
         return true
         #endif
     }
 
     public func fetchNamingTemplate() -> String {
         #if canImport(BranchDamCore)
-        guard let cStr = FetchNamingTemplate() else {
-            return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
+        var error: NSError?
+        let res = BindingsFetchNamingTemplate(&error)
+        if error == nil && !res.isEmpty {
+            return res
         }
-        let result = String(cString: cStr)
-        FreeCString(cStr)
-        return result
+        return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
         #else
         return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
         #endif

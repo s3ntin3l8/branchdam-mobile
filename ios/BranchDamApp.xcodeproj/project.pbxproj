@@ -22,7 +22,42 @@
 		A100000D /* QrPairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* QrPairingView.swift */; };
 		A100000E /* SafeSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* SafeSpaceView.swift */; };
 		A100000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000F /* Assets.xcassets */; };
+		A1000020 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
+		A1000021 /* BranchDamCore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1000101 /* ApplePairDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000101 /* ApplePairDetectorTests.swift */; };
+		A1000102 /* AppleSafeSpaceManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000102 /* AppleSafeSpaceManagerTests.swift */; };
+		A1000103 /* AppleTrashSyncObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000103 /* AppleTrashSyncObserverTests.swift */; };
+		A1000104 /* AppleUiStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000104 /* AppleUiStateTests.swift */; };
+		A1000105 /* BackgroundSyncManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000105 /* BackgroundSyncManagerTests.swift */; };
+		A1000106 /* BranchDamCoreBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000106 /* BranchDamCoreBridgeTests.swift */; };
+		A1000107 /* LivePhotoExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000107 /* LivePhotoExtractorTests.swift */; };
+		A1000108 /* PhotoKitObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000108 /* PhotoKitObserverTests.swift */; };
+		A1000120 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A9000100 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A7000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A5000001;
+			remoteInfo = BranchDamApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A3000004 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A1000021 /* BranchDamCore.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A2000000 /* BranchDAM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BranchDAM.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -43,6 +78,16 @@
 		A200000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000011 /* BranchDamCoreHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BranchDamCoreHeader.h; sourceTree = "<group>"; };
+		A2000020 /* BranchDamCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDamCore.xcframework; path = BranchDamCore.xcframework; sourceTree = "<group>"; };
+		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
+		A2000102 /* AppleSafeSpaceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerTests.swift; sourceTree = "<group>"; };
+		A2000103 /* AppleTrashSyncObserverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTrashSyncObserverTests.swift; sourceTree = "<group>"; };
+		A2000104 /* AppleUiStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleUiStateTests.swift; sourceTree = "<group>"; };
+		A2000105 /* BackgroundSyncManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManagerTests.swift; sourceTree = "<group>"; };
+		A2000106 /* BranchDamCoreBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDamCoreBridgeTests.swift; sourceTree = "<group>"; };
+		A2000107 /* LivePhotoExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePhotoExtractorTests.swift; sourceTree = "<group>"; };
+		A2000108 /* PhotoKitObserverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitObserverTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +95,15 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000020 /* BranchDamCore.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3000101 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000120 /* BranchDamCore.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -60,6 +114,8 @@
 			isa = PBXGroup;
 			children = (
 				A4000002 /* BranchDAM */,
+				A4000100 /* BranchDAMTests */,
+				A4000020 /* Frameworks */,
 				A4000007 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,6 +177,7 @@
 			isa = PBXGroup;
 			children = (
 				A2000000 /* BranchDAM.app */,
+				A2000100 /* BranchDAMTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -136,6 +193,29 @@
 			path = UI;
 			sourceTree = "<group>";
 		};
+		A4000020 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A2000020 /* BranchDamCore.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A4000100 /* BranchDAMTests */ = {
+			isa = PBXGroup;
+			children = (
+				A2000101 /* ApplePairDetectorTests.swift */,
+				A2000102 /* AppleSafeSpaceManagerTests.swift */,
+				A2000103 /* AppleTrashSyncObserverTests.swift */,
+				A2000104 /* AppleUiStateTests.swift */,
+				A2000105 /* BackgroundSyncManagerTests.swift */,
+				A2000106 /* BranchDamCoreBridgeTests.swift */,
+				A2000107 /* LivePhotoExtractorTests.swift */,
+				A2000108 /* PhotoKitObserverTests.swift */,
+			);
+			path = BranchDAMTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -146,6 +226,7 @@
 				A3000002 /* Sources */,
 				A3000001 /* Frameworks */,
 				A3000003 /* Resources */,
+				A3000004 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -155,6 +236,23 @@
 			productName = BranchDAM;
 			productReference = A2000000 /* BranchDAM.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A5000101 /* BranchDAMTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A6000101 /* Build configuration list for PBXNativeTarget "BranchDAMTests" */;
+			buildPhases = (
+				A3000102 /* Sources */,
+				A3000101 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A9000101 /* PBXTargetDependency */,
+			);
+			name = BranchDAMTests;
+			productName = BranchDAMTests;
+			productReference = A2000100 /* BranchDAMTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -169,6 +267,12 @@
 						CreatedOnToolsVersion = 16.0;
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
+					};
+					A5000101 = {
+						CreatedOnToolsVersion = 16.0;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = A5000001;
 					};
 				};
 			};
@@ -186,6 +290,7 @@
 			projectRoot = "";
 			targets = (
 				A5000001 /* BranchDamApp */,
+				A5000101 /* BranchDAMTests */,
 			);
 		};
 /* End PBXProject section */
@@ -223,7 +328,30 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A3000102 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000101 /* ApplePairDetectorTests.swift in Sources */,
+				A1000102 /* AppleSafeSpaceManagerTests.swift in Sources */,
+				A1000103 /* AppleTrashSyncObserverTests.swift in Sources */,
+				A1000104 /* AppleUiStateTests.swift in Sources */,
+				A1000105 /* BackgroundSyncManagerTests.swift in Sources */,
+				A1000106 /* BranchDamCoreBridgeTests.swift in Sources */,
+				A1000107 /* LivePhotoExtractorTests.swift in Sources */,
+				A1000108 /* PhotoKitObserverTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A9000101 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A5000001 /* BranchDamApp */;
+			targetProxy = A9000100 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A8000001 /* Debug */ = {
@@ -289,7 +417,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
@@ -306,6 +442,7 @@
 				PRODUCT_NAME = BranchDAM;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -319,7 +456,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
@@ -336,8 +481,79 @@
 				PRODUCT_NAME = BranchDAM;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A8000101 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BranchDAM.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BranchDAM";
+			};
+			name = Debug;
+		};
+		A8000102 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BranchDAM.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BranchDAM";
 			};
 			name = Release;
 		};
@@ -358,6 +574,15 @@
 			buildConfigurations = (
 				A8000001 /* Debug */,
 				A8000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A6000101 /* Build configuration list for PBXNativeTarget "BranchDAMTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8000101 /* Debug */,
+				A8000102 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
