@@ -4,7 +4,7 @@
 
 ## Changes
 
-- 
+-
 
 ## Verification Plan
 
@@ -12,7 +12,7 @@
 - `make check`
 
 ### Manual Verification
-- 
+-
 
 ## Review Checklist
 - [ ] Hermes review addressed / threads resolved
