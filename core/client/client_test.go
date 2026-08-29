@@ -37,6 +37,7 @@ func TestClientHandshake(t *testing.T) {
 			ServerVersion:      "0.1.0",
 			ServerTimeUnix:     1724000000,
 			PendingEventsCount: 0,
+			NamingTemplate:     "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}",
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -53,7 +54,7 @@ func TestClientHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Handshake failed: %v", err)
 	}
-	if !res.OK || res.ServerVersion != "0.1.0" {
+	if !res.OK || res.ServerVersion != "0.1.0" || res.NamingTemplate != "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}" {
 		t.Fatalf("unexpected handshake response: %+v", res)
 	}
 }
@@ -143,13 +144,15 @@ func TestUploadStream(t *testing.T) {
 	testPayload := []byte("branchdam raw image payload bytes for testing upload")
 	var receivedBytes []byte
 	var capturedBlake3 string
+	var capturedCamera string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/staging/upload" {
+		if r.URL.Path != "/api/v1/agent/upload" {
 			http.NotFound(w, r)
 			return
 		}
 		capturedBlake3 = r.Header.Get("X-Blake3-Hash")
+		capturedCamera = r.Header.Get("X-Camera-Model")
 		filename := r.Header.Get("X-Filename")
 		if filename != "PXL_TEST.dng" {
 			t.Errorf("unexpected filename header: %s", filename)
@@ -164,12 +167,14 @@ func TestUploadStream(t *testing.T) {
 
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(UploadResponse{
-			OK:         true,
-			NodeUUID:   "018f-node-uuid",
-			FilePath:   "/storage/staging/mobile/PXL_TEST.dng",
-			Status:     "STAGED",
-			SizeBytes:  int64(len(receivedBytes)),
-			Blake3Hash: capturedBlake3,
+			OK:           true,
+			NodeUUID:     "018f-node-uuid",
+			FilePath:     "/storage/archive/2026/2026-08-29_Pixel-Fold/PXL_TEST.dng",
+			Status:       "UPLOADED",
+			SizeBytes:    int64(len(receivedBytes)),
+			BytesWritten: int64(len(receivedBytes)),
+			Blake3Hash:   capturedBlake3,
+			RelativePath: "2026/2026-08-29_Pixel-Fold/PXL_TEST.dng",
 		})
 	}))
 	defer server.Close()
@@ -178,6 +183,7 @@ func TestUploadStream(t *testing.T) {
 
 	var progressCalled int64
 	opts := UploadOptions{
+		CameraModel:    "Pixel-Fold",
 		Blake3Hash:     "fakeblake3hash",
 		FastHash:       "fast1234",
 		CapturedAtUnix: 1724000000,
@@ -197,7 +203,7 @@ func TestUploadStream(t *testing.T) {
 		t.Fatalf("UploadStream failed: %v", err)
 	}
 
-	if !resp.OK || resp.NodeUUID != "018f-node-uuid" {
+	if !resp.OK || resp.NodeUUID != "018f-node-uuid" || resp.RelativePath != "2026/2026-08-29_Pixel-Fold/PXL_TEST.dng" {
 		t.Fatalf("unexpected upload response: %+v", resp)
 	}
 	if !bytes.Equal(receivedBytes, testPayload) {
@@ -205,6 +211,9 @@ func TestUploadStream(t *testing.T) {
 	}
 	if capturedBlake3 != "fakeblake3hash" {
 		t.Fatalf("blake3 header mismatch: %s", capturedBlake3)
+	}
+	if capturedCamera != "Pixel-Fold" {
+		t.Fatalf("camera header mismatch: %s", capturedCamera)
 	}
 	if atomic.LoadInt64(&progressCalled) == 0 {
 		t.Fatal("expected progress callback to be called")

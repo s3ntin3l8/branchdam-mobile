@@ -29,16 +29,17 @@ func TestEngineFullLifecycle(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/v1/staging/upload":
+		case "/api/v1/agent/upload":
 			filename := r.Header.Get("X-Filename")
 			uploadedFiles = append(uploadedFiles, filename)
 			_, _ = io.ReadAll(r.Body)
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(client.UploadResponse{
-				OK:       true,
-				NodeUUID: "018f-test-node-1",
-				FilePath: "/storage/staging/" + filename,
-				Status:   "STAGED",
+				OK:           true,
+				NodeUUID:     "018f-test-node-1",
+				FilePath:     "/storage/archive/2026/2026-08-29/" + filename,
+				Status:       "UPLOADED",
+				RelativePath: "2026/2026-08-29/" + filename,
 			})
 		case "/api/v1/agent/events":
 			var req client.AgentEventRequest

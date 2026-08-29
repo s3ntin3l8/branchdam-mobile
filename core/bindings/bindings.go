@@ -48,6 +48,23 @@ func InitCore(dbPath, baseURL, apiKey, agentID, clientVersion string) error {
 	return nil
 }
 
+// FetchNamingTemplate performs a handshake with the server and returns the active naming template.
+func FetchNamingTemplate() (string, error) {
+	engineMu.RLock()
+	c := globalClient
+	engineMu.RUnlock()
+	if c == nil {
+		return "", fmt.Errorf("core engine not initialized")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := c.Handshake(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	return resp.NamingTemplate, nil
+}
+
 // ComputeFileHashes calculates FastHash (16 hex) and FullHash BLAKE3-256 (64 hex).
 func ComputeFileHashes(filePath string) (fastHash string, fullHash string, sizeBytes int64, err error) {
 	file, err := openFile(filePath)

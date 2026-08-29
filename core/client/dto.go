@@ -12,6 +12,7 @@ type HandshakeResponse struct {
 	ServerTimeUnix        int64  `json:"serverTimeUnix"`
 	AcknowledgedEventUUID string `json:"acknowledgedEventUuid,omitempty"`
 	PendingEventsCount    int64  `json:"pendingEventsCount"`
+	NamingTemplate        string `json:"namingTemplate,omitempty"`
 }
 
 type AgentEventRequest struct {
@@ -57,10 +58,12 @@ type MobileTelemetry struct {
 }
 
 type UploadResponse struct {
-	OK         bool   `json:"ok"`
-	NodeUUID   string `json:"nodeUuid"`
-	FilePath   string `json:"filePath"`
-	Status     string `json:"status"`
-	SizeBytes  int64  `json:"sizeBytes"`
-	Blake3Hash string `json:"blake3Hash"`
+	OK           bool   `json:"ok,omitempty"`
+	NodeUUID     string `json:"nodeUuid"`
+	FilePath     string `json:"filePath,omitempty"`
+	Status       string `json:"status"`
+	SizeBytes    int64  `json:"sizeBytes,omitempty"`
+	BytesWritten int64  `json:"bytesWritten,omitempty"`
+	Blake3Hash   string `json:"blake3Hash"`
+	RelativePath string `json:"relativePath,omitempty"`
 }

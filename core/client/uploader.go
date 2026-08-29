@@ -12,6 +12,7 @@ import (
 type ProgressCallback func(bytesSent int64, totalBytes int64)
 
 type UploadOptions struct {
+	CameraModel    string
 	FastHash       string
 	Blake3Hash     string
 	CapturedAtUnix int64
@@ -36,7 +37,7 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// UploadStream streams file bytes directly to POST /api/v1/staging/upload using the stream-optimized client.
+// UploadStream streams file bytes directly to POST /api/v1/agent/upload using the stream-optimized client.
 func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64, filename string, opts UploadOptions) (*UploadResponse, error) {
 	var bodyReader io.Reader = r
 	if opts.ProgressFn != nil {
@@ -47,7 +48,7 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 		}
 	}
 
-	reqURL := c.baseURL + "/api/v1/staging/upload"
+	reqURL := c.baseURL + "/api/v1/agent/upload"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create upload request: %w", err)
@@ -58,6 +59,9 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	req.Header.Set("X-Filename", filename)
 	req.ContentLength = sizeBytes
 
+	if opts.CameraModel != "" {
+		req.Header.Set("X-Camera-Model", opts.CameraModel)
+	}
 	if opts.Blake3Hash != "" {
 		req.Header.Set("X-Blake3-Hash", opts.Blake3Hash)
 	}

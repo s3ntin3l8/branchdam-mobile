@@ -37,6 +37,7 @@ public class AppleQrParser {
 public struct QrPairingView: View {
     @State private var serverUrl: String = "http://192.168.1.100:8080"
     @State private var apiKey: String = ""
+    @State private var namingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
 
     public init() {}
 
@@ -46,6 +47,13 @@ public struct QrPairingView: View {
                 Section(header: Text("Server Connection")) {
                     TextField("Server URL", text: $serverUrl)
                     SecureField("API Key", text: $apiKey)
+                }
+
+                Section(header: Text("Server Ingest Scheme")) {
+                    LabeledContent("Naming Template", value: namingTemplate)
+                    Text("Synchronized automatically via server handshake for POST /api/v1/agent/upload.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 Section {
@@ -59,7 +67,7 @@ public struct QrPairingView: View {
                     }
                 }
             }
-            .navigationTitle("Server Pairing")
+            .navigationTitle("Server Settings")
         }
     }
 }
