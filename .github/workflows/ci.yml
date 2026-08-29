@@ -52,6 +52,8 @@ jobs:
   test-ios:
     name: iOS (Build & Test)
     runs-on: macos-14
+    env:
+      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@v7
 

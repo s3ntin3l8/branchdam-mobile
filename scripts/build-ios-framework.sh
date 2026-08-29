@@ -9,6 +9,7 @@ echo "=== Building iOS xcframework from core ==="
 
 GOPATH_BIN="$(go env GOPATH)/bin"
 export PATH="${GOPATH_BIN}:${PATH}"
+export GOTOOLCHAIN=auto
 
 if ! command -v gomobile &>/dev/null; then
     echo "gomobile not found in PATH. Installing gomobile and gobind..."
