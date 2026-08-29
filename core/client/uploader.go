@@ -84,14 +84,15 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 
 	if resp.StatusCode == http.StatusConflict {
+		// Always treat 409 as a dedup response, with or without a parseable nodeUuid.
+		// A 409 with no nodeUuid is logged as a soft dedup so the item isn't retried indefinitely.
 		var dedupResp UploadResponse
-		if err := json.Unmarshal(respBody, &dedupResp); err == nil && dedupResp.NodeUUID != "" {
-			return nil, &DedupError{
-				DedupResponse: DedupResponse{
-					NodeUUID: dedupResp.NodeUUID,
-					FilePath: dedupResp.FilePath,
-				},
-			}
+		_ = json.Unmarshal(respBody, &dedupResp)
+		return nil, &DedupError{
+			DedupResponse: DedupResponse{
+				NodeUUID: dedupResp.NodeUUID,
+				FilePath: dedupResp.FilePath,
+			},
 		}
 	}
 

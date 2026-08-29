@@ -201,4 +201,25 @@ func TestGetUploadItemByBlake3Hash(t *testing.T) {
 	if found == nil || found.ID != id || found.Blake3Hash != hash {
 		t.Fatalf("found item mismatch: %+v (expected id %d)", found, id)
 	}
+
+	// Exhaust retries so item becomes FAILED; GetUploadItemByBlake3Hash should return nil
+	if err := MarkUploadExhaustedForTest(q, id); err != nil {
+		t.Fatalf("failed to exhaust retries: %v", err)
+	}
+	notFound, err := q.GetUploadItemByBlake3Hash(hash)
+	if err != nil {
+		t.Fatalf("unexpected error after item failed: %v", err)
+	}
+	if notFound != nil {
+		t.Fatalf("expected nil for FAILED item, got %+v", notFound)
+	}
+}
+
+// MarkUploadExhaustedForTest directly sets status to FAILED in the test DB to
+// simulate retry exhaustion without coupling to MarkUploadFailed's retry logic.
+func MarkUploadExhaustedForTest(q *Queue, id int64) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	_, err := q.db.Exec(`UPDATE upload_queue SET status = 'FAILED', retry_count = 5 WHERE id = ?`, id)
+	return err
 }

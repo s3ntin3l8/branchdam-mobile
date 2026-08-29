@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"database/sql"
 	"fmt"
 )
 
@@ -38,8 +39,9 @@ func (q *Queue) EnqueueUpload(item *UploadItem) (int64, error) {
 	return id, nil
 }
 
-// GetUploadItemByBlake3Hash returns the most recent pending or completed
+// GetUploadItemByBlake3Hash returns the most recent active (PENDING, IN_PROGRESS, or COMPLETED)
 // queue item with the given BLAKE3 hash, or nil if none exists.
+// FAILED items are excluded so that exhausted-retry content can be re-enqueued.
 // Used by EnqueueLocalCapture to gate duplicate enqueue.
 func (q *Queue) GetUploadItemByBlake3Hash(hash string) (*UploadItem, error) {
 	q.mu.RLock()
@@ -51,6 +53,7 @@ func (q *Queue) GetUploadItemByBlake3Hash(hash string) (*UploadItem, error) {
 	       error_msg, node_uuid, created_at_unix, updated_at_unix
 	FROM upload_queue
 	WHERE blake3_hash = ?
+	  AND status != 'FAILED'
 	ORDER BY id DESC
 	LIMIT 1
 	`
@@ -62,7 +65,7 @@ func (q *Queue) GetUploadItemByBlake3Hash(hash string) (*UploadItem, error) {
 		&item.ErrorMsg, &item.NodeUUID, &item.CreatedAtUnix, &item.UpdatedAtUnix,
 	)
 	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to query upload item by blake3 hash: %w", err)
