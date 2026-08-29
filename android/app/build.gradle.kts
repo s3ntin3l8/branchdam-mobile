@@ -8,7 +8,16 @@ android {
     namespace = "com.branchdam.mobile"
     compileSdk = 35
 
-    val appVersionName = System.getenv("APP_VERSION_NAME")?.removePrefix("v") ?: "0.1.0"
+    val appVersionName = System.getenv("APP_VERSION_NAME")?.removePrefix("v") ?: run {
+        val manifestFile = rootProject.file("../.release-please-manifest.json")
+        if (manifestFile.exists()) {
+            val json = manifestFile.readText()
+            val match = Regex("\"\\.\":\\s*\"([^\"]+)\"").find(json)
+            match?.groupValues?.get(1) ?: "0.2.0"
+        } else {
+            "0.2.0"
+        }
+    }
     val appVersionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: run {
         val parts = appVersionName.split(".")
         if (parts.size >= 3) {
