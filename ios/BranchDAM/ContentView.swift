@@ -29,9 +29,9 @@ public struct ContentView: View {
                     .edgesIgnoringSafeArea(.all)
 
                 AppleOtgImportConfirmationView(
-                    scanResult = scanResult,
-                    onConfirm = { otgManager.confirmImport(scanResult: scanResult) },
-                    onDismiss = { otgManager.cancelImport() }
+                    scanResult: scanResult,
+                    onConfirm: { otgManager.confirmImport(scanResult: scanResult) },
+                    onDismiss: { otgManager.cancelImport() }
                 )
                 .background(Color(UIColor.systemBackground))
                 .cornerRadius(20)
@@ -42,8 +42,8 @@ public struct ContentView: View {
                     .edgesIgnoringSafeArea(.all)
 
                 AppleOtgProgressView(
-                    progress = progress,
-                    onCancel = { otgManager.cancelImport() }
+                    progress: progress,
+                    onCancel: { otgManager.cancelImport() }
                 )
             }
         }
