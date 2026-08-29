@@ -29,6 +29,59 @@ object QrParser {
     }
 }
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+
+val BrandTeal = Color(0xFF2BA69A)
+
+@Composable
+fun BrandMonogram(
+    size: androidx.compose.ui.unit.Dp = 64.dp,
+    color: Color = BrandTeal,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = this.size.width / 64f
+
+        // 1. Stem: rect x=6, y=5, width=9, height=54, rx=4.5
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(6f * scale, 5f * scale),
+            size = Size(9f * scale, 54f * scale),
+            cornerRadius = CornerRadius(4.5f * scale, 4.5f * scale)
+        )
+
+        // 2. Main loop: circle cx=28, cy=40, r=14.5, stroke=7.5
+        drawCircle(
+            color = color,
+            radius = 14.5f * scale,
+            center = Offset(28f * scale, 40f * scale),
+            style = Stroke(width = 7.5f * scale)
+        )
+
+        // 3. Connector line: M43 40 H48, width=6
+        drawLine(
+            color = color,
+            start = Offset(43f * scale, 40f * scale),
+            end = Offset(48f * scale, 40f * scale),
+            strokeWidth = 6f * scale,
+            cap = StrokeCap.Round
+        )
+
+        // 4. Child node: circle cx=54, cy=40, r=6
+        drawCircle(
+            color = color,
+            radius = 6f * scale,
+            center = Offset(54f * scale, 40f * scale)
+        )
+    }
+}
+
 @Composable
 fun QrPairingScreen(
     onPairingComplete: (PairingConfig) -> Unit,
@@ -47,6 +100,8 @@ fun QrPairingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        BrandMonogram(size = 64.dp)
+        Spacer(Modifier.height(16.dp))
         Text("branchDAM Server Settings", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
 
