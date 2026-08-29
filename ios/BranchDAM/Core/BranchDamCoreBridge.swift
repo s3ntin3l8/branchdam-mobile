@@ -22,6 +22,7 @@ public class BranchDamCoreBridge {
     public static let shared = BranchDamCoreBridge()
 
     private var isInitialized = false
+    private var mockOffloadedMedia: [String: Bool] = [:]
 
     private init() {}
 
@@ -100,7 +101,7 @@ public class BranchDamCoreBridge {
         #if canImport(BranchDamCore)
         return GetMediaOffloaded(localID) == 1
         #else
-        return false
+        return mockOffloadedMedia[localID] ?? false
         #endif
     }
 
@@ -108,6 +109,7 @@ public class BranchDamCoreBridge {
         #if canImport(BranchDamCore)
         return SetMediaOffloaded(localID, isOffloaded ? 1 : 0) == 0
         #else
+        mockOffloadedMedia[localID] = isOffloaded
         return true
         #endif
     }
