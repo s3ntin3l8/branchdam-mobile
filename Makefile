@@ -1,4 +1,4 @@
-.PHONY: all check test lint android ios-framework ios-test clean
+.PHONY: all check test lint android android-test ios-framework ios-test clean
 
 all: check
 
@@ -13,6 +13,9 @@ lint:
 
 android:
 	cd android && if [ -f "./gradlew" ]; then ./gradlew assembleDebug; fi
+
+android-test:
+	cd android && if [ -f "./gradlew" ]; then ./gradlew test; fi
 
 ios-framework:
 	./scripts/build-ios-framework.sh
