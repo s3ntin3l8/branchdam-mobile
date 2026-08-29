@@ -10,19 +10,19 @@
         android:translateX="25.2"
         android:translateY="25.2">
         <path
-            android:fillColor="#2BA69A"
+            android:fillColor="@color/brand_teal"
             android:pathData="M6,9.5 A4.5,4.5 0 0,1 15,9.5 L15,54.5 A4.5,4.5 0 0,1 6,54.5 Z" />
         <path
-            android:strokeColor="#2BA69A"
+            android:strokeColor="@color/brand_teal"
             android:strokeWidth="7.5"
             android:pathData="M 28,40 m -14.5,0 a 14.5,14.5 0 1,0 29,0 a 14.5,14.5 0 1,0 -29,0" />
         <path
-            android:strokeColor="#2BA69A"
+            android:strokeColor="@color/brand_teal"
             android:strokeWidth="6"
             android:strokeLineCap="round"
             android:pathData="M 43,40 L 48,40" />
         <path
-            android:fillColor="#2BA69A"
+            android:fillColor="@color/brand_teal"
             android:pathData="M 54,40 m -6,0 a 6,6 0 1,0 12,0 a 6,6 0 1,0 -12,0" />
     </group>
 </vector>
