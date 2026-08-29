@@ -38,16 +38,17 @@ func (q *Queue) SetMediaOffloaded(localID string, isOffloaded bool) error {
 		offloadedInt = 1
 	}
 
-	query := `UPDATE local_media_state SET is_offloaded = ?, updated_at_unix = ? WHERE local_id = ?`
-	res, err := q.db.Exec(query, offloadedInt, now, localID)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return errors.New("media record not found")
-	}
-	return nil
+	query := `
+	INSERT INTO local_media_state (
+		local_id, node_uuid, blake3_hash, lifecycle_state, is_offloaded,
+		created_at_unix, updated_at_unix
+	) VALUES (?, '', '', 'ARCHIVED', ?, ?, ?)
+	ON CONFLICT(local_id) DO UPDATE SET
+		is_offloaded = excluded.is_offloaded,
+		updated_at_unix = excluded.updated_at_unix
+	`
+	_, err := q.db.Exec(query, localID, offloadedInt, now, now)
+	return err
 }
 
 // IsMediaOffloaded returns true if a local asset deletion was an intentional offload.
