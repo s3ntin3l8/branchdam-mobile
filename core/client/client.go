@@ -55,6 +55,10 @@ func New(cfg Config) *Client {
 	}
 }
 
+func (c *Client) AgentID() string {
+	return c.agentID
+}
+
 func (c *Client) setHeaders(req *http.Request) {
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)

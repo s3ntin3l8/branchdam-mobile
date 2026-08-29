@@ -17,6 +17,7 @@ int32_t SyncBatch(int32_t timeoutSecs, int32_t batchSize);
 char* CheckSafeSpaceCandidates(const char* localIDsJSON);
 int32_t SetMediaOffloaded(const char* localID, int32_t isOffloaded);
 int32_t GetMediaOffloaded(const char* localID);
+char* FetchNamingTemplate(void);
 void FreeCString(char* str);
 
 #ifdef __cplusplus

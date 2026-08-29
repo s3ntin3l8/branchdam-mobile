@@ -111,4 +111,17 @@ public class BranchDamCoreBridge {
         return true
         #endif
     }
+
+    public func fetchNamingTemplate() -> String {
+        #if canImport(BranchDamCore)
+        guard let cStr = FetchNamingTemplate() else {
+            return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
+        }
+        let result = String(cString: cStr)
+        FreeCString(cStr)
+        return result
+        #else
+        return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
+        #endif
+    }
 }

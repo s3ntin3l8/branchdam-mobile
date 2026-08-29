@@ -1,6 +1,8 @@
 package bindings
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -113,5 +115,52 @@ func TestBindingsSyncBatch(t *testing.T) {
 	}
 	if u != 0 || e != 0 {
 		t.Fatalf("expected 0 uploads and 0 events, got %d, %d", u, e)
+	}
+}
+
+func TestFetchNamingTemplate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/agent/handshake" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"ok": true,
+			"serverVersion": "0.12.0",
+			"namingTemplate": "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
+		}`))
+	}))
+	defer server.Close()
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "bindings_template.db")
+	if err := InitCore(dbPath, server.URL, "test-key", "agent-test", "0.1.0"); err != nil {
+		t.Fatalf("InitCore failed: %v", err)
+	}
+
+	tmpl, err := FetchNamingTemplate()
+	if err != nil {
+		t.Fatalf("FetchNamingTemplate failed: %v", err)
+	}
+	if tmpl != "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}" {
+		t.Errorf("got template %q, want '{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}'", tmpl)
+	}
+}
+
+func TestFetchNamingTemplate_Uninitialized(t *testing.T) {
+	engineMu.Lock()
+	savedClient := globalClient
+	globalClient = nil
+	engineMu.Unlock()
+
+	defer func() {
+		engineMu.Lock()
+		globalClient = savedClient
+		engineMu.Unlock()
+	}()
+
+	if _, err := FetchNamingTemplate(); err == nil {
+		t.Fatal("expected error on uninitialized FetchNamingTemplate")
 	}
 }

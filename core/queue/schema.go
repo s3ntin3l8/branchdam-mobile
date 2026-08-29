@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS upload_queue (
     target_dir          TEXT    NOT NULL DEFAULT '',
     fast_hash           TEXT    NOT NULL DEFAULT '',
     blake3_hash         TEXT    NOT NULL DEFAULT '',
+    camera_model        TEXT    NOT NULL DEFAULT '',
     size_bytes          INTEGER NOT NULL DEFAULT 0,
     captured_at_unix    INTEGER NOT NULL DEFAULT 0,
     status              TEXT    NOT NULL DEFAULT 'PENDING',

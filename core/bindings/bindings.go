@@ -76,14 +76,14 @@ func ComputeFileHashes(filePath string) (fastHash string, fullHash string, sizeB
 }
 
 // EnqueueMedia enqueues a newly captured photo/video into the local queue.
-func EnqueueMedia(localPath, filename string, capturedAtUnix int64, localID string) (int64, error) {
+func EnqueueMedia(localPath, filename string, capturedAtUnix int64, localID string, cameraModel ...string) (int64, error) {
 	engineMu.RLock()
 	defer engineMu.RUnlock()
 	if globalEngine == nil {
 		return 0, fmt.Errorf("core engine not initialized")
 	}
 
-	item, err := globalEngine.EnqueueLocalCapture(localPath, filename, capturedAtUnix, localID)
+	item, err := globalEngine.EnqueueLocalCapture(localPath, filename, capturedAtUnix, localID, cameraModel...)
 	if err != nil {
 		return 0, err
 	}

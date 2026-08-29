@@ -64,6 +64,7 @@ public struct QrPairingView: View {
                             apiKey: apiKey,
                             agentID: "iphone-pro"
                         )
+                        namingTemplate = BranchDamCoreBridge.shared.fetchNamingTemplate()
                     }
                 }
             }
