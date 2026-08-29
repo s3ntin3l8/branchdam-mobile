@@ -19,7 +19,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
 
       - name: Test Core with coverage
@@ -44,7 +44,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version-file: core/go.mod
 
       - name: Pre-commit
         uses: pre-commit/action@v3.0.1
