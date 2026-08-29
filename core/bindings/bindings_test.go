@@ -22,16 +22,16 @@ func TestBindingsLifecycle(t *testing.T) {
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	fast, full, size, err := ComputeFileHashes(testFile)
+	hashes, err := ComputeFileHashes(testFile)
 	if err != nil {
 		t.Fatalf("ComputeFileHashes failed: %v", err)
 	}
-	if fast == "" || len(full) != 64 || size == 0 {
-		t.Fatalf("invalid hashes: fast=%s, full=%s, size=%d", fast, full, size)
+	if hashes.FastHash == "" || len(hashes.FullHash) != 64 || hashes.SizeBytes == 0 {
+		t.Fatalf("invalid hashes: fast=%s, full=%s, size=%d", hashes.FastHash, hashes.FullHash, hashes.SizeBytes)
 	}
 
 	// Test Enqueue
-	id, err := EnqueueMedia(testFile, "test.raw", 1724000000, "local_uri_bind")
+	id, err := EnqueueMedia(testFile, "test.raw", 1724000000, "local_uri_bind", "")
 	if err != nil || id <= 0 {
 		t.Fatalf("EnqueueMedia failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestBindingsUninitialized(t *testing.T) {
 		engineMu.Unlock()
 	}()
 
-	if _, err := EnqueueMedia("/tmp/fake", "fake.jpg", 1724000000, "local_1"); err == nil {
+	if _, err := EnqueueMedia("/tmp/fake", "fake.jpg", 1724000000, "local_1", ""); err == nil {
 		t.Fatal("expected error on uninitialized EnqueueMedia")
 	}
 
@@ -87,7 +87,7 @@ func TestBindingsUninitialized(t *testing.T) {
 		t.Fatal("expected error on uninitialized EnqueueDeleteEvent")
 	}
 
-	if _, _, err := SyncBatch(5, 5); err == nil {
+	if _, err := SyncBatch(5, 5); err == nil {
 		t.Fatal("expected error on uninitialized SyncBatch")
 	}
 
@@ -109,12 +109,12 @@ func TestBindingsSyncBatch(t *testing.T) {
 	}
 
 	// Sync on empty queue
-	u, e, err := SyncBatch(2, 5)
+	res, err := SyncBatch(2, 5)
 	if err != nil {
 		t.Fatalf("SyncBatch on empty queue failed: %v", err)
 	}
-	if u != 0 || e != 0 {
-		t.Fatalf("expected 0 uploads and 0 events, got %d, %d", u, e)
+	if res.Uploaded != 0 || res.EventsSent != 0 {
+		t.Fatalf("expected 0 uploads and 0 events, got %d, %d", res.Uploaded, res.EventsSent)
 	}
 }
 
