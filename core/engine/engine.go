@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
@@ -42,6 +43,14 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 	fastHash, fullHash, sizeBytes, err := hasher.HashReader(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash local file: %w", err)
+	}
+
+	// Dedup gate: check if this blake3Hash is already queued or uploaded
+	if existing, err := e.q.GetUploadItemByBlake3Hash(fullHash); err == nil && existing != nil {
+		if localID != "" {
+			_ = e.q.RecordLocalMedia(localID, existing.NodeUUID, fullHash, "ACTIVE")
+		}
+		return existing, nil
 	}
 
 	cam := ""
@@ -117,8 +126,20 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		file.Close()
 
 		if err != nil {
+			if dedupResp, ok := client.AsDedupResponse(err); ok {
+				slog.Info("engine: upload dedup — server returned existing node",
+					"existingUUID", dedupResp.NodeUUID, "localPath", item.LocalPath)
+				_ = e.q.MarkUploadComplete(item.ID, dedupResp.NodeUUID)
+				completedCount++
+				continue
+			}
 			_ = e.q.MarkUploadFailed(item.ID, err.Error(), 5)
 			continue
+		}
+
+		if resp.IsDedup {
+			slog.Info("engine: upload dedup — server acknowledged existing content via X-Dedup",
+				"existingUUID", resp.NodeUUID, "localPath", item.LocalPath)
 		}
 
 		if err := e.q.MarkUploadComplete(item.ID, resp.NodeUUID); err != nil {

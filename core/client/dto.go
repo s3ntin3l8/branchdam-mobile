@@ -66,4 +66,32 @@ type UploadResponse struct {
 	BytesWritten int64  `json:"bytesWritten,omitempty"`
 	Blake3Hash   string `json:"blake3Hash"`
 	RelativePath string `json:"relativePath,omitempty"`
+	IsDedup      bool   `json:"isDedup,omitempty"`
+}
+
+// DedupResponse is returned when the server indicates the uploaded content
+// already exists in the library (D1: X-Dedup: true response header).
+type DedupResponse struct {
+	NodeUUID string
+	FilePath string
+}
+
+type DedupError struct {
+	DedupResponse
+}
+
+func (e *DedupError) Error() string {
+	return "server dedup: content already exists in library"
+}
+
+// AsDedupResponse checks whether err wraps a server dedup response and
+// extracts the existing node identity. Returns (zero, false) for non-dedup errors.
+func AsDedupResponse(err error) (DedupResponse, bool) {
+	if err == nil {
+		return DedupResponse{}, false
+	}
+	if deErr, ok := err.(*DedupError); ok {
+		return deErr.DedupResponse, true
+	}
+	return DedupResponse{}, false
 }

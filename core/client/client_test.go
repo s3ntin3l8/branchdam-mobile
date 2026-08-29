@@ -238,3 +238,88 @@ func TestUploadStreamError(t *testing.T) {
 		t.Fatal("expected error on 422 Unprocessable Entity, got nil")
 	}
 }
+
+func TestUploadStream_DedupHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Dedup", "true")
+		resp := UploadResponse{
+			OK:       true,
+			NodeUUID: "existing-node-uuid",
+			Status:   "EXISTS",
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	resp, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("duplicate content")),
+		17,
+		"dup.jpg",
+		UploadOptions{},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.IsDedup || resp.NodeUUID != "existing-node-uuid" {
+		t.Fatalf("expected dedup response, got %+v", resp)
+	}
+}
+
+func TestUploadStream_DedupConflictError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"nodeUuid": "conflict-node-uuid",
+			"filePath": "/archive/conflict.jpg",
+		})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	_, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("duplicate content")),
+		17,
+		"conflict.jpg",
+		UploadOptions{},
+	)
+	if err == nil {
+		t.Fatal("expected error on 409 conflict, got nil")
+	}
+
+	dedup, ok := AsDedupResponse(err)
+	if !ok {
+		t.Fatalf("expected AsDedupResponse true, got false (err: %v)", err)
+	}
+	if dedup.NodeUUID != "conflict-node-uuid" {
+		t.Fatalf("unexpected node uuid: %s", dedup.NodeUUID)
+	}
+}
+
+func TestUploadStream_DedupConflictError_NoNodeUUID(t *testing.T) {
+	// Server returns 409 but no nodeUuid in body — must still be treated as DedupError
+	// so the engine can mark the item complete instead of failing it.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte(`{"error":"duplicate"}`))
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	_, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("duplicate")),
+		9,
+		"dup_no_uuid.jpg",
+		UploadOptions{},
+	)
+	if err == nil {
+		t.Fatal("expected error on 409 with no nodeUuid, got nil")
+	}
+	_, ok := AsDedupResponse(err)
+	if !ok {
+		t.Fatalf("expected 409-without-nodeUuid to still be AsDedupResponse, got false (err: %v)", err)
+	}
+}
