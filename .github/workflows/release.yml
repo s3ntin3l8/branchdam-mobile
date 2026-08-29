@@ -56,25 +56,28 @@ jobs:
       - name: Configure Release Signing Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag }}
         run: |
           mkdir -p ~/.android
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "Decoding repository release keystore from secrets..."
             echo "$KEYSTORE_BASE64" | base64 --decode > ~/.android/release.keystore
-          elif [ ! -f ~/.android/debug.keystore ]; then
-            echo "Generating self-signed fallback keystore for installable sideloading..."
-            keytool -genkey -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set in repository secrets; using self-signed development keystore for sideloading."
+            if [ ! -f ~/.android/debug.keystore ]; then
+              keytool -genkey -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            fi
           fi
 
       - name: Build Release APK and App Bundle
         working-directory: android
         env:
+          APP_VERSION_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag || '0.2.0' }}
           KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '/home/runner/.android/release.keystore' || '' }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          chmod +x ./gradlew
           ./gradlew assembleRelease bundleRelease --no-daemon
 
       - name: Collect and Package Artifacts

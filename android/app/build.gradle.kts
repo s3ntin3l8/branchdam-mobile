@@ -8,23 +8,41 @@ android {
     namespace = "com.branchdam.mobile"
     compileSdk = 35
 
+    val appVersionName = System.getenv("APP_VERSION_NAME")?.removePrefix("v") ?: "0.1.0"
+    val appVersionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: run {
+        val parts = appVersionName.split(".")
+        if (parts.size >= 3) {
+            (parts[0].toIntOrNull() ?: 0) * 10000 + (parts[1].toIntOrNull() ?: 0) * 100 + (parts[2].substringBefore("-").toIntOrNull() ?: 0)
+        } else {
+            1
+        }
+    }
+
     defaultConfig {
         applicationId = "com.branchdam.mobile"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode.coerceAtLeast(1)
+        versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_FILE")
-            if (!keystorePath.isNullOrEmpty() && file(keystorePath).exists()) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            if (!keystorePath.isNullOrEmpty()) {
+                val kFile = file(keystorePath)
+                require(kFile.exists()) { "KEYSTORE_FILE does not exist at: $keystorePath" }
+                val storePass = System.getenv("KEYSTORE_PASSWORD")
+                val kAlias = System.getenv("KEY_ALIAS")
+                val kPass = System.getenv("KEY_PASSWORD")
+                require(!storePass.isNullOrEmpty()) { "KEYSTORE_PASSWORD must be provided when KEYSTORE_FILE is set" }
+                require(!kAlias.isNullOrEmpty()) { "KEY_ALIAS must be provided when KEYSTORE_FILE is set" }
+                require(!kPass.isNullOrEmpty()) { "KEY_PASSWORD must be provided when KEYSTORE_FILE is set" }
+                storeFile = kFile
+                storePassword = storePass
+                keyAlias = kAlias
+                keyPassword = kPass
             } else {
                 val debugKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
                 if (debugKeystore.exists()) {
