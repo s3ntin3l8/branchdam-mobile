@@ -121,6 +121,34 @@ fun QrPairingScreen(
             )
         }
 
+        Spacer(Modifier.height(16.dp))
+
+        var autoImportEnabled by remember {
+            mutableStateOf(com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Auto-import Camera Roll", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Sync new photos silently without confirmation notification",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = autoImportEnabled,
+                onCheckedChange = {
+                    autoImportEnabled = it
+                    com.branchdam.mobile.service.ImportConfirmationNotifier.setAutoImportEnabled(context, it)
+                }
+            )
+        }
+
         Spacer(Modifier.height(24.dp))
 
         Button(

@@ -37,28 +37,40 @@ class MediaStoreObserver(
         val images = MediaScanner.queryRecentImages(context, minDateTakenUnix = minTimestamp * 1000L)
         val videos = MediaScanner.queryRecentVideos(context, minDateTakenUnix = minTimestamp * 1000L)
 
-        var enqueuedCount = 0
         val allMedia = (images + videos).sortedBy { it.dateTakenUnix }
+        val newItems = mutableListOf<MediaItem>()
 
         for (item in allMedia) {
-            if (item.filePath.isNotEmpty()) {
-                NativeBridge.enqueueMedia(
-                    localPath = item.filePath,
-                    filename = item.displayName,
-                    capturedAtUnix = item.dateTakenUnix,
-                    localId = item.contentUri
-                )
-                enqueuedCount++
+            if (item.filePath.isNotEmpty() && !com.branchdam.mobile.service.ImportConfirmationNotifier.isItemSuppressed(item.contentUri)) {
+                newItems.add(item)
                 if (item.dateTakenUnix > lastScannedTimestamp.get()) {
                     lastScannedTimestamp.set(item.dateTakenUnix)
                 }
             }
         }
 
-        if (enqueuedCount > 0) {
-            SyncScheduler.triggerImmediateSync(context)
+        if (newItems.isNotEmpty()) {
+            val autoImport = com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)
+            if (autoImport) {
+                for (item in newItems) {
+                    NativeBridge.enqueueMedia(
+                        localPath = item.filePath,
+                        filename = item.displayName,
+                        capturedAtUnix = item.dateTakenUnix,
+                        localId = item.contentUri
+                    )
+                }
+                SyncScheduler.triggerImmediateSync(context)
+            } else {
+                com.branchdam.mobile.service.ImportConfirmationNotifier.stagePendingItems(newItems)
+                com.branchdam.mobile.service.ImportConfirmationNotifier.showImportConfirmation(
+                    context = context,
+                    newItemCount = newItems.size,
+                    itemIds = newItems.map { it.contentUri }.toTypedArray()
+                )
+            }
         }
 
-        return enqueuedCount
+        return newItems.size
     }
 }
