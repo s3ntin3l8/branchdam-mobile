@@ -39,6 +39,7 @@ public struct QrPairingView: View {
     @State private var apiKey: String = ""
     @State private var namingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
     @State private var syncOnMobileData: Bool = BackgroundSyncManager.shared.syncOnMobileData
+    @State private var autoImportEnabled: Bool = AppleCameraRollImportNotifier.shared.autoImportEnabled
 
     public init() {}
 
@@ -59,12 +60,20 @@ public struct QrPairingView: View {
                     SecureField("API Key", text: $apiKey)
                 }
 
-                Section(header: Text("Network Constraints")) {
+                Section(header: Text("Network & Ingest Constraints")) {
                     Toggle("Sync on Mobile Data / Cellular", isOn: $syncOnMobileData)
                         .onChange(of: syncOnMobileData) { newValue in
                             BackgroundSyncManager.shared.syncOnMobileData = newValue
                         }
                     Text("When disabled, sync only runs on unmetered Wi-Fi.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Toggle("Auto-import Camera Roll", isOn: $autoImportEnabled)
+                        .onChange(of: autoImportEnabled) { newValue in
+                            AppleCameraRollImportNotifier.shared.autoImportEnabled = newValue
+                        }
+                    Text("When disabled, a notification prompts before camera roll sync.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

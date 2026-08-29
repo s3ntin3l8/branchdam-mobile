@@ -39,9 +39,10 @@ class MediaStoreObserver(
 
         var enqueuedCount = 0
         val allMedia = (images + videos).sortedBy { it.dateTakenUnix }
+        val enqueuedIds = mutableListOf<String>()
 
         for (item in allMedia) {
-            if (item.filePath.isNotEmpty()) {
+            if (item.filePath.isNotEmpty() && !com.branchdam.mobile.service.ImportConfirmationNotifier.isItemSuppressed(item.contentUri)) {
                 NativeBridge.enqueueMedia(
                     localPath = item.filePath,
                     filename = item.displayName,
@@ -49,6 +50,7 @@ class MediaStoreObserver(
                     localId = item.contentUri
                 )
                 enqueuedCount++
+                enqueuedIds.add(item.contentUri)
                 if (item.dateTakenUnix > lastScannedTimestamp.get()) {
                     lastScannedTimestamp.set(item.dateTakenUnix)
                 }
@@ -56,7 +58,16 @@ class MediaStoreObserver(
         }
 
         if (enqueuedCount > 0) {
-            SyncScheduler.triggerImmediateSync(context)
+            val autoImport = com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)
+            if (autoImport) {
+                SyncScheduler.triggerImmediateSync(context)
+            } else {
+                com.branchdam.mobile.service.ImportConfirmationNotifier.showImportConfirmation(
+                    context = context,
+                    newItemCount = enqueuedCount,
+                    itemIds = enqueuedIds.toTypedArray()
+                )
+            }
         }
 
         return enqueuedCount

@@ -62,6 +62,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
         var discovered = [DiscoveredAsset]()
 
         assets.enumerateObjects { asset, _, _ in
+            if AppleCameraRollImportNotifier.shared.isAssetSuppressed(identifier: asset.localIdentifier) {
+                return
+            }
+
             let resources = PHAssetResource.assetResources(for: asset)
             let primaryResource = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
 
@@ -95,7 +99,14 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
         }
 
         if !discovered.isEmpty {
-            BackgroundSyncManager.shared.scheduleBackgroundSync()
+            if AppleCameraRollImportNotifier.shared.autoImportEnabled {
+                BackgroundSyncManager.shared.triggerImmediateSync()
+            } else {
+                AppleCameraRollImportNotifier.shared.postImportNotification(
+                    count: discovered.count,
+                    assetIdentifiers: discovered.map { $0.localIdentifier }
+                )
+            }
         }
 
         return discovered
