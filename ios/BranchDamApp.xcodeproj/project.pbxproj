@@ -22,6 +22,9 @@
 		A100000D /* QrPairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* QrPairingView.swift */; };
 		A100000E /* SafeSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* SafeSpaceView.swift */; };
 		A100000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000F /* Assets.xcassets */; };
+		A1000012 /* AppleOtgCardScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012 /* AppleOtgCardScanner.swift */; };
+		A1000013 /* AppleOtgIngestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* AppleOtgIngestManager.swift */; };
+		A1000014 /* AppleOtgImportConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* AppleOtgImportConfirmationView.swift */; };
 		A1000020 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
 		A1000021 /* BranchDamCore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A1000101 /* ApplePairDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000101 /* ApplePairDetectorTests.swift */; };
@@ -32,6 +35,8 @@
 		A1000106 /* BranchDamCoreBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000106 /* BranchDamCoreBridgeTests.swift */; };
 		A1000107 /* LivePhotoExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000107 /* LivePhotoExtractorTests.swift */; };
 		A1000108 /* PhotoKitObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000108 /* PhotoKitObserverTests.swift */; };
+		A1000109 /* AppleOtgCardScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000109 /* AppleOtgCardScannerTests.swift */; };
+		A100010A /* AppleOtgIngestManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010A /* AppleOtgIngestManagerTests.swift */; };
 		A1000120 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
 /* End PBXBuildFile section */
 
@@ -78,6 +83,9 @@
 		A200000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000011 /* BranchDamCoreHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BranchDamCoreHeader.h; sourceTree = "<group>"; };
+		A2000012 /* AppleOtgCardScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgCardScanner.swift; sourceTree = "<group>"; };
+		A2000013 /* AppleOtgIngestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManager.swift; sourceTree = "<group>"; };
+		A2000014 /* AppleOtgImportConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgImportConfirmationView.swift; sourceTree = "<group>"; };
 		A2000020 /* BranchDamCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDamCore.xcframework; path = BranchDamCore.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
@@ -88,6 +96,8 @@
 		A2000106 /* BranchDamCoreBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDamCoreBridgeTests.swift; sourceTree = "<group>"; };
 		A2000107 /* LivePhotoExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePhotoExtractorTests.swift; sourceTree = "<group>"; };
 		A2000108 /* PhotoKitObserverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitObserverTests.swift; sourceTree = "<group>"; };
+		A2000109 /* AppleOtgCardScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgCardScannerTests.swift; sourceTree = "<group>"; };
+		A200010A /* AppleOtgIngestManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManagerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,6 +160,8 @@
 			children = (
 				A2000004 /* PhotoKitObserver.swift */,
 				A2000005 /* BackgroundSyncManager.swift */,
+				A2000012 /* AppleOtgCardScanner.swift */,
+				A2000013 /* AppleOtgIngestManager.swift */,
 			);
 			path = Ingest;
 			sourceTree = "<group>";
@@ -189,6 +201,7 @@
 				A200000C /* BrandMonogramView.swift */,
 				A200000D /* QrPairingView.swift */,
 				A200000E /* SafeSpaceView.swift */,
+				A2000014 /* AppleOtgImportConfirmationView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -212,6 +225,8 @@
 				A2000106 /* BranchDamCoreBridgeTests.swift */,
 				A2000107 /* LivePhotoExtractorTests.swift */,
 				A2000108 /* PhotoKitObserverTests.swift */,
+				A2000109 /* AppleOtgCardScannerTests.swift */,
+				A200010A /* AppleOtgIngestManagerTests.swift */,
 			);
 			path = BranchDAMTests;
 			sourceTree = "<group>";
@@ -325,6 +340,9 @@
 				A100000C /* BrandMonogramView.swift in Sources */,
 				A100000D /* QrPairingView.swift in Sources */,
 				A100000E /* SafeSpaceView.swift in Sources */,
+				A1000012 /* AppleOtgCardScanner.swift in Sources */,
+				A1000013 /* AppleOtgIngestManager.swift in Sources */,
+				A1000014 /* AppleOtgImportConfirmationView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -340,6 +358,8 @@
 				A1000106 /* BranchDamCoreBridgeTests.swift in Sources */,
 				A1000107 /* LivePhotoExtractorTests.swift in Sources */,
 				A1000108 /* PhotoKitObserverTests.swift in Sources */,
+				A1000109 /* AppleOtgCardScannerTests.swift in Sources */,
+				A100010A /* AppleOtgIngestManagerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
