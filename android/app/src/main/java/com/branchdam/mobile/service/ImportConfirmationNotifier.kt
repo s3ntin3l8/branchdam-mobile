@@ -147,7 +147,9 @@ object ImportConfirmationNotifier {
                         )
                     }
                 }
-                SyncScheduler.triggerImmediateSync(context)
+                if (context != null) {
+                    SyncScheduler.triggerImmediateSync(context)
+                }
             }
             ACTION_LATER -> {
                 for (id in targetIds) {
@@ -161,7 +163,9 @@ object ImportConfirmationNotifier {
                         )
                     }
                 }
-                SyncScheduler.schedulePeriodicSync(context)
+                if (context != null) {
+                    SyncScheduler.schedulePeriodicSync(context)
+                }
             }
             ACTION_SKIP -> {
                 suppressItems(targetIds)
