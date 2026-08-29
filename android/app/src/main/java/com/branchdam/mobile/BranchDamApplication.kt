@@ -26,14 +26,12 @@ class BranchDamApplication : Application() {
     }
 
     private fun initCoreEngine(dbPath: String) {
-        // Native Go core engine initialized via JNI / bindings
         val prefs = getSharedPreferences("branchdam_prefs", Context.MODE_PRIVATE)
         val serverUrl = prefs.getString("server_url", "http://10.0.2.2:8080") ?: "http://10.0.2.2:8080"
         val apiKey = prefs.getString("api_key", "") ?: ""
         val agentId = prefs.getString("agent_id", "pixel-fold-${android.os.Build.MODEL}") ?: "pixel-fold"
 
         try {
-            // Invokes Go core bindings: InitCore(dbPath, serverUrl, apiKey, agentId, "0.1.0")
             NativeBridge.initCore(dbPath, serverUrl, apiKey, agentId, "0.1.0")
         } catch (_: UnsatisfiedLinkError) {
             // Core native library loaded during runtime / tests
@@ -55,15 +53,27 @@ object NativeBridge {
         }
     }
 
-    fun initCore(dbPath: String, serverUrl: String, apiKey: String, agentId: String, version: String) {
-        // JNI native method binding
-    }
+    fun initCore(dbPath: String, serverUrl: String, apiKey: String, agentId: String, version: String) {}
 
     fun enqueueMedia(localPath: String, filename: String, capturedAtUnix: Long, localId: String): Long {
         return 1L
     }
 
+    fun enqueueLineageEvent(parentUuid: String, childUuid: String, relationshipType: String, resolver: String, confidence: Double): String {
+        return "mock-lineage-uuid"
+    }
+
+    fun enqueueDeleteEvent(nodeUuid: String): String {
+        return "mock-delete-uuid"
+    }
+
     fun syncBatch(timeoutSecs: Int, batchSize: Int): Pair<Int, Int> {
         return Pair(0, 0)
     }
+
+    fun isMediaOffloaded(localId: String): Boolean {
+        return false
+    }
+
+    fun setMediaOffloaded(localId: String, isOffloaded: Boolean) {}
 }
