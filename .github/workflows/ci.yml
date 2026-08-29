@@ -55,6 +55,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+
+      - name: Build Go Core xcframework
+        run: |
+          ./scripts/build-ios-framework.sh
+
       - name: Run iOS Unit Tests
         run: |
           xcodebuild test \

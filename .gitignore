@@ -35,6 +35,7 @@ out/
 !*.xcworkspace/contents.xcworkspacedata
 DerivedData/
 Pods/
+*.xcframework/
 *.ipa
 *.mobileprovision
 *.cer

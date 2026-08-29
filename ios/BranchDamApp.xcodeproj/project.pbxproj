@@ -22,6 +22,8 @@
 		A100000D /* QrPairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* QrPairingView.swift */; };
 		A100000E /* SafeSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* SafeSpaceView.swift */; };
 		A100000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000F /* Assets.xcassets */; };
+		A1000020 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
+		A1000021 /* BranchDamCore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A1000101 /* ApplePairDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000101 /* ApplePairDetectorTests.swift */; };
 		A1000102 /* AppleSafeSpaceManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000102 /* AppleSafeSpaceManagerTests.swift */; };
 		A1000103 /* AppleTrashSyncObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000103 /* AppleTrashSyncObserverTests.swift */; };
@@ -30,6 +32,7 @@
 		A1000106 /* BranchDamCoreBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000106 /* BranchDamCoreBridgeTests.swift */; };
 		A1000107 /* LivePhotoExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000107 /* LivePhotoExtractorTests.swift */; };
 		A1000108 /* PhotoKitObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000108 /* PhotoKitObserverTests.swift */; };
+		A1000120 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -41,6 +44,20 @@
 			remoteInfo = BranchDamApp;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A3000004 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A1000021 /* BranchDamCore.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A2000000 /* BranchDAM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BranchDAM.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -61,6 +78,7 @@
 		A200000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000011 /* BranchDamCoreHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BranchDamCoreHeader.h; sourceTree = "<group>"; };
+		A2000020 /* BranchDamCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDamCore.xcframework; path = BranchDamCore.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
 		A2000102 /* AppleSafeSpaceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerTests.swift; sourceTree = "<group>"; };
@@ -77,6 +95,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000020 /* BranchDamCore.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +103,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000120 /* BranchDamCore.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,6 +115,7 @@
 			children = (
 				A4000002 /* BranchDAM */,
 				A4000100 /* BranchDAMTests */,
+				A4000020 /* Frameworks */,
 				A4000007 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -172,6 +193,14 @@
 			path = UI;
 			sourceTree = "<group>";
 		};
+		A4000020 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A2000020 /* BranchDamCore.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		A4000100 /* BranchDAMTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -197,6 +226,7 @@
 				A3000002 /* Sources */,
 				A3000001 /* Frameworks */,
 				A3000003 /* Resources */,
+				A3000004 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -387,7 +417,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
@@ -417,7 +455,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
@@ -448,7 +494,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -474,7 +528,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/BranchDAM/Core",
+				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
