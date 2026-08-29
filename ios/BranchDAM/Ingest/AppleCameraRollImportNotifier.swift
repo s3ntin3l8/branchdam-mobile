@@ -21,6 +21,7 @@ public class AppleCameraRollImportNotifier {
     }
 
     private var suppressedAssetIds = Set<String>()
+    private var pendingAssetsMap = [String: DiscoveredAsset]()
     private let lock = NSLock()
 
     public init() {}
@@ -47,6 +48,26 @@ public class AppleCameraRollImportNotifier {
         lock.lock()
         defer { lock.unlock() }
         suppressedAssetIds.removeAll()
+    }
+
+    public func stagePendingAssets(_ assets: [DiscoveredAsset]) {
+        lock.lock()
+        defer { lock.unlock() }
+        for asset in assets {
+            pendingAssetsMap[asset.localIdentifier] = asset
+        }
+    }
+
+    public func getPendingAssets() -> [DiscoveredAsset] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(pendingAssetsMap.values)
+    }
+
+    public func clearPendingAssets() {
+        lock.lock()
+        defer { lock.unlock() }
+        pendingAssetsMap.removeAll()
     }
 
     public func registerNotificationCategories() {
@@ -96,13 +117,49 @@ public class AppleCameraRollImportNotifier {
     }
 
     public func handleAction(actionIdentifier: String, assetIdentifiers: [String] = []) {
+        lock.lock()
+        let targetIds = assetIdentifiers.isEmpty ? Array(pendingAssetsMap.keys) : assetIdentifiers
+        lock.unlock()
+
         switch actionIdentifier {
         case Self.actionImportNow:
+            lock.lock()
+            for id in targetIds {
+                if let item = pendingAssetsMap.removeValue(forKey: id), !suppressedAssetIds.contains(id) {
+                    _ = BranchDamCoreBridge.shared.enqueueMedia(
+                        localPath: "ph://\(item.localIdentifier)",
+                        filename: item.filename,
+                        capturedAtUnix: item.creationDateUnix,
+                        localID: item.localIdentifier
+                    )
+                }
+            }
+            lock.unlock()
             BackgroundSyncManager.shared.triggerImmediateSync()
+
         case Self.actionLater:
+            lock.lock()
+            for id in targetIds {
+                if let item = pendingAssetsMap.removeValue(forKey: id), !suppressedAssetIds.contains(id) {
+                    _ = BranchDamCoreBridge.shared.enqueueMedia(
+                        localPath: "ph://\(item.localIdentifier)",
+                        filename: item.filename,
+                        capturedAtUnix: item.creationDateUnix,
+                        localID: item.localIdentifier
+                    )
+                }
+            }
+            lock.unlock()
             BackgroundSyncManager.shared.scheduleBackgroundSync()
+
         case Self.actionSkip:
-            suppressAssets(assetIdentifiers)
+            suppressAssets(targetIds)
+            lock.lock()
+            for id in targetIds {
+                pendingAssetsMap.removeValue(forKey: id)
+            }
+            lock.unlock()
+
         default:
             break
         }

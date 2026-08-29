@@ -1,5 +1,6 @@
 package com.branchdam.mobile
 
+import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.service.ImportConfirmationNotifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,6 +13,7 @@ class ImportConfirmationNotifierTest {
     @Before
     fun setUp() {
         ImportConfirmationNotifier.clearSuppressed()
+        ImportConfirmationNotifier.clearPendingItems()
     }
 
     @Test
@@ -46,5 +48,36 @@ class ImportConfirmationNotifierTest {
         assertTrue(ImportConfirmationNotifier.isItemSuppressed(id1))
         assertTrue(ImportConfirmationNotifier.isItemSuppressed(id2))
         assertFalse(ImportConfirmationNotifier.isItemSuppressed(id3))
+    }
+
+    @Test
+    fun testStagingPendingItems() {
+        val item1 = MediaItem(
+            id = 1L,
+            contentUri = "content://media/external/images/media/1",
+            filePath = "/storage/emulated/0/DCIM/Camera/IMG_0001.JPG",
+            displayName = "IMG_0001.JPG",
+            mimeType = "image/jpeg",
+            sizeBytes = 1024L,
+            dateTakenUnix = 1700000000L,
+            isRaw = false
+        )
+        val item2 = MediaItem(
+            id = 2L,
+            contentUri = "content://media/external/images/media/2",
+            filePath = "/storage/emulated/0/DCIM/Camera/IMG_0002.DNG",
+            displayName = "IMG_0002.DNG",
+            mimeType = "image/x-adobe-dng",
+            sizeBytes = 2048L,
+            dateTakenUnix = 1700000001L,
+            isRaw = true
+        )
+
+        ImportConfirmationNotifier.stagePendingItems(listOf(item1, item2))
+        val staged = ImportConfirmationNotifier.getPendingItems()
+        assertEquals(2, staged.size)
+
+        ImportConfirmationNotifier.clearPendingItems()
+        assertTrue(ImportConfirmationNotifier.getPendingItems().isEmpty())
     }
 }

@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.branchdam.mobile.NativeBridge
+import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.receiver.ImportConfirmationReceiver
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -25,6 +27,7 @@ object ImportConfirmationNotifier {
     const val EXTRA_ITEM_IDS = "extra_item_ids"
 
     private val suppressedIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val pendingItemsMap = ConcurrentHashMap<String, MediaItem>()
 
     fun getAutoImportEnabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences(SyncScheduler.PREFS_NAME, Context.MODE_PRIVATE)
@@ -50,6 +53,20 @@ object ImportConfirmationNotifier {
 
     fun clearSuppressed() {
         suppressedIds.clear()
+    }
+
+    fun stagePendingItems(items: List<MediaItem>) {
+        for (item in items) {
+            pendingItemsMap[item.contentUri] = item
+        }
+    }
+
+    fun getPendingItems(): List<MediaItem> {
+        return pendingItemsMap.values.toList()
+    }
+
+    fun clearPendingItems() {
+        pendingItemsMap.clear()
     }
 
     fun createNotificationChannel(context: Context) {
@@ -112,15 +129,42 @@ object ImportConfirmationNotifier {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.cancel(NOTIFICATION_ID)
 
+        val targetIds = if (itemIds.isNotEmpty()) itemIds.toSet() else pendingItemsMap.keys
+
         when (action) {
             ACTION_IMPORT_NOW -> {
+                for (id in targetIds) {
+                    val item = pendingItemsMap.remove(id)
+                    if (item != null && !isItemSuppressed(id)) {
+                        NativeBridge.enqueueMedia(
+                            localPath = item.filePath,
+                            filename = item.displayName,
+                            capturedAtUnix = item.dateTakenUnix,
+                            localId = item.contentUri
+                        )
+                    }
+                }
                 SyncScheduler.triggerImmediateSync(context)
             }
             ACTION_LATER -> {
-                // Defer to next periodic sync (no immediate sync triggered)
+                for (id in targetIds) {
+                    val item = pendingItemsMap.remove(id)
+                    if (item != null && !isItemSuppressed(id)) {
+                        NativeBridge.enqueueMedia(
+                            localPath = item.filePath,
+                            filename = item.displayName,
+                            capturedAtUnix = item.dateTakenUnix,
+                            localId = item.contentUri
+                        )
+                    }
+                }
+                // Enqueued, will upload on next periodic sync window
             }
             ACTION_SKIP -> {
-                suppressItems(itemIds.toList())
+                suppressItems(targetIds)
+                for (id in targetIds) {
+                    pendingItemsMap.remove(id)
+                }
             }
         }
     }

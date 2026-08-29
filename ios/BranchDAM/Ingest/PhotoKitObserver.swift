@@ -84,14 +84,6 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
                 pixelHeight: asset.pixelHeight
             )
             discovered.append(item)
-
-            // Enqueue into core engine bridge
-            _ = BranchDamCoreBridge.shared.enqueueMedia(
-                localPath: "ph://\(asset.localIdentifier)",
-                filename: filename,
-                capturedAtUnix: creationUnix,
-                localID: asset.localIdentifier
-            )
         }
 
         if let latest = assets.lastObject?.creationDate {
@@ -100,8 +92,17 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
 
         if !discovered.isEmpty {
             if AppleCameraRollImportNotifier.shared.autoImportEnabled {
+                for item in discovered {
+                    _ = BranchDamCoreBridge.shared.enqueueMedia(
+                        localPath: "ph://\(item.localIdentifier)",
+                        filename: item.filename,
+                        capturedAtUnix: item.creationDateUnix,
+                        localID: item.localIdentifier
+                    )
+                }
                 BackgroundSyncManager.shared.triggerImmediateSync()
             } else {
+                AppleCameraRollImportNotifier.shared.stagePendingAssets(discovered)
                 AppleCameraRollImportNotifier.shared.postImportNotification(
                     count: discovered.count,
                     assetIdentifiers: discovered.map { $0.localIdentifier }
