@@ -17,13 +17,13 @@ func (q *Queue) EnqueueUpload(item *UploadItem) (int64, error) {
 	query := `
 	INSERT INTO upload_queue (
 		local_path, target_filename, target_dir, fast_hash, blake3_hash,
-		size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
+		camera_model, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
 		error_msg, node_uuid, created_at_unix, updated_at_unix
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	res, err := q.db.Exec(query,
 		item.LocalPath, item.TargetFilename, item.TargetDir, item.FastHash, item.Blake3Hash,
-		item.SizeBytes, item.CapturedAtUnix, string(item.Status), item.RetryCount, item.LastAttemptUnix,
+		item.CameraModel, item.SizeBytes, item.CapturedAtUnix, string(item.Status), item.RetryCount, item.LastAttemptUnix,
 		item.ErrorMsg, item.NodeUUID, item.CreatedAtUnix, item.UpdatedAtUnix,
 	)
 	if err != nil {
@@ -48,7 +48,7 @@ func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetrie
 
 	query := `
 	SELECT id, local_path, target_filename, target_dir, fast_hash, blake3_hash,
-	       size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
+	       camera_model, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
 	       error_msg, node_uuid, created_at_unix, updated_at_unix
 	FROM upload_queue
 	WHERE (status = 'PENDING' OR (status = 'IN_PROGRESS' AND last_attempt_unix <= ?))
@@ -69,7 +69,7 @@ func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetrie
 		var statusStr string
 		err := rows.Scan(
 			&item.ID, &item.LocalPath, &item.TargetFilename, &item.TargetDir, &item.FastHash, &item.Blake3Hash,
-			&item.SizeBytes, &item.CapturedAtUnix, &statusStr, &item.RetryCount, &item.LastAttemptUnix,
+			&item.CameraModel, &item.SizeBytes, &item.CapturedAtUnix, &statusStr, &item.RetryCount, &item.LastAttemptUnix,
 			&item.ErrorMsg, &item.NodeUUID, &item.CreatedAtUnix, &item.UpdatedAtUnix,
 		)
 		if err != nil {

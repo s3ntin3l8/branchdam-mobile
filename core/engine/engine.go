@@ -32,7 +32,7 @@ func New(q *queue.Queue, c *client.Client) *Engine {
 }
 
 // EnqueueLocalCapture reads a local media file, calculates hashes, records local state, and queues for upload.
-func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix int64, localID string) (*queue.UploadItem, error) {
+func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix int64, localID string, cameraModel ...string) (*queue.UploadItem, error) {
 	file, err := os.Open(localPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open local file: %w", err)
@@ -44,11 +44,19 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		return nil, fmt.Errorf("failed to hash local file: %w", err)
 	}
 
+	cam := ""
+	if len(cameraModel) > 0 && cameraModel[0] != "" {
+		cam = cameraModel[0]
+	} else if e.c != nil {
+		cam = e.c.AgentID()
+	}
+
 	item := &queue.UploadItem{
 		LocalPath:      localPath,
 		TargetFilename: filename,
 		FastHash:       fastHash,
 		Blake3Hash:     fullHash,
+		CameraModel:    cam,
 		SizeBytes:      sizeBytes,
 		CapturedAtUnix: capturedAtUnix,
 	}
@@ -93,7 +101,13 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 			continue
 		}
 
+		cam := item.CameraModel
+		if cam == "" && e.c != nil {
+			cam = e.c.AgentID()
+		}
+
 		uploadOpts := client.UploadOptions{
+			CameraModel:    cam,
 			FastHash:       item.FastHash,
 			Blake3Hash:     item.Blake3Hash,
 			CapturedAtUnix: item.CapturedAtUnix,

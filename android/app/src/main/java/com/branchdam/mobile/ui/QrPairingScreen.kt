@@ -32,11 +32,13 @@ object QrParser {
 @Composable
 fun QrPairingScreen(
     onPairingComplete: (PairingConfig) -> Unit,
-    namingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}",
+    onFetchNamingTemplate: (() -> String)? = null,
+    initialNamingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}",
     modifier: Modifier = Modifier
 ) {
     var manualUrl by remember { mutableStateOf("http://192.168.1.100:8080") }
     var manualKey by remember { mutableStateOf("") }
+    var namingTemplate by remember { mutableStateOf(initialNamingTemplate) }
 
     Column(
         modifier = modifier
@@ -70,8 +72,8 @@ fun QrPairingScreen(
             value = namingTemplate,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Server Naming Template (Synchronized)") },
-            supportingText = { Text("Managed by server handshake (POST /api/v1/agent/upload)") },
+            label = { Text("Server Naming Template") },
+            supportingText = { Text("Synchronized via server handshake (POST /api/v1/agent/upload)") },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -80,6 +82,12 @@ fun QrPairingScreen(
         Button(
             onClick = {
                 onPairingComplete(PairingConfig(manualUrl, manualKey, "pixel-10-fold"))
+                if (onFetchNamingTemplate != null) {
+                    val fetched = onFetchNamingTemplate()
+                    if (fetched.isNotBlank()) {
+                        namingTemplate = fetched
+                    }
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
