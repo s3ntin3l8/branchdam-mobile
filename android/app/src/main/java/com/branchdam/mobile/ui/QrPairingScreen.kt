@@ -32,6 +32,7 @@ object QrParser {
 @Composable
 fun QrPairingScreen(
     onPairingComplete: (PairingConfig) -> Unit,
+    namingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}",
     modifier: Modifier = Modifier
 ) {
     var manualUrl by remember { mutableStateOf("http://192.168.1.100:8080") }
@@ -44,7 +45,7 @@ fun QrPairingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("branchDAM Server Pairing", style = MaterialTheme.typography.headlineSmall)
+        Text("branchDAM Server Settings", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
@@ -60,6 +61,17 @@ fun QrPairingScreen(
             value = manualKey,
             onValueChange = { manualKey = it },
             label = { Text("API Key (Optional)") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = namingTemplate,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Server Naming Template (Synchronized)") },
+            supportingText = { Text("Managed by server handshake (POST /api/v1/agent/upload)") },
             modifier = Modifier.fillMaxWidth()
         )
 
