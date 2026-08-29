@@ -34,8 +34,9 @@ public class BranchDamCoreBridge {
         version: String = "0.1.0"
     ) -> Bool {
         #if canImport(BranchDamCore)
-        let res = InitCore(dbPath, baseURL, apiKey, agentID, version)
-        self.isInitialized = (res == 0)
+        var error: NSError?
+        let ok = BindingsInitCore(dbPath, baseURL, apiKey, agentID, version, &error)
+        self.isInitialized = ok && error == nil
         return self.isInitialized
         #else
         self.isInitialized = true
@@ -50,7 +51,9 @@ public class BranchDamCoreBridge {
         localID: String
     ) -> Int64 {
         #if canImport(BranchDamCore)
-        return EnqueueMedia(localPath, filename, capturedAtUnix, localID)
+        var error: NSError?
+        let id = BindingsEnqueueMedia(localPath, filename, capturedAtUnix, localID, "", &error)
+        return error == nil ? id : 0
         #else
         return 1
         #endif
@@ -64,12 +67,9 @@ public class BranchDamCoreBridge {
         confidence: Double = 1.00
     ) -> String {
         #if canImport(BranchDamCore)
-        guard let cStr = EnqueueLineageEvent(parentUUID, childUUID, relationshipType, resolver, confidence) else {
-            return ""
-        }
-        let result = String(cString: cStr)
-        FreeCString(cStr)
-        return result
+        var error: NSError?
+        let res = BindingsEnqueueLineageEvent(parentUUID, childUUID, relationshipType, resolver, confidence, &error)
+        return (error == nil && res != nil) ? res! : ""
         #else
         return UUID().uuidString
         #endif
@@ -77,12 +77,9 @@ public class BranchDamCoreBridge {
 
     public func enqueueDeleteEvent(nodeUUID: String) -> String {
         #if canImport(BranchDamCore)
-        guard let cStr = EnqueueDeleteEvent(nodeUUID) else {
-            return ""
-        }
-        let result = String(cString: cStr)
-        FreeCString(cStr)
-        return result
+        var error: NSError?
+        let res = BindingsEnqueueDeleteEvent(nodeUUID, &error)
+        return (error == nil && res != nil) ? res! : ""
         #else
         return UUID().uuidString
         #endif
@@ -90,8 +87,11 @@ public class BranchDamCoreBridge {
 
     public func syncBatch(timeoutSecs: Int32 = 120, batchSize: Int32 = 10) -> (uploaded: Int32, eventsSent: Int32) {
         #if canImport(BranchDamCore)
-        let res = SyncBatch(timeoutSecs, batchSize)
-        return (uploaded: res, eventsSent: 0)
+        var error: NSError?
+        if let res = BindingsSyncBatch(Int(timeoutSecs), Int(batchSize), &error), error == nil {
+            return (uploaded: Int32(res.uploaded), eventsSent: Int32(res.eventsSent))
+        }
+        return (uploaded: 0, eventsSent: 0)
         #else
         return (uploaded: 0, eventsSent: 0)
         #endif
@@ -99,7 +99,7 @@ public class BranchDamCoreBridge {
 
     public func isMediaOffloaded(localID: String) -> Bool {
         #if canImport(BranchDamCore)
-        return GetMediaOffloaded(localID) == 1
+        return BindingsIsMediaOffloaded(localID)
         #else
         return mockOffloadedMedia[localID] ?? false
         #endif
@@ -107,7 +107,9 @@ public class BranchDamCoreBridge {
 
     public func setMediaOffloaded(localID: String, isOffloaded: Bool) -> Bool {
         #if canImport(BranchDamCore)
-        return SetMediaOffloaded(localID, isOffloaded ? 1 : 0) == 0
+        var error: NSError?
+        let ok = BindingsSetMediaOffloaded(localID, isOffloaded, &error)
+        return ok && error == nil
         #else
         mockOffloadedMedia[localID] = isOffloaded
         return true
@@ -116,12 +118,11 @@ public class BranchDamCoreBridge {
 
     public func fetchNamingTemplate() -> String {
         #if canImport(BranchDamCore)
-        guard let cStr = FetchNamingTemplate() else {
-            return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
+        var error: NSError?
+        if let res = BindingsFetchNamingTemplate(&error), error == nil {
+            return res
         }
-        let result = String(cString: cStr)
-        FreeCString(cStr)
-        return result
+        return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
         #else
         return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
         #endif

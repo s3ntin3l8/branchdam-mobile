@@ -183,13 +183,17 @@ func SyncBatch(timeoutSecs int, batchSize int) (*SyncResult, error) {
 }
 
 // IsMediaOffloaded checks whether local deletion of localID was an intentional offload.
-func IsMediaOffloaded(localID string) (bool, error) {
+func IsMediaOffloaded(localID string) bool {
 	engineMu.RLock()
 	defer engineMu.RUnlock()
 	if globalQueue == nil {
-		return false, fmt.Errorf("core engine not initialized")
+		return false
 	}
-	return globalQueue.IsMediaOffloaded(localID)
+	offloaded, err := globalQueue.IsMediaOffloaded(localID)
+	if err != nil {
+		return false
+	}
+	return offloaded
 }
 
 // SetMediaOffloaded flags local asset as offloaded to suppress deletion events.

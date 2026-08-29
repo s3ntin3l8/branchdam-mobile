@@ -53,8 +53,8 @@ func TestBindingsLifecycle(t *testing.T) {
 		t.Fatalf("SetMediaOffloaded failed: %v", err)
 	}
 
-	offloaded, err := IsMediaOffloaded("local_uri_bind")
-	if err != nil || !offloaded {
+	offloaded := IsMediaOffloaded("local_uri_bind")
+	if !offloaded {
 		t.Fatalf("expected offloaded true, got %v", offloaded)
 	}
 }
@@ -91,8 +91,8 @@ func TestBindingsUninitialized(t *testing.T) {
 		t.Fatal("expected error on uninitialized SyncBatch")
 	}
 
-	if _, err := IsMediaOffloaded("local_1"); err == nil {
-		t.Fatal("expected error on uninitialized IsMediaOffloaded")
+	if offloaded := IsMediaOffloaded("local_1"); offloaded {
+		t.Fatal("expected offloaded false on uninitialized IsMediaOffloaded")
 	}
 
 	if err := SetMediaOffloaded("local_1", true); err == nil {
