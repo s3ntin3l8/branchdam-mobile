@@ -30,6 +30,10 @@ func Open(dbPath string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to execute queue schema: %w", err)
 	}
 
+	// Reset any orphaned IN_PROGRESS items from a previous crashed/killed session back to PENDING
+	now := time.Now().Unix()
+	_, _ = db.Exec(`UPDATE upload_queue SET status = 'PENDING', updated_at_unix = ? WHERE status = 'IN_PROGRESS'`, now)
+
 	return &Queue{db: db}, nil
 }
 

@@ -152,44 +152,60 @@ func (e *Engine) SyncEvents(ctx context.Context, batchSize int) (int, error) {
 
 // CheckSafeSpaceCandidates queries the server to determine which local items are safely archived.
 func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string) ([]SafeSpaceCandidate, error) {
-	var candidates []SafeSpaceCandidate
+	candidateMap := make(map[string]SafeSpaceCandidate, len(localIDs))
 	var queryUUIDs []string
 	idToLocal := make(map[string]string)
 
 	for _, localID := range localIDs {
 		state, err := e.q.GetMediaByLocalID(localID)
 		if err != nil || state == nil || state.NodeUUID == "" {
-			candidates = append(candidates, SafeSpaceCandidate{
+			candidateMap[localID] = SafeSpaceCandidate{
 				LocalID:    localID,
 				IsVerified: false,
 				IsEligible: false,
-			})
+			}
 			continue
 		}
 
+		candidateMap[localID] = SafeSpaceCandidate{
+			LocalID:    localID,
+			NodeUUID:   state.NodeUUID,
+			Blake3Hash: state.Blake3Hash,
+			IsVerified: false,
+			IsEligible: false,
+		}
 		queryUUIDs = append(queryUUIDs, state.NodeUUID)
 		idToLocal[state.NodeUUID] = localID
 	}
 
-	if len(queryUUIDs) == 0 {
-		return candidates, nil
+	if len(queryUUIDs) > 0 {
+		statuses, err := e.c.GetNodeStatuses(ctx, queryUUIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query node statuses: %w", err)
+		}
+
+		for _, st := range statuses {
+			localID, exists := idToLocal[st.NodeUUID]
+			if !exists {
+				continue
+			}
+
+			isEligible := st.Found && st.Verified && (st.Tier == "TIER3_MASTER_ARCHIVE" || st.Tier == "TIER2_DERIVATIVE_CACHE")
+			candidateMap[localID] = SafeSpaceCandidate{
+				LocalID:    localID,
+				NodeUUID:   st.NodeUUID,
+				Blake3Hash: candidateMap[localID].Blake3Hash,
+				IsVerified: st.Verified,
+				IsEligible: isEligible,
+				Tier:       st.Tier,
+			}
+		}
 	}
 
-	statuses, err := e.c.GetNodeStatuses(ctx, queryUUIDs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query node statuses: %w", err)
-	}
-
-	for _, st := range statuses {
-		localID := idToLocal[st.NodeUUID]
-		isEligible := st.Verified && (st.Tier == "TIER3_MASTER_ARCHIVE" || st.Tier == "TIER2_DERIVATIVE_CACHE")
-		candidates = append(candidates, SafeSpaceCandidate{
-			LocalID:    localID,
-			NodeUUID:   st.NodeUUID,
-			IsVerified: st.Verified,
-			IsEligible: isEligible,
-			Tier:       st.Tier,
-		})
+	// Build stable output ordered by input localIDs
+	candidates := make([]SafeSpaceCandidate, 0, len(localIDs))
+	for _, localID := range localIDs {
+		candidates = append(candidates, candidateMap[localID])
 	}
 
 	return candidates, nil

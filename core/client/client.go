@@ -13,6 +13,7 @@ type Config struct {
 	AgentID       string
 	ClientVersion string
 	HTTPClient    *http.Client
+	UploadClient  *http.Client
 }
 
 type Client struct {
@@ -21,6 +22,7 @@ type Client struct {
 	agentID       string
 	clientVersion string
 	httpClient    *http.Client
+	uploadClient  *http.Client
 }
 
 func New(cfg Config) *Client {
@@ -29,6 +31,14 @@ func New(cfg Config) *Client {
 	if httpClient == nil {
 		httpClient = &http.Client{
 			Timeout: 30 * time.Second,
+		}
+	}
+	uploadClient := cfg.UploadClient
+	if uploadClient == nil {
+		// Upload transfers rely on request context for deadline/cancellation
+		// rather than a static 30s client-level timeout that would cut off large media streams.
+		uploadClient = &http.Client{
+			Timeout: 0,
 		}
 	}
 	version := cfg.ClientVersion
@@ -41,6 +51,7 @@ func New(cfg Config) *Client {
 		agentID:       cfg.AgentID,
 		clientVersion: version,
 		httpClient:    httpClient,
+		uploadClient:  uploadClient,
 	}
 }
 

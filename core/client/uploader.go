@@ -36,7 +36,7 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// UploadStream streams file bytes directly to POST /api/v1/staging/upload.
+// UploadStream streams file bytes directly to POST /api/v1/staging/upload using the stream-optimized client.
 func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64, filename string, opts UploadOptions) (*UploadResponse, error) {
 	var bodyReader io.Reader = r
 	if opts.ProgressFn != nil {
@@ -68,7 +68,7 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 		req.Header.Set("X-Capture-Timestamp", strconv.FormatInt(opts.CapturedAtUnix, 10))
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.uploadClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("upload transfer failed: %w", err)
 	}

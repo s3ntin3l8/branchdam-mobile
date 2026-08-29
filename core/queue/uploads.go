@@ -38,7 +38,7 @@ func (q *Queue) EnqueueUpload(item *UploadItem) (int64, error) {
 	return id, nil
 }
 
-// ClaimPendingUploads retrieves pending upload items eligible for attempt.
+// ClaimPendingUploads retrieves pending upload items eligible for attempt, reclaiming stale in-progress items.
 func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetries int) ([]*UploadItem, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -51,11 +51,13 @@ func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetrie
 	       size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
 	       error_msg, node_uuid, created_at_unix, updated_at_unix
 	FROM upload_queue
-	WHERE status = 'PENDING' AND retry_count < ? AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
+	WHERE (status = 'PENDING' OR (status = 'IN_PROGRESS' AND last_attempt_unix <= ?))
+	  AND retry_count < ?
+	  AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
 	ORDER BY id ASC
 	LIMIT ?
 	`
-	rows, err := q.db.Query(query, maxRetries, cutoff, limit)
+	rows, err := q.db.Query(query, cutoff, maxRetries, cutoff, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to claim pending uploads: %w", err)
 	}
