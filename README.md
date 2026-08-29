@@ -40,22 +40,26 @@ Native mobile companion application for [branchDAM](https://github.com/s3ntin3l8
 4. When prompted by Android, enable **Install unknown apps** for your browser or file manager, then tap **Install**.
 
 #### Method C: Build from Source via Gradle
-Prerequisites: JDK 21, Android SDK (API 35), and Go 1.24.
+Prerequisites: JDK 21, Android SDK Platform 35, Android NDK (for native Go JNI library), and Go 1.25+.
 
 ```bash
 # Clone repository
 git clone https://github.com/s3ntin3l8/branchdam-mobile.git
 cd branchdam-mobile
 
-# Build Go core C-archive for Android
-cd core && go build -buildmode=c-shared -o ../android/app/src/main/jniLibs/arm64-v8a/libbranchdamcore.so ./bindings && cd ..
+# Cross-compile Go core C-shared library for Android arm64
+cd core
+CGO_ENABLED=1 GOOS=android GOARCH=arm64 \
+  CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang \
+  go build -buildmode=c-shared -o ../android/app/src/main/jniLibs/arm64-v8a/libbranchdamcore.so ./bindings
+cd ..
 
 # Assemble release APK and App Bundle (AAB)
 cd android
 ./gradlew assembleRelease bundleRelease
 
-# Install directly to connected device via adb
-adb install -r app/build/outputs/apk/release/branchdam-mobile.apk
+# Install directly to connected device via adb (local builds output app-release.apk)
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
 ---
@@ -106,10 +110,13 @@ To pair the mobile app with your branchDAM server:
   Exchanges device capabilities, checks protocol version, and receives the server's canonical naming template (e.g. `{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}`).
 - **Direct Upload (`POST /api/v1/agent/upload`)**:
   Streams chunked binary asset data directly with headers:
-  - `X-Agent-ID`: Unique companion instance ID.
-  - `X-Camera-Model`: Hardware camera model string (e.g. `Google Pixel 10 Pro Fold`).
-  - `X-Original-Path`: Original camera roll relative path.
-  - `X-Content-SHA256`: Checksum for streaming validation.
+  - `User-Agent`: Companion identifier (`branchdam-mobile/<agent_id>`).
+  - `X-Filename`: Original camera roll file name.
+  - `X-Camera-Model`: Hardware camera model string (e.g. `Google Pixel 10 Pro Fold`, `iPhone 16 Pro Max`).
+  - `X-Blake3-Hash`: BLAKE3 checksum for integrity and archive verification.
+  - `X-Fast-Hash`: Streaming fast hash (xxHash) for duplicate detection.
+  - `X-Capture-Timestamp`: Capture time in Unix epoch seconds.
+  - `X-API-Key` / `Authorization`: Companion authentication credential.
 - **Safe Space Deletion Model**:
   Assets are only marked eligible for local deletion after the server responds with HTTP `200 OK` / `201 Created` and the BLAKE3 checksum is verified on the master storage tier.
 
