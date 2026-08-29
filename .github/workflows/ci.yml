@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test-core:
+    name: Core (Go build · vet · test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,12 +22,21 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: core/go.sum
 
-      - name: Test Core
+      - name: Test Core with coverage
         run: |
           cd core
-          go test -race -v -coverprofile=coverage.txt ./...
+          go test -race -v -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: core/coverage.txt
+          flags: core
+          fail_ci_if_error: false
 
   lint:
+    name: Pre-commit & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

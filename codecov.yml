@@ -1,0 +1,28 @@
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+      core:
+        target: 75%
+        flags:
+          - core
+      android:
+        target: 60%
+        flags:
+          - android
+    patch:
+      default:
+        target: 75%
+        informational: true
+
+flags:
+  core:
+    paths:
+      - core/
+  android:
+    paths:
+      - android/
+
+comment:
+  layout: "reach, diff, flags, files"
