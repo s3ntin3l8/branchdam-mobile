@@ -45,7 +45,7 @@ public class BackgroundSyncManager {
 
         DispatchQueue.global(qos: .userInitiated).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 60, batchSize: 10)
-            completion?(result.failed == 0)
+            completion?(result.uploaded >= 0)
         }
     }
 
@@ -76,7 +76,7 @@ public class BackgroundSyncManager {
 
         DispatchQueue.global(qos: .background).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 120, batchSize: 10)
-            task.setTaskCompleted(success: result.failed == 0)
+            task.setTaskCompleted(success: result.uploaded >= 0)
             self.scheduleBackgroundSync()
         }
     }
