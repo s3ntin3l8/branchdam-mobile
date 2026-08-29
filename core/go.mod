@@ -6,7 +6,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/uuid v1.6.0
 	github.com/zeebo/blake3 v0.2.4
-	modernc.org/sqlite v1.57.0
+	modernc.org/sqlite v1.35.0
 )
 
 require (

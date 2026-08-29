@@ -12,10 +12,10 @@ import (
 type ProgressCallback func(bytesSent int64, totalBytes int64)
 
 type UploadOptions struct {
-	FastHash           string
-	Blake3Hash         string
-	CapturedAtUnix     int64
-	ProgressFn         ProgressCallback
+	FastHash       string
+	Blake3Hash     string
+	CapturedAtUnix int64
+	ProgressFn     ProgressCallback
 }
 
 type progressReader struct {

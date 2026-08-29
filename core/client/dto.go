@@ -41,19 +41,19 @@ type NodeStatusResponse struct {
 }
 
 type MobileTelemetry struct {
-	DeviceID            string `json:"deviceId"`
-	DeviceName          string `json:"deviceName"`
-	Platform            string `json:"platform"`
-	ClientVersion       string `json:"clientVersion"`
-	TotalBytes          int64  `json:"totalBytes"`
-	FreeBytes           int64  `json:"freeBytes"`
-	UsedBytes           int64  `json:"usedBytes"`
-	SafeToFreeBytes     int64  `json:"safeToFreeBytes"`
-	PendingQueueCount   int64  `json:"pendingQueueCount"`
-	BatteryLevel        int    `json:"batteryLevel"`
-	IsCharging          bool   `json:"isCharging"`
-	NetworkType         string `json:"networkType"`
-	TimestampUnix       int64  `json:"timestampUnix"`
+	DeviceID          string `json:"deviceId"`
+	DeviceName        string `json:"deviceName"`
+	Platform          string `json:"platform"`
+	ClientVersion     string `json:"clientVersion"`
+	TotalBytes        int64  `json:"totalBytes"`
+	FreeBytes         int64  `json:"freeBytes"`
+	UsedBytes         int64  `json:"usedBytes"`
+	SafeToFreeBytes   int64  `json:"safeToFreeBytes"`
+	PendingQueueCount int64  `json:"pendingQueueCount"`
+	BatteryLevel      int    `json:"batteryLevel"`
+	IsCharging        bool   `json:"isCharging"`
+	NetworkType       string `json:"networkType"`
+	TimestampUnix     int64  `json:"timestampUnix"`
 }
 
 type UploadResponse struct {

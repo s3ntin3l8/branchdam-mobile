@@ -26,7 +26,7 @@ func TestUploadQueueLifecycle(t *testing.T) {
 		LocalPath:      "/sdcard/DCIM/Camera/PXL_001.dng",
 		TargetFilename: "PXL_001.dng",
 		FastHash:       "0123456789abcdef",
-		Blake3Hash:     "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a",
+		Blake3Hash:     "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a// pragma: allowlist secret",
 		SizeBytes:      24000000,
 		CapturedAtUnix: 1724000000,
 	}
@@ -129,7 +129,7 @@ func TestLocalMediaStateAndOffload(t *testing.T) {
 
 	localID := "content://media/external/images/media/1004"
 	nodeUUID := "018f2345-6789-7abc-def0-123456789abc"
-	blake3 := "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a"
+	blake3 := "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a// pragma: allowlist secret"
 
 	if err := q.RecordLocalMedia(localID, nodeUUID, blake3, "ACTIVE"); err != nil {
 		t.Fatalf("RecordLocalMedia failed: %v", err)
