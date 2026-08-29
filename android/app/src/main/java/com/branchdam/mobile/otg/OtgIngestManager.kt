@@ -5,13 +5,16 @@ import android.net.Uri
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CancellationException
 
 data class OtgIngestProgress(
     val currentFileIndex: Int,
@@ -41,12 +44,15 @@ class OtgIngestManager(
     private val _state = MutableStateFlow<OtgState>(OtgState.Idle)
     val state: StateFlow<OtgState> = _state.asStateFlow()
 
+    private var inFlightJob: Job? = null
+
     /**
      * Called when a USB mass storage / SD card is attached or selected via SAF.
      * Starts background scanning and transitions to AwaitingConfirmation upon completion.
      */
     fun onCardDetected(deviceLabel: String, directory: File) {
-        scope.launch {
+        inFlightJob?.cancel()
+        inFlightJob = scope.launch {
             _state.value = OtgState.Scanning(deviceLabel)
             val result = withContext(ioDispatcher) {
                 OtgCardScanner.scanDirectory(directory, deviceLabel)
@@ -63,7 +69,8 @@ class OtgIngestManager(
      * Called when a SAF DocumentTree URI is provided by the user.
      */
     fun onDocumentTreeSelected(treeUri: Uri, deviceLabel: String = "SD Card") {
-        scope.launch {
+        inFlightJob?.cancel()
+        inFlightJob = scope.launch {
             _state.value = OtgState.Scanning(deviceLabel)
             val result = withContext(ioDispatcher) {
                 if (context != null) {
@@ -88,7 +95,8 @@ class OtgIngestManager(
         destinationDir: File = context?.filesDir?.let { File(it, "otg_stage") } ?: File(System.getProperty("java.io.tmpdir"), "otg_stage"),
         onFileStaged: (file: File, candidate: OtgMediaCandidate) -> Unit = { _, _ -> }
     ) {
-        scope.launch {
+        inFlightJob?.cancel()
+        inFlightJob = scope.launch {
             val candidates = scanResult.candidates
             val totalBytes = scanResult.totalSizeBytes
             var bytesProcessed = 0L
@@ -98,32 +106,41 @@ class OtgIngestManager(
                 destinationDir.mkdirs()
             }
 
-            for ((index, candidate) in candidates.withIndex()) {
-                _state.value = OtgState.Ingesting(
-                    OtgIngestProgress(
-                        currentFileIndex = index + 1,
-                        totalFiles = candidates.size,
-                        currentFileName = candidate.fileName,
-                        bytesProcessed = bytesProcessed,
-                        totalBytes = totalBytes
+            try {
+                for ((index, candidate) in candidates.withIndex()) {
+                    if (!isActive) break
+
+                    _state.value = OtgState.Ingesting(
+                        OtgIngestProgress(
+                            currentFileIndex = index + 1,
+                            totalFiles = candidates.size,
+                            currentFileName = candidate.fileName,
+                            bytesProcessed = bytesProcessed,
+                            totalBytes = totalBytes
+                        )
                     )
-                )
 
-                val stagedFile = withContext(ioDispatcher) {
-                    copyCandidateToStage(candidate, destinationDir)
-                }
+                    val stagedFile = withContext(ioDispatcher) {
+                        copyCandidateToStage(candidate, destinationDir)
+                    }
 
-                if (stagedFile != null && stagedFile.exists()) {
                     bytesProcessed += candidate.sizeBytes
                     importedCount++
                     onFileStaged(stagedFile, candidate)
                 }
-            }
 
-            _state.value = OtgState.Completed(
-                importedCount = importedCount,
-                totalBytes = bytesProcessed
-            )
+                if (isActive) {
+                    _state.value = OtgState.Completed(
+                        importedCount = importedCount,
+                        totalBytes = bytesProcessed
+                    )
+                }
+            } catch (ce: CancellationException) {
+                // Job was cancelled by user
+                _state.value = OtgState.Idle
+            } catch (e: Exception) {
+                _state.value = OtgState.Error("Failed to import SD card media: ${e.message ?: "Unknown error"}")
+            }
         }
     }
 
@@ -131,6 +148,8 @@ class OtgIngestManager(
      * Human cancellation hook to reject or skip the ingest.
      */
     fun cancelImport() {
+        inFlightJob?.cancel()
+        inFlightJob = null
         _state.value = OtgState.Idle
     }
 
@@ -138,30 +157,31 @@ class OtgIngestManager(
      * Resets state back to Idle after viewing completion or error.
      */
     fun reset() {
+        inFlightJob?.cancel()
+        inFlightJob = null
         _state.value = OtgState.Idle
     }
 
-    private fun copyCandidateToStage(candidate: OtgMediaCandidate, stageDir: File): File? {
-        val targetFile = File(stageDir, candidate.fileName)
-        return try {
-            if (candidate.uri.startsWith("content://") && context != null) {
-                val uri = Uri.parse(candidate.uri)
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        input.copyTo(output)
-                    }
+    private fun copyCandidateToStage(candidate: OtgMediaCandidate, stageDir: File): File {
+        // Preserve relative path to avoid same-named collisions across camera folders (e.g. 100EOSR5 vs 101EOSR5)
+        val targetFile = File(stageDir, candidate.relativePath)
+        targetFile.parentFile?.mkdirs()
+
+        if (candidate.uri.startsWith("content://") && context != null) {
+            val uri = Uri.parse(candidate.uri)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(targetFile).use { output ->
+                    input.copyTo(output)
                 }
-            } else if (candidate.uri.startsWith("file:/")) {
-                val sourceFile = File(java.net.URI(candidate.uri))
-                sourceFile.copyTo(targetFile, overwrite = true)
-            } else {
-                val sourceFile = File(candidate.uri)
-                sourceFile.copyTo(targetFile, overwrite = true)
-            }
-            targetFile
-        } catch (e: Exception) {
-            null
+            } ?: throw IllegalStateException("Could not open stream for content URI: ${candidate.uri}")
+        } else if (candidate.uri.startsWith("file:/")) {
+            val sourceFile = File(java.net.URI(candidate.uri))
+            sourceFile.copyTo(targetFile, overwrite = true)
+        } else {
+            val sourceFile = File(candidate.uri)
+            sourceFile.copyTo(targetFile, overwrite = true)
         }
+        return targetFile
     }
 
     companion object {

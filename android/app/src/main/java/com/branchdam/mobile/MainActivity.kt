@@ -54,6 +54,12 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = { otgManager.reset() }
                             )
                         }
+                        is OtgState.Error -> {
+                            com.branchdam.mobile.ui.OtgIngestErrorDialog(
+                                errorMessage = state.message,
+                                onDismiss = { otgManager.reset() }
+                            )
+                        }
                         else -> Unit
                     }
                 }
