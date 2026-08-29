@@ -8,7 +8,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         let success = bridge.initialize(
             dbPath: "/tmp/test_queue.db",
             baseURL: "http://localhost:8080",
-            apiKey: "test_key",
+            apiKey: "test_key", // pragma: allowlist secret
             agentID: "iphone-16-pro"
         )
         XCTAssertTrue(success)
