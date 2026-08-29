@@ -12,12 +12,17 @@ public class BackgroundSyncManager {
         }
         set {
             UserDefaults.standard.set(newValue, forKey: Self.keySyncOnMobileData)
+            setupUrlSession()
         }
     }
 
     private var urlSession: URLSession?
 
     private init() {
+        setupUrlSession()
+    }
+
+    private func setupUrlSession() {
         let config = URLSessionConfiguration.background(withIdentifier: "com.branchdam.mobile.bg-uploader")
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
@@ -40,7 +45,7 @@ public class BackgroundSyncManager {
 
         DispatchQueue.global(qos: .userInitiated).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 60, batchSize: 10)
-            completion?(result.uploaded >= 0)
+            completion?(result.failed == 0)
         }
     }
 
@@ -71,7 +76,7 @@ public class BackgroundSyncManager {
 
         DispatchQueue.global(qos: .background).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 120, batchSize: 10)
-            task.setTaskCompleted(success: result.uploaded >= 0)
+            task.setTaskCompleted(success: result.failed == 0)
             self.scheduleBackgroundSync()
         }
     }

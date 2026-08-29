@@ -52,10 +52,11 @@ fun QrPairingScreen(
     initialNamingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}",
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var manualUrl by remember { mutableStateOf("http://192.168.1.100:8080") }
     var manualKey by remember { mutableStateOf("") }
     var namingTemplate by remember { mutableStateOf(initialNamingTemplate) }
-    var syncOnMobileData by remember { mutableStateOf(false) }
+    var syncOnMobileData by remember { mutableStateOf(com.branchdam.mobile.service.SyncScheduler.getSyncOnMobileData(context)) }
 
     Column(
         modifier = modifier
@@ -113,7 +114,10 @@ fun QrPairingScreen(
             }
             Switch(
                 checked = syncOnMobileData,
-                onCheckedChange = { syncOnMobileData = it }
+                onCheckedChange = {
+                    syncOnMobileData = it
+                    com.branchdam.mobile.service.SyncScheduler.setSyncOnMobileData(context, it)
+                }
             )
         }
 
