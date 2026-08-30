@@ -45,6 +45,23 @@ public struct ContentView: View {
                     progress: progress,
                     onCancel: { otgManager.cancelImport() }
                 )
+            } else if case .completed(let importedCount, let totalBytes) = otgManager.state {
+                Color.black.opacity(0.4)
+                    .edgesIgnoringSafeArea(.all)
+
+                AppleOtgCompletedView(
+                    importedCount: importedCount,
+                    totalBytes: totalBytes,
+                    onDismiss: { otgManager.reset() }
+                )
+            } else if case .error(let message) = otgManager.state {
+                Color.black.opacity(0.4)
+                    .edgesIgnoringSafeArea(.all)
+
+                AppleOtgErrorView(
+                    errorMessage: message,
+                    onDismiss: { otgManager.reset() }
+                )
             }
         }
     }

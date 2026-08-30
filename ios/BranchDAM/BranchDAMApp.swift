@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct BranchDAMApp: App {
@@ -17,6 +18,12 @@ struct BranchDAMApp: App {
 
         PhotoKitObserver.shared.startObserving()
         BackgroundSyncManager.shared.registerBackgroundTasks()
+        AppleCameraRollImportNotifier.shared.registerNotificationCategories()
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            if settings.authorizationStatus == .notDetermined {
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+            }
+        }
     }
 
     var body: some Scene {

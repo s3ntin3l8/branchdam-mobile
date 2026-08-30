@@ -34,6 +34,25 @@ public class AppleEditCorrelator {
         return edits
     }
 
+    @discardableResult
+    public static func registerEditLineage(edits: [AppleInPhoneEdit]) -> Int {
+        var count = 0
+        for edit in edits {
+            let resolver = "in_phone_\(edit.editorApp.lowercased().replacingOccurrences(of: " ", with: "_"))"
+            let eventId = BranchDamCoreBridge.shared.enqueueLineageEvent(
+                parentUUID: edit.originalMasterId,
+                childUUID: edit.editedDerivativeId,
+                relationshipType: "DERIVED_FROM",
+                resolver: resolver,
+                confidence: edit.confidence
+            )
+            if !eventId.isEmpty {
+                count += 1
+            }
+        }
+        return count
+    }
+
     private static func extractBaseStem(_ filename: String) -> String {
         return (filename as NSString).deletingPathExtension.replacingOccurrences(of: "IMG_", with: "")
     }
