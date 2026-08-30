@@ -35,19 +35,17 @@ public class AppleSafeSpaceManager {
             guard candidate.isVerified else { continue }
             verifiedCount += 1
 
-            let setOk = BranchDamCoreBridge.shared.setMediaOffloaded(localID: candidate.localId, isOffloaded: true)
-            if setOk {
-                let deleted: Bool
-                if let customDelete = deletionHandler {
-                    deleted = customDelete(candidate.localId)
-                } else {
-                    deleted = deleteLocalAsset(localIdentifier: candidate.localId)
-                }
+            let deleted: Bool
+            if let customDelete = deletionHandler {
+                deleted = customDelete(candidate.localId)
+            } else {
+                deleted = deleteLocalAsset(localIdentifier: candidate.localId)
+            }
 
-                if deleted {
-                    reclaimedCount += 1
-                    bytesFreed += candidate.sizeBytes
-                }
+            if deleted {
+                _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: candidate.localId, isOffloaded: true)
+                reclaimedCount += 1
+                bytesFreed += candidate.sizeBytes
             }
         }
 

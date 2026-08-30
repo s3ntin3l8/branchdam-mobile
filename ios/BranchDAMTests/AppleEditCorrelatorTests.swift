@@ -6,7 +6,7 @@ final class AppleEditCorrelatorTests: XCTestCase {
     override func setUp() {
         super.setUp()
         _ = BranchDamCoreBridge.shared.initialize(
-            dbPath: NSTemporaryDirectory() + "edit_correlator_test.db",
+            dbPath: NSTemporaryDirectory() + "edit_correlator_test_\(UUID().uuidString).db",
             baseURL: "http://localhost:8080"
         )
     }

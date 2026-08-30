@@ -36,12 +36,11 @@ object SafeSpaceManager {
 
             eligibleCount++
 
-            // 1. Mark offloaded in local queue database before deleting local file
-            NativeBridge.setMediaOffloaded(uriString, true)
-
-            // 2. Perform deletion of local copy
+            // 1. Perform deletion of local copy
             val deleted = deleteLocalMedia(context, Uri.parse(uriString))
             if (deleted) {
+                // 2. Mark offloaded in local queue database after successful deletion
+                NativeBridge.setMediaOffloaded(uriString, true)
                 reclaimedCount++
                 freedBytes += sizeBytes
             }
