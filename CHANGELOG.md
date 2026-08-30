@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.3.0...branchdam-mobile-v0.4.0) (2026-08-30)
+
+
+### Features
+
+* **core/engine:** hash-based dedup against local queue and server library ([#53](https://github.com/s3ntin3l8/branchdam-mobile/issues/53)) ([23f26a8](https://github.com/s3ntin3l8/branchdam-mobile/commit/23f26a839d3a7429df7d6e1ebc50a4eee08774dc))
+* **ios:** address Android/iOS feature parity gaps across lineage, notifications, safe space, and OTG feedback ([#54](https://github.com/s3ntin3l8/branchdam-mobile/issues/54)) ([f5e700c](https://github.com/s3ntin3l8/branchdam-mobile/commit/f5e700cd2410977f5416a580a138de8c788c40a1))
+* **ios:** configure BranchDAMTests target, xcframework build automation, and CI test pipeline ([#48](https://github.com/s3ntin3l8/branchdam-mobile/issues/48)) ([a555d07](https://github.com/s3ntin3l8/branchdam-mobile/commit/a555d0752b2799bba484d990cdda59018d57c930))
+* **mobile:** camera-roll import confirmation notification with actions and auto-import settings ([#52](https://github.com/s3ntin3l8/branchdam-mobile/issues/52)) ([3cab79a](https://github.com/s3ntin3l8/branchdam-mobile/commit/3cab79a47dd50e21cb931e6bb8d156148ba1163a))
+* **mobile:** USB-C OTG SD card discovery & ingest with human confirmation ([#50](https://github.com/s3ntin3l8/branchdam-mobile/issues/50)) ([4f82e35](https://github.com/s3ntin3l8/branchdam-mobile/commit/4f82e353064a733fd92f8d28240f97e2d3517acf))
+
+
+### Bug Fixes
+
+* **mobile:** respect metered network constraint in Android & iOS sync schedulers ([#51](https://github.com/s3ntin3l8/branchdam-mobile/issues/51)) ([d505922](https://github.com/s3ntin3l8/branchdam-mobile/commit/d505922649e77873560fe1f839622b3bfc170210))
+
 ## [0.3.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.2.0...branchdam-mobile-v0.3.0) (2026-08-29)
 
 
