@@ -39,6 +39,7 @@
 		A1000109 /* AppleOtgCardScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000109 /* AppleOtgCardScannerTests.swift */; };
 		A100010A /* AppleOtgIngestManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010A /* AppleOtgIngestManagerTests.swift */; };
 		A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010B /* AppleCameraRollImportNotifierTests.swift */; };
+		A100010C /* AppleEditCorrelatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010C /* AppleEditCorrelatorTests.swift */; };
 		A1000120 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
 /* End PBXBuildFile section */
 
@@ -102,6 +103,7 @@
 		A2000109 /* AppleOtgCardScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgCardScannerTests.swift; sourceTree = "<group>"; };
 		A200010A /* AppleOtgIngestManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManagerTests.swift; sourceTree = "<group>"; };
 		A200010B /* AppleCameraRollImportNotifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifierTests.swift; sourceTree = "<group>"; };
+		A200010C /* AppleEditCorrelatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleEditCorrelatorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -233,6 +235,7 @@
 				A2000109 /* AppleOtgCardScannerTests.swift */,
 				A200010A /* AppleOtgIngestManagerTests.swift */,
 				A200010B /* AppleCameraRollImportNotifierTests.swift */,
+				A200010C /* AppleEditCorrelatorTests.swift */,
 			);
 			path = BranchDAMTests;
 			sourceTree = "<group>";
@@ -368,6 +371,7 @@
 				A1000109 /* AppleOtgCardScannerTests.swift in Sources */,
 				A100010A /* AppleOtgIngestManagerTests.swift in Sources */,
 				A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */,
+				A100010C /* AppleEditCorrelatorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

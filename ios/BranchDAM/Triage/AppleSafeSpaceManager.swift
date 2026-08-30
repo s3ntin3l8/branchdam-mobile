@@ -1,4 +1,5 @@
 import Foundation
+import Photos
 
 public struct AppleSafeSpaceReport: Equatable {
     public let totalCandidates: Int
@@ -20,10 +21,11 @@ public class AppleSafeSpaceManager {
      * Executes safe space reclaim on iOS:
      * 1. Confirms node verification on Tier 3 NAS.
      * 2. Flags is_offloaded = 1 in SQLite queue.db.
-     * 3. Deletes local full-res asset copy.
+     * 3. Deletes local full-res asset copy via PHPhotoLibrary or deletionHandler.
      */
     public static func reclaimSafeSpace(
-        candidates: [(localId: String, sizeBytes: Int64, isVerified: Bool)]
+        candidates: [(localId: String, sizeBytes: Int64, isVerified: Bool)],
+        deletionHandler: ((_ localId: String) -> Bool)? = nil
     ) -> AppleSafeSpaceReport {
         var verifiedCount = 0
         var reclaimedCount = 0
@@ -35,8 +37,17 @@ public class AppleSafeSpaceManager {
 
             let setOk = BranchDamCoreBridge.shared.setMediaOffloaded(localID: candidate.localId, isOffloaded: true)
             if setOk {
-                reclaimedCount += 1
-                bytesFreed += candidate.sizeBytes
+                let deleted: Bool
+                if let customDelete = deletionHandler {
+                    deleted = customDelete(candidate.localId)
+                } else {
+                    deleted = deleteLocalAsset(localIdentifier: candidate.localId)
+                }
+
+                if deleted {
+                    reclaimedCount += 1
+                    bytesFreed += candidate.sizeBytes
+                }
             }
         }
 
@@ -46,5 +57,20 @@ public class AppleSafeSpaceManager {
             reclaimedCount: reclaimedCount,
             estimatedBytesFreed: bytesFreed
         )
+    }
+
+    private static func deleteLocalAsset(localIdentifier: String) -> Bool {
+        let cleanId = localIdentifier.hasPrefix("ph://") ? String(localIdentifier.dropFirst(5)) : localIdentifier
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
+        guard assets.count > 0 else { return true }
+        var success = true
+        do {
+            try PHPhotoLibrary.shared().performChangesAndWait {
+                PHAssetChangeRequest.deleteAssets(assets)
+            }
+        } catch {
+            success = false
+        }
+        return success
     }
 }

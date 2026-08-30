@@ -128,3 +128,86 @@ public struct AppleOtgProgressView: View {
         .padding()
     }
 }
+
+public struct AppleOtgCompletedView: View {
+    public let importedCount: Int
+    public let totalBytes: Int64
+    public let onDismiss: () -> Void
+
+    public var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 44))
+                .foregroundColor(.green)
+
+            Text("Import Complete")
+                .font(.title3)
+                .fontWeight(.bold)
+
+            Text("Successfully staged \(importedCount) items (\(AppleOtgCandidate.formatBytes(totalBytes))) to branchDAM queue.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+
+            Button(action: onDismiss) {
+                Text("Done")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.accentColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(16)
+        .shadow(radius: 10)
+        .padding()
+    }
+}
+
+public struct AppleOtgErrorView: View {
+    public let errorMessage: String
+    public let onDismiss: () -> Void
+
+    public var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 44))
+                .foregroundColor(.red)
+
+            Text("Import Failed")
+                .font(.title3)
+                .fontWeight(.bold)
+
+            Text(errorMessage)
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+
+            Button(action: onDismiss) {
+                Text("OK")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(16)
+        .shadow(radius: 10)
+        .padding()
+    }
+}
