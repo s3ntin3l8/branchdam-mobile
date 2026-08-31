@@ -2,7 +2,7 @@ package com.branchdam.mobile.triage
 
 import android.content.Context
 import android.net.Uri
-import com.branchdam.mobile.NativeBridge
+import com.branchdam.mobile.EngineHolder
 
 data class SafeSpaceResult(
     val totalChecked: Int,
@@ -36,13 +36,19 @@ object SafeSpaceManager {
 
             eligibleCount++
 
-            // 1. Perform deletion of local copy
-            val deleted = deleteLocalMedia(context, Uri.parse(uriString))
-            if (deleted) {
-                // 2. Mark offloaded in local queue database after successful deletion
-                NativeBridge.setMediaOffloaded(uriString, true)
-                reclaimedCount++
-                freedBytes += sizeBytes
+            // 1. Engine-owned atomic reclaim (B.2.7): the engine re-queries
+            // the server for current verified + tier state, sets the
+            // local flag, and only returns Eligible=true on success.
+            // The shell deletes the local copy only after the engine
+            // confirms the asset is safely archived.
+            val verdict = EngineHolder.reclaimSafeSpace(uriString)
+            if (verdict.eligible) {
+                // 2. Delete the local copy AFTER the engine confirms.
+                val deleted = deleteLocalMedia(context, Uri.parse(uriString))
+                if (deleted) {
+                    reclaimedCount++
+                    freedBytes += sizeBytes
+                }
             }
         }
 

@@ -15,7 +15,9 @@ class BranchDamApplication : Application() {
         super.onCreate()
         instance = this
 
-        // Initialize SQLite queue and background observer
+        // Initialize the gomobile-bound Go engine. The holder falls back
+        // to mock values when the AAR is not on the classpath, so
+        // unit tests that run without the native binary still work.
         val dbFile = File(filesDir, "branchdam_queue.db")
         initCoreEngine(dbFile.absolutePath)
 
@@ -31,49 +33,17 @@ class BranchDamApplication : Application() {
         val apiKey = prefs.getString("api_key", "") ?: ""
         val agentId = prefs.getString("agent_id", "pixel-fold-${android.os.Build.MODEL}") ?: "pixel-fold"
 
-        try {
-            NativeBridge.initCore(dbPath, serverUrl, apiKey, agentId, "0.1.0")
-        } catch (_: UnsatisfiedLinkError) {
-            // Core native library loaded during runtime / tests
-        }
+        EngineHolder.initialize(
+            dbPath = dbPath,
+            baseURL = serverUrl,
+            apiKey = apiKey,
+            agentID = agentId,
+            version = "0.1.0",
+        )
     }
 
     companion object {
         lateinit var instance: BranchDamApplication
             private set
     }
-}
-
-object NativeBridge {
-    init {
-        try {
-            System.loadLibrary("branchdam_core")
-        } catch (_: UnsatisfiedLinkError) {
-            // Mock or stub mode for unit tests without native binary
-        }
-    }
-
-    fun initCore(dbPath: String, serverUrl: String, apiKey: String, agentId: String, version: String) {}
-
-    fun enqueueMedia(localPath: String, filename: String, capturedAtUnix: Long, localId: String): Long {
-        return 1L
-    }
-
-    fun enqueueLineageEvent(parentUuid: String, childUuid: String, relationshipType: String, resolver: String, confidence: Double): String {
-        return "mock-lineage-uuid"
-    }
-
-    fun enqueueDeleteEvent(nodeUuid: String): String {
-        return "mock-delete-uuid"
-    }
-
-    fun syncBatch(timeoutSecs: Int, batchSize: Int): Pair<Int, Int> {
-        return Pair(0, 0)
-    }
-
-    fun isMediaOffloaded(localId: String): Boolean {
-        return false
-    }
-
-    fun setMediaOffloaded(localId: String, isOffloaded: Boolean) {}
 }

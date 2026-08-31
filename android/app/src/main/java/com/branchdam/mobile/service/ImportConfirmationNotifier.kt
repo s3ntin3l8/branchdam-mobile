@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.branchdam.mobile.NativeBridge
+import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.receiver.ImportConfirmationReceiver
 import java.util.Collections
@@ -139,7 +139,7 @@ object ImportConfirmationNotifier {
                 for (id in targetIds) {
                     val item = pendingItemsMap.remove(id)
                     if (item != null && !isItemSuppressed(id)) {
-                        NativeBridge.enqueueMedia(
+                        EngineHolder.enqueueMedia(
                             localPath = item.filePath,
                             filename = item.displayName,
                             capturedAtUnix = item.dateTakenUnix,
@@ -155,7 +155,7 @@ object ImportConfirmationNotifier {
                 for (id in targetIds) {
                     val item = pendingItemsMap.remove(id)
                     if (item != null && !isItemSuppressed(id)) {
-                        NativeBridge.enqueueMedia(
+                        EngineHolder.enqueueMedia(
                             localPath = item.filePath,
                             filename = item.displayName,
                             capturedAtUnix = item.dateTakenUnix,

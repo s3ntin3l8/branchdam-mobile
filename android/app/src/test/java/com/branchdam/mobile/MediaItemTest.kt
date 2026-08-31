@@ -42,8 +42,8 @@ class MediaItemTest {
     }
 
     @Test
-    fun testNativeBridgeStub() {
-        val mediaId = NativeBridge.enqueueMedia(
+    fun testEngineHolderStub() {
+        val mediaId = EngineHolder.enqueueMedia(
             localPath = "/sdcard/DCIM/Camera/test.jpg",
             filename = "test.jpg",
             capturedAtUnix = 1724000000L,
@@ -51,7 +51,7 @@ class MediaItemTest {
         )
         assertEquals(1L, mediaId)
 
-        val (uploaded, events) = NativeBridge.syncBatch(120, 10)
+        val (uploaded, events) = EngineHolder.syncBatch(120, 10)
         assertEquals(0, uploaded)
         assertEquals(0, events)
     }
