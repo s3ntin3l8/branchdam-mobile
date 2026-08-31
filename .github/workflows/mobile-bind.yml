@@ -40,11 +40,11 @@ jobs:
       - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.0.12077973'
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;26.2.11399342'
 
       - name: Build branchdam.aar
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.2.11399342
         run: ./scripts/build-mobile.sh --android-only
 
       - name: Upload AAR
