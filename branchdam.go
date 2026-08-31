@@ -344,14 +344,15 @@ type SyncResult struct {
 	EventsSent int64
 }
 
-// SyncBatch runs one batch of upload + event sync. The supplied Context
-// governs cancellation; on a Shell-supplied gomobile Context, the shell's
-// BGTask or WorkManager expirationHandler maps to ctx.Done().
+// SyncBatch runs one batch of upload + event sync. The implementation
+// derives a stdlib context.Context from opts.TimeoutSecs (no shell
+// context is required for the FFI surface; gomobile's context-bridging
+// is complex and the SyncOptions already carry the equivalent
+// information).
 //
-// The implementation defers to the internal engine.SyncUploads and
-// engine.SyncEvents; the SQLite-backed cancel flag (B.2.2) is also honored
-// via the queue.CancelRequested() check.
-func (e *Engine) SyncBatch(ctx Context, opts SyncOptions) (SyncResult, error) {
+// The SQLite-backed cancel flag (B.2.2) is also honored via the
+// queue.CancelRequested() check between items.
+func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 	if err := e.requireOpen(); err != nil {
 		return SyncResult{}, err
 	}
@@ -376,13 +377,12 @@ func (e *Engine) SyncBatch(ctx Context, opts SyncOptions) (SyncResult, error) {
 		maxRetries = 5
 	}
 
-	stdCtx := gomobileContextToStd(ctx)
-	cancelCtx, cancel := context.WithTimeout(stdCtx, time.Duration(timeoutSecs)*time.Second)
+	stdCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
 	defer cancel()
 
 	var result SyncResult
 	if opts.IncludeUploads {
-		n, err := e.engine.SyncUploads(cancelCtx, batchSize)
+		n, err := e.engine.SyncUploads(stdCtx, batchSize)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return result, newError(CodeContextCanceled, "sync uploads cancelled: %v", err)
@@ -392,7 +392,7 @@ func (e *Engine) SyncBatch(ctx Context, opts SyncOptions) (SyncResult, error) {
 		result.Uploaded = int64(n)
 	}
 	if opts.IncludeEvents {
-		n, err := e.engine.SyncEvents(cancelCtx, batchSize)
+		n, err := e.engine.SyncEvents(stdCtx, batchSize)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return result, newError(CodeContextCanceled, "sync events cancelled: %v", err)
@@ -443,7 +443,7 @@ type SafeSpaceVerdict struct {
 // status of each candidate's node and returns a verdict per candidate.
 // Candidates without a nodeUUID are reported as ineligible with a
 // not-found reason.
-func (e *Engine) CheckSafeSpaceCandidates(ctx Context, candidates []SafeSpaceCandidate) ([]SafeSpaceVerdict, error) {
+func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]SafeSpaceVerdict, error) {
 	if err := e.requireOpen(); err != nil {
 		return nil, err
 	}
@@ -454,23 +454,20 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx Context, candidates []SafeSpaceCan
 		}
 		localIDs = append(localIDs, c.LocalID)
 	}
-	stdCtx := gomobileContextToStd(ctx)
-	raw, err := e.engine.CheckSafeSpaceCandidates(stdCtx, localIDs)
+	raw, err := e.engine.CheckSafeSpaceCandidates(context.Background(), localIDs)
 	if err != nil {
 		return nil, errToError(err)
 	}
 	// raw is []engine.SafeSpaceCandidate indexed by input order; map it
 	// back to the caller's input localIDs.
 	out := make([]SafeSpaceVerdict, 0, len(raw))
-	for i, c := range raw {
+	for _, c := range raw {
 		reason := ""
 		if !c.IsEligible {
 			// Audit: VERIFIED_REQUIRED is the canonical reason a
 			// candidate is ineligible.
 			reason = CodeVerifiedRequired
 		}
-		_ = i // index alignment is implicit; engine returns same order
-		_ = localIDs
 		out = append(out, SafeSpaceVerdict{LocalID: c.LocalID, Eligible: c.IsEligible, Reason: reason})
 	}
 	return out, nil
@@ -480,15 +477,14 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx Context, candidates []SafeSpaceCan
 // and only if the current state is verified + tier 2/3. The local file
 // deletion is the shell's responsibility and should only happen after
 // this returns Eligible=true.
-func (e *Engine) ReclaimSafeSpace(ctx Context, localID string) (SafeSpaceVerdict, error) {
+func (e *Engine) ReclaimSafeSpace(localID string) (SafeSpaceVerdict, error) {
 	if err := e.requireOpen(); err != nil {
 		return SafeSpaceVerdict{}, err
 	}
 	if localID == "" {
 		return SafeSpaceVerdict{}, newError(CodeInvalidInput, "LocalID is required")
 	}
-	stdCtx := gomobileContextToStd(ctx)
-	verdict, err := e.engine.SafeSpaceReclaim(stdCtx, localID)
+	verdict, err := e.engine.SafeSpaceReclaim(context.Background(), localID)
 	if err != nil {
 		return SafeSpaceVerdict{LocalID: localID, Reason: err.Error()}, errToError(err)
 	}
@@ -543,12 +539,11 @@ func (e *Engine) SetMediaOffloaded(localID string, isOffloaded bool) error {
 
 // FetchNamingTemplate calls the server's handshake endpoint and returns
 // the canonical naming template. Caches the result in the engine.
-func (e *Engine) FetchNamingTemplate(ctx Context) (string, error) {
+func (e *Engine) FetchNamingTemplate() (string, error) {
 	if err := e.requireOpen(); err != nil {
 		return "", err
 	}
-	stdCtx := gomobileContextToStd(ctx)
-	resp, err := e.client.Handshake(stdCtx, "")
+	resp, err := e.client.Handshake(context.Background(), "")
 	if err != nil {
 		return "", errToError(err)
 	}
