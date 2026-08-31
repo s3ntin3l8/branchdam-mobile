@@ -26,8 +26,8 @@
 		A1000013 /* AppleOtgIngestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* AppleOtgIngestManager.swift */; };
 		A1000014 /* AppleOtgImportConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* AppleOtgImportConfirmationView.swift */; };
 		A1000015 /* AppleCameraRollImportNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* AppleCameraRollImportNotifier.swift */; };
-		A1000020 /* BranchDam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDam.xcframework */; };
-		A1000021 /* BranchDam.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDam.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1000020 /* branchdam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; };
+		A1000021 /* branchdam.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A1000101 /* ApplePairDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000101 /* ApplePairDetectorTests.swift */; };
 		A1000102 /* AppleSafeSpaceManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000102 /* AppleSafeSpaceManagerTests.swift */; };
 		A1000103 /* AppleTrashSyncObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000103 /* AppleTrashSyncObserverTests.swift */; };
@@ -40,7 +40,7 @@
 		A100010A /* AppleOtgIngestManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010A /* AppleOtgIngestManagerTests.swift */; };
 		A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010B /* AppleCameraRollImportNotifierTests.swift */; };
 		A100010C /* AppleEditCorrelatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010C /* AppleEditCorrelatorTests.swift */; };
-		A1000120 /* BranchDam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDam.xcframework */; };
+		A1000120 /* branchdam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,7 +60,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				A1000021 /* BranchDam.xcframework in Embed Frameworks */,
+				A1000021 /* branchdam.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -89,7 +89,7 @@
 		A2000013 /* AppleOtgIngestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManager.swift; sourceTree = "<group>"; };
 		A2000014 /* AppleOtgImportConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgImportConfirmationView.swift; sourceTree = "<group>"; };
 		A2000015 /* AppleCameraRollImportNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifier.swift; sourceTree = "<group>"; };
-		A2000020 /* BranchDam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDam.xcframework; path = BranchDam.xcframework; sourceTree = "<group>"; };
+		A2000020 /* branchdam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = branchdam.xcframework; path = branchdam.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
 		A2000102 /* AppleSafeSpaceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerTests.swift; sourceTree = "<group>"; };
@@ -110,7 +110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000020 /* BranchDam.xcframework in Frameworks */,
+				A1000020 /* branchdam.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,7 +118,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000120 /* BranchDam.xcframework in Frameworks */,
+				A1000120 /* branchdam.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -214,7 +214,7 @@
 		A4000020 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				A2000020 /* BranchDam.xcframework */,
+				A2000020 /* branchdam.xcframework */,
 			);
 			path = Frameworks;
 			sourceTree = "<group>";

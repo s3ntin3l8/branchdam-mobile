@@ -76,11 +76,19 @@ if [[ "${BUILD_IOS}" -eq 1 ]]; then
 
     echo "=== Building iOS xcframework (ios, iossimulator) ==="
     mkdir -p ios/Frameworks
+    # The Swift module name is taken from the .xcframework directory
+    # basename; Obj-C class names are built as <Prefix><Title(pkgName)>.
+    # With pkgName="branchdam", the natural Obj-C class prefix is
+    # "Branchdam" (Title of the lowercase package name). We use a
+    # lowercase .xcframework directory so the Swift module name
+    # "branchdam" matches the Obj-C class prefix "Branchdam" —
+    # Swift's import is case-insensitive but its Obj-C prefix-stripping
+    # logic is case-sensitive, so the names must match exactly.
     gomobile bind \
         -target ios,iossimulator \
-        -o ios/Frameworks/BranchDam.xcframework \
+        -o ios/Frameworks/branchdam.xcframework \
         "${PUBLIC_PKG}"
-    echo "xcframework: $(ls -la ios/Frameworks/BranchDam.xcframework)"
+    echo "xcframework: $(ls -la ios/Frameworks/branchdam.xcframework)"
 fi
 
 echo "=== build-mobile.sh: done ==="

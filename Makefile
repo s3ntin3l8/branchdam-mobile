@@ -37,6 +37,7 @@ ios-test:
 clean:
 	rm -rf dist/ coverage.txt core/coverage.txt \
 		android/app/libs/branchdam.aar \
+		ios/Frameworks/branchdam.xcframework \
 		ios/Frameworks/BranchDam.xcframework \
 		ios/BranchDamCore.xcframework
 	cd android && if [ -f "./gradlew" ]; then ./gradlew clean; fi

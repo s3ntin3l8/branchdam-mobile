@@ -1,6 +1,6 @@
 import Foundation
-#if canImport(BranchDam)
-import BranchDam
+#if canImport(branchdam)
+import branchdam
 #endif
 
 public struct SafeSpaceCandidateVerdict: Codable, Equatable {
@@ -28,8 +28,8 @@ public struct SafeSpaceCandidateVerdict: Codable, Equatable {
 public class BranchDamCoreBridge {
     public static let shared = BranchDamCoreBridge()
 
-    #if canImport(BranchDam)
-    private var engine: BranchDam.Engine?
+    #if canImport(branchdam)
+    private var engine: branchdam.Engine?
     #endif
     private var isInitialized = false
     private var mockOffloadedMedia: [String: Bool] = [:]
@@ -45,16 +45,16 @@ public class BranchDamCoreBridge {
         agentID: String = "iphone-companion",
         version: String = "0.1.0"
     ) -> Bool {
-        #if canImport(BranchDam)
+        #if canImport(branchdam)
         do {
-            let opts = BranchDam.EngineOptions()
+            let opts = branchdam.EngineOptions()
             opts.dbPath = dbPath
             opts.baseURL = baseURL
             opts.apiKey = apiKey
             opts.agentID = agentID
             opts.clientVersion = version
             opts.httpTimeoutSec = 0
-            let e = try BranchDam.Engine.newEngine(opts)
+            let e = try branchdam.Engine.newEngine(opts)
             self.engine = e
             self.isInitialized = true
             return true
@@ -71,12 +71,12 @@ public class BranchDamCoreBridge {
     /// Reported version of the bound Go engine. Useful for diagnostics and
     /// smoke tests confirming the artifact loaded.
     public static var engineVersion: String {
-        #if canImport(BranchDam)
+        #if canImport(branchdam)
         // gomobile binds Go's `Version() string` (no error return) as a
         // non-throwing Swift method. The try/catch from the previous draft
         // was dead code and triggered a Swift 6 "no calls to throwing
         // functions" warning.
-        return BranchDam.version()
+        return branchdam.version()
         #else
         return "unavailable"
         #endif

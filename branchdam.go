@@ -3,7 +3,12 @@
 // this package and produces:
 //
 //	android/app/libs/branchdam.aar      (Kotlin/Java consumer: io.branchdam.core.Engine)
-//	ios/Frameworks/BranchDam.xcframework (Swift consumer: import BranchDam)
+//	ios/Frameworks/branchdam.xcframework (Swift consumer: import branchdam)
+//
+// The Swift xcframework is named branchdam (lowercase) so its Swift module
+// name matches the Obj-C class prefix that gomobile emits for the Go package
+// "branchdam"; that match is what lets Swift's Obj-C import see the types
+// as `branchdam.Engine`, `branchdam.EngineOptions`, etc.
 //
 // The actual implementation lives in github.com/s3ntin3l8/branchdam-mobile/core
 // (subpackages client, engine, hasher, queue). Sub-issue A ships a minimal

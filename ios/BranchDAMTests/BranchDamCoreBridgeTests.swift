@@ -1,6 +1,6 @@
 import XCTest
-#if canImport(BranchDam)
-import BranchDam
+#if canImport(branchdam)
+import branchdam
 #endif
 @testable import BranchDAM
 
@@ -61,7 +61,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
     /// Smoke test for the gomobile-bound Engine. Proves the artifact loaded.
     /// Sub-issue A only; B expands the API surface.
     func testEngineVersionLoads() {
-        #if canImport(BranchDam)
+        #if canImport(branchdam)
         let version = BranchDamCoreBridge.engineVersion
         XCTAssertFalse(version.isEmpty, "engine version should be non-empty when framework loads")
         XCTAssertNotEqual(version, "unavailable", "engine version should be reachable through the framework")
