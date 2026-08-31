@@ -89,7 +89,7 @@
 		A2000013 /* AppleOtgIngestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManager.swift; sourceTree = "<group>"; };
 		A2000014 /* AppleOtgImportConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgImportConfirmationView.swift; sourceTree = "<group>"; };
 		A2000015 /* AppleCameraRollImportNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifier.swift; sourceTree = "<group>"; };
-		A2000020 /* BranchDam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDam.xcframework; path = Frameworks/BranchDam.xcframework; sourceTree = "<group>"; };
+		A2000020 /* BranchDam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDam.xcframework; path = BranchDam.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
 		A2000102 /* AppleSafeSpaceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerTests.swift; sourceTree = "<group>"; };

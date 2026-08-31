@@ -72,7 +72,11 @@ public class BranchDamCoreBridge {
     /// smoke tests confirming the artifact loaded.
     public static var engineVersion: String {
         #if canImport(BranchDam)
-        do { return try BranchDam.version() } catch { return "unknown" }
+        // gomobile binds Go's `Version() string` (no error return) as a
+        // non-throwing Swift method. The try/catch from the previous draft
+        // was dead code and triggered a Swift 6 "no calls to throwing
+        // functions" warning.
+        return BranchDam.version()
         #else
         return "unavailable"
         #endif
