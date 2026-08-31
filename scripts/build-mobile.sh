@@ -12,10 +12,11 @@ set -euo pipefail
 #   For Android:  ANDROID_HOME, ANDROID_NDK_HOME, javac (1.8+)
 #   For iOS:      Xcode (must run on macOS)
 #
-# NDK compatibility: gomobile v0.0.0-20260821190718 validates the
-# NDK's minSdkVersion and rejects versions outside 21..35. r25
-# (25.1.8937393) is known to work; r26/r27 may report "unsupported
-# API version 16" because of legacy NDK metadata.
+# NDK compatibility: gomobile v0.0.0-20260821190718 defaults to
+# -androidapi=16, which is below every recent NDK's supported min
+# (r25: 19..33, r26: 21..35, r27: 21..35). The script passes
+# -androidapi=21, matching the project's minSdk = 28 floor and
+# inside the r25/r26/r27 supported range.
 #
 # Sub-issue A ships this as the single source of truth for the mobile
 # library build. Sub-issues B+ add the real Engine API; this script does
@@ -61,8 +62,13 @@ if [[ "${BUILD_ANDROID}" -eq 1 ]]; then
 
     echo "=== Building Android AAR (arm, arm64, 386, amd64) ==="
     mkdir -p android/app/libs
+    # -androidapi 21: matches the project's minSdk = 28 floor and is within
+    # the r25/r26 NDK's supported range (r25: 19..33, r26: 21..35).
+    # Without -androidapi, gomobile defaults to API 16, which is below
+    # every recent NDK's min API and fails the env check.
     gomobile bind \
         -target android \
+        -androidapi 21 \
         -javapkg io.branchdam.core \
         -o android/app/libs/branchdam.aar \
         "${PUBLIC_PKG}"
