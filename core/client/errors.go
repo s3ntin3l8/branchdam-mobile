@@ -32,6 +32,7 @@ const (
 	CodeDedupNoNodeUUID  = "DEDUP_NO_NODE_UUID"
 	CodeHashMismatch     = "HASH_MISMATCH"
 	CodeNetworkError     = "NETWORK_ERROR"
+	CodeIOError          = "IO_ERROR"
 )
 
 // MaxResponseBodyBytes caps the size of any HTTP response body the

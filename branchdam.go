@@ -328,19 +328,19 @@ func buildLineagePayload(parentLocalID, childLocalID, relationshipType string, c
 
 // SyncOptions controls a SyncBatch call.
 type SyncOptions struct {
-	TimeoutSecs     int
-	BatchSize       int
+	TimeoutSecs      int
+	BatchSize        int
 	RetryBackoffSecs int64
-	MaxRetries      int
-	IncludeEvents   bool
-	IncludeUploads  bool
+	MaxRetries       int
+	IncludeEvents    bool
+	IncludeUploads   bool
 }
 
 // SyncResult reports what SyncBatch did. Counts are best-effort; if the
 // batch is cancelled mid-flight the partial counts are returned with
 // CONTEXT_CANCELED.
 type SyncResult struct {
-	Uploaded  int64
+	Uploaded   int64
 	EventsSent int64
 }
 
@@ -487,12 +487,14 @@ func (e *Engine) ReclaimSafeSpace(ctx Context, localID string) (SafeSpaceVerdict
 	if localID == "" {
 		return SafeSpaceVerdict{}, newError(CodeInvalidInput, "LocalID is required")
 	}
-	// B.2.7 (engine-owned atomic reclaim) replaces the placeholder
-	// below. For now, delegate to the existing engine method and
-	// infer the verdict from the queue state.
-	if err := e.engine.SafeSpaceReclaim(localID); err != nil {
-		return SafeSpaceVerdict{LocalID: localID, Eligible: false, Reason: err.Error()},
-			errToError(err)
+	stdCtx := gomobileContextToStd(ctx)
+	verdict, err := e.engine.SafeSpaceReclaim(stdCtx, localID)
+	if err != nil {
+		return SafeSpaceVerdict{LocalID: localID, Reason: err.Error()}, errToError(err)
+	}
+	if !verdict.Eligible {
+		return SafeSpaceVerdict{LocalID: localID, Reason: verdict.Reason},
+			newError(CodeVerifiedRequired, "reclaim ineligible: %s", verdict.Reason)
 	}
 	return SafeSpaceVerdict{LocalID: localID, Eligible: true}, nil
 }

@@ -121,7 +121,7 @@ func TestEngineFullLifecycle(t *testing.T) {
 	}
 
 	// 5. Reclaim safe space
-	if err := eng.SafeSpaceReclaim("local_uri_1"); err != nil {
+	if _, err := eng.SafeSpaceReclaim(context.Background(), "local_uri_1"); err != nil {
 		t.Fatalf("SafeSpaceReclaim failed: %v", err)
 	}
 
@@ -232,5 +232,179 @@ func TestSyncUploads_DedupResponse(t *testing.T) {
 	}
 	if state.Status != queue.UploadCompleted || state.NodeUUID != "existing-server-node-uuid" {
 		t.Fatalf("unexpected state after server dedup: %+v", state)
+	}
+}
+
+// TestEnqueueLocalCapture_FileMissing_SurfacesIOError: B.2.5 — a
+// non-existent local file must produce a *client.ClientError with
+// CodeIOError so the shell can map it to branchdam.Error{Code:
+// "IO_ERROR"}.
+func TestEnqueueLocalCapture_FileMissing_SurfacesIOError(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_missing_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	eng := New(q, nil)
+
+	missingPath := filepath.Join(tempDir, "does_not_exist.dng")
+	_, err = eng.EnqueueLocalCapture(missingPath, "does_not_exist.dng", 1724000000, "local_uri_missing")
+	if err == nil {
+		t.Fatalf("expected error for missing file, got nil")
+	}
+	ce, ok := err.(*client.ClientError)
+	if !ok {
+		t.Fatalf("error type = %T, want *client.ClientError", err)
+	}
+	if ce.Code != client.CodeIOError {
+		t.Fatalf("Code = %q, want %q", ce.Code, client.CodeIOError)
+	}
+}
+
+// TestSyncUploads_CancelFlagHonored: B.2.2 — calling SetCancelFlag
+// mid-batch causes SyncUploads to stop at the next per-item checkpoint.
+// The shell's SetCancelFlag is the cancellation mechanism; SyncUploads
+// returns 0 completed and no error (the cancel is a soft signal — the
+// shell can re-invoke SyncUploads to resume).
+func TestSyncUploads_CancelFlagHonored(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_cancel_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	// Enqueue 3 items. No server needed because we cancel before the
+	// first HTTP request.
+	for i := 0; i < 3; i++ {
+		_, err := q.EnqueueUpload(&queue.UploadItem{
+			LocalPath:      "/sdcard/DCIM/file.dng",
+			TargetFilename: "file.dng",
+			Blake3Hash:     "b3cancel",
+		})
+		if err != nil {
+			t.Fatalf("EnqueueUpload: %v", err)
+		}
+	}
+
+	// Pre-set the cancel flag so the first claim's WHERE clause
+	// (cancel_requested = 0) filters everything out.
+	if err := q.RequestCancel(); err != nil {
+		t.Fatalf("RequestCancel: %v", err)
+	}
+
+	eng := New(q, nil)
+	count, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("SyncUploads: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 completed before cancel, got %d", count)
+	}
+	// Items should still be PENDING (claim filtered by cancel flag).
+	if pending, _ := q.CountPendingUploads(); pending != 3 {
+		t.Fatalf("expected 3 pending, got %d (cancel should not have claimed anything)", pending)
+	}
+}
+
+// TestSyncUploads_DedupNoNodeUUID_HardFailure: B.2.6 — server
+// returns 409 with no nodeUuid; the engine must NOT mark the item
+// complete (the audit's "asset permanently orphaned" failure mode).
+func TestSyncUploads_DedupNoNodeUUID_HardFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_dedup_empty_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":"duplicate"}`))
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "k", AgentID: "a"})
+	eng := New(q, c)
+
+	testFilePath := filepath.Join(tempDir, "PXL_DEDUP_EMPTY.dng")
+	if err := os.WriteFile(testFilePath, []byte("payload"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DEDUP_EMPTY.dng", 1724000000, "local_uri_dup_empty")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+
+	completed, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("SyncUploads: %v", err)
+	}
+	if completed != 0 {
+		t.Fatalf("expected 0 completed, got %d (item should NOT be marked complete with empty nodeUUID)", completed)
+	}
+
+	// Confirm the item is still PENDING (retry path), not COMPLETED.
+	state, err := q.GetUploadItemByBlake3Hash(item.Blake3Hash)
+	if err != nil || state == nil {
+		t.Fatalf("GetUploadItemByBlake3Hash: %v", err)
+	}
+	if state.Status == queue.UploadCompleted {
+		t.Fatalf("item is COMPLETED but 409 had no nodeUuid: %+v", state)
+	}
+}
+
+// TestSafeSpaceReclaim_Ineligible: B.2.7 — the engine-owned atomic
+// reclaim must NOT mark the asset offloaded when the server says the
+// node isn't verified+TIER3/2. The audit's invariant is "set the flag
+// only inside the same logical operation as the server confirmation";
+// this test exercises the negative case.
+func TestSafeSpaceReclaim_Ineligible(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_reclaim_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{
+			Statuses: []client.NodeStatusItem{
+				{
+					NodeUUID: "node-1",
+					Found:    true,
+					Verified: false, // not verified
+					Tier:     "TIER3_MASTER_ARCHIVE",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "k", AgentID: "a"})
+	eng := New(q, c)
+
+	if err := q.RecordLocalMedia("local_uri_ineligible", "node-1", "b3", "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
+
+	verdict, err := eng.SafeSpaceReclaim(context.Background(), "local_uri_ineligible")
+	if err == nil {
+		t.Fatalf("expected error for ineligible reclaim, got nil")
+	}
+	if verdict.Eligible {
+		t.Fatalf("expected Eligible=false, got true")
+	}
+
+	// Confirm the local flag is NOT set.
+	isOffloaded, _ := q.IsMediaOffloaded("local_uri_ineligible")
+	if isOffloaded {
+		t.Fatalf("expected NOT offloaded (server said not verified), but flag is set")
 	}
 }
