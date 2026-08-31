@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,14 @@ import (
 	"github.com/s3ntin3l8/branchdam-mobile/core/hasher"
 	"github.com/s3ntin3l8/branchdam-mobile/core/queue"
 )
+
+// isNotFoundErr reports whether err is the (database/sql).ErrNoRows
+// sentinel from a missing-row scan. The engine treats "not found" as
+// a normal "ineligible" outcome (no error) so the branchdam FFI
+// surface can distinguish it from "ineligible, server said no".
+func isNotFoundErr(err error) bool {
+	return errors.Is(err, sql.ErrNoRows)
+}
 
 type Engine struct {
 	q *queue.Queue
@@ -323,15 +332,30 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 		return SafeSpaceVerdict{Reason: "localID is required"}, errors.New("localID is required")
 	}
 
-	// Look up the current state in the local queue.
+	// Look up the current state in the local queue. A missing row
+	// (sql.ErrNoRows from the GetMediaByLocalID scan) is a legitimate
+	// "ineligible, not found" outcome — the engine returns a
+	// SafeSpaceVerdict with Eligible=false and Reason="not found";
+	// the second return value is nil so the caller can distinguish
+	// "ineligible, not found" from "ineligible, server said no".
 	state, err := e.q.GetMediaByLocalID(localID)
 	if err != nil {
-		return SafeSpaceVerdict{LocalID: localID, Reason: "local state lookup failed"},
+		if isNotFoundErr(err) {
+			return SafeSpaceVerdict{
+				LocalID:  localID,
+				Eligible: false,
+				Reason:   "localID not found in local state",
+			}, nil
+		}
+		return SafeSpaceVerdict{LocalID: localID, Reason: "local state lookup: " + err.Error()},
 			fmt.Errorf("local state lookup: %w", err)
 	}
 	if state == nil || state.NodeUUID == "" {
-		return SafeSpaceVerdict{LocalID: localID, Reason: "not found in local state"},
-			errors.New("localID not found in local state")
+		return SafeSpaceVerdict{
+			LocalID:  localID,
+			Eligible: false,
+			Reason:   "localID not found in local state",
+		}, nil
 	}
 
 	// Re-query the server for the current status of this node.
