@@ -106,3 +106,33 @@ func TestNewEngineValidatesSchemeHTTPSOrHTTP(t *testing.T) {
 		})
 	}
 }
+
+// TestIsMediaOffloaded_FailClosedOnDBError: per B.2.3, the engine must
+// surface DB errors to the shell so it can refuse to delete. The
+// current branchdam wrapper maps queue errors to DB_ERROR.
+func TestIsMediaOffloaded_FailClosedOnDBError(t *testing.T) {
+	dir := t.TempDir()
+	e, err := NewEngine(EngineOptions{
+		DBPath:  filepath.Join(dir, "engine.db"),
+		BaseURL: "http://localhost:8080",
+		AgentID: "test-agent",
+	})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	// Close the queue underneath the engine to force a DB error.
+	if err := e.queue.Close(); err != nil {
+		t.Fatalf("close queue: %v", err)
+	}
+	_, err = e.IsMediaOffloaded("any-id")
+	if err == nil {
+		t.Fatalf("IsMediaOffloaded: expected DB_ERROR after closing queue, got nil")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("error type = %T, want *Error", err)
+	}
+	if be.Code != "DB_ERROR" {
+		t.Fatalf("Code = %q, want %q", be.Code, "DB_ERROR")
+	}
+}
