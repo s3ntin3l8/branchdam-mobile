@@ -6,12 +6,12 @@ check: lint test
 
 test:
 	cd core && go test -race -v ./...
-	cd . && go test -race -v ./. 2>/dev/null || true
+	cd . && go test -race -v ./.
 
 lint:
 	pre-commit run --all-files
 	cd core && go vet ./...
-	cd . && go vet ./. 2>/dev/null || true
+	cd . && go vet ./.
 
 android:
 	cd android && if [ -f "./gradlew" ]; then ./gradlew assembleDebug; fi

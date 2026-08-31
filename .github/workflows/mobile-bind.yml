@@ -38,13 +38,13 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Android SDK & NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools,platforms;android-35,build-tools;35.0.0,ndk;26.1.10909125'
+          packages: 'platform-tools,platforms;android-35,build-tools;35.0.0,ndk;27.0.12077973'
 
       - name: Build branchdam.aar
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.1.10909125
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: ./scripts/build-mobile.sh --android-only
 
       - name: Upload AAR

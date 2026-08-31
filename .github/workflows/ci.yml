@@ -29,7 +29,7 @@ jobs:
 
       - name: Test branchdam public package
         run: |
-          go test -race -v ./. 2>/dev/null || true
+          go test -race -v .
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -95,15 +95,15 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK & NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools,platforms;android-35,build-tools;35.0.0,ndk;26.1.10909125'
+          packages: 'platform-tools,platforms;android-35,build-tools;35.0.0,ndk;27.0.12077973'
 
       - name: Build Go Core AAR
         # ANDROID_HOME is exported by setup-android into $GITHUB_ENV; ANDROID_NDK_HOME
         # follows the standard layout ($ANDROID_HOME/ndk/<version>).
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.1.10909125
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: |
           ./scripts/build-mobile.sh --android-only
 

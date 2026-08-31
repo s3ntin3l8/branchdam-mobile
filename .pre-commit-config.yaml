@@ -42,7 +42,7 @@ repos:
 
       - id: go-vet-root
         name: "go vet (branchdam package)"
-        entry: bash -c 'go vet ./. 2>/dev/null || true'
+        entry: bash -c 'go vet ./.'
         language: system
         types: [go]
         pass_filenames: false
