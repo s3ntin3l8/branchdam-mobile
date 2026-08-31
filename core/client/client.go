@@ -60,9 +60,11 @@ func (c *Client) AgentID() string {
 }
 
 func (c *Client) setHeaders(req *http.Request) {
+	// T2-6: send the API key only in X-API-Key. Previously both
+	// X-API-Key and Authorization: Bearer were set, doubling the
+	// surface area in any log line, proxy log, or error message.
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 	req.Header.Set("User-Agent", fmt.Sprintf("branchdam-mobile/%s (%s)", c.clientVersion, c.agentID))
 	req.Header.Set("Content-Type", "application/json")
