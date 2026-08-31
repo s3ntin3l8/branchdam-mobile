@@ -1,0 +1,80 @@
+name: mobile-bind
+
+# Optional workflow that builds the gomobile-bound branchdam library and
+# uploads the artifacts (AAR + xcframework) for the commit. Not a required
+# check; opt in by adding the `mobile-bind` label to a PR.
+#
+# Why: producing the iOS xcframework requires macOS, and the AAR build needs
+# the Android NDK. These are not part of the standard `make check` flow, but
+# are useful to validate on demand.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-bind-android:
+    name: Android AAR
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'mobile-bind')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK & NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools,platforms;android-35,build-tools;35.0.0,ndk;26.1.10909125'
+
+      - name: Build branchdam.aar
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.1.10909125
+        run: ./scripts/build-mobile.sh --android-only
+
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: branchdam-aar
+          path: android/app/libs/branchdam.aar
+          if-no-files-found: error
+
+  mobile-bind-ios:
+    name: iOS xcframework
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'mobile-bind')
+    runs-on: macos-14
+    env:
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build BranchDam.xcframework
+        run: ./scripts/build-mobile.sh --ios-only
+
+      - name: Upload xcframework
+        uses: actions/upload-artifact@v4
+        with:
+          name: branchdam-xcframework
+          path: ios/Frameworks/BranchDam.xcframework
+          if-no-files-found: error
