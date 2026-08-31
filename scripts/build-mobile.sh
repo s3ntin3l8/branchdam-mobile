@@ -5,12 +5,17 @@ set -euo pipefail
 # Go package at the repo root (package `branchdam`).
 #
 # Outputs:
-#   android/app/libs/branchdam.aar      (Kotlin/Java consumer)
-#   ios/Frameworks/BranchDam.xcframework (Swift consumer; ios + iossimulator)
+#   android/app/libs/branchdam.aar       (Kotlin/Java consumer)
+#   ios/Frameworks/branchdam.xcframework (Swift consumer; ios + iossimulator)
 #
 # Required environment:
 #   For Android:  ANDROID_HOME, ANDROID_NDK_HOME, javac (1.8+)
 #   For iOS:      Xcode (must run on macOS)
+#
+# NDK compatibility: gomobile v0.0.0-20260821190718 validates the
+# NDK's minSdkVersion and rejects versions outside 21..35. r25
+# (25.1.8937393) is known to work; r26/r27 may report "unsupported
+# API version 16" because of legacy NDK metadata.
 #
 # Sub-issue A ships this as the single source of truth for the mobile
 # library build. Sub-issues B+ add the real Engine API; this script does
