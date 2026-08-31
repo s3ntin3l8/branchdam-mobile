@@ -61,6 +61,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Pin the Xcode version explicitly. The default Xcode that ships
+      # with the macos-14 image can change, and the iPhone 16 simulator
+      # isn't guaranteed to be present in every future release. Xcode
+      # 15.4 is the version this project has been validated against.
+      - name: Select Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
