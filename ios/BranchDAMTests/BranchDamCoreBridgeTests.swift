@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(BranchDam)
+import BranchDam
+#endif
 @testable import BranchDAM
 
 final class BranchDamCoreBridgeTests: XCTestCase {
@@ -6,7 +9,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
     func testBridgeInitialization() {
         let bridge = BranchDamCoreBridge.shared
         let success = bridge.initialize(
-            dbPath: "/tmp/test_queue.db",
+            dbPath: NSTemporaryDirectory() + "test_queue_a.db",
             baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
             agentID: "iphone-16-pro"
@@ -17,7 +20,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
     func testEnqueueMediaMock() {
         let bridge = BranchDamCoreBridge.shared
         _ = bridge.initialize(
-            dbPath: NSTemporaryDirectory() + "test_queue.db",
+            dbPath: NSTemporaryDirectory() + "test_queue_a.db",
             baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
             agentID: "iphone-16-pro"
@@ -53,5 +56,20 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertTrue(setResult)
         let isOffloaded = bridge.isMediaOffloaded(localID: "ph://asset-001")
         XCTAssertTrue(isOffloaded)
+    }
+
+    /// Smoke test for the gomobile-bound Engine. Proves the artifact loaded.
+    /// Sub-issue A only; B expands the API surface.
+    func testEngineVersionLoads() {
+        #if canImport(BranchDam)
+        let version = BranchDamCoreBridge.engineVersion
+        XCTAssertFalse(version.isEmpty, "engine version should be non-empty when framework loads")
+        XCTAssertNotEqual(version, "unavailable", "engine version should be reachable through the framework")
+        #else
+        // Framework absent (local dev without make mobile-build-ios). Verify
+        // the bridge's fallback returns the documented stub string so callers
+        // can rely on a known value.
+        XCTAssertEqual(BranchDamCoreBridge.engineVersion, "unavailable")
+        #endif
     }
 }
