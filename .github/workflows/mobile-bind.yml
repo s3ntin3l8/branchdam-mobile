@@ -76,5 +76,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: branchdam-xcframework
-          path: ios/Frameworks/BranchDam.xcframework
+          path: ios/Frameworks/branchdam.xcframework
           if-no-files-found: error

@@ -12,11 +12,18 @@ set -euo pipefail
 #   For Android:  ANDROID_HOME, ANDROID_NDK_HOME, javac (1.8+)
 #   For iOS:      Xcode (must run on macOS)
 #
+# Reproducibility: gomobile and gobind are installed at the pseudo-version
+# pinned in go.mod's tool directive. Using @latest here would let the
+# toolchain drift between runs and across CI; pinning matches the build
+# of the public Go package itself.
+#
 # NDK compatibility: gomobile v0.0.0-20260821190718 defaults to
 # -androidapi=16, which is below every recent NDK's supported min
 # (r25: 19..33, r26: 21..35, r27: 21..35). The script passes
-# -androidapi=21, matching the project's minSdk = 28 floor and
-# inside the r25/r26/r27 supported range.
+# -androidapi=21, the lowest API the r26/r27 NDKs support, which is
+# below the app's minSdk = 28 (gomobile's AAR minSdk is independent
+# of the consumer's minSdk; the AAR links against API 21 stubs that
+# are no-ops on devices above 21).
 #
 # Sub-issue A ships this as the single source of truth for the mobile
 # library build. Sub-issues B+ add the real Engine API; this script does
@@ -24,15 +31,17 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PUBLIC_PKG="github.com/s3ntin3l8/branchdam-mobile"
+# Must match the pseudo-version pinned in go.mod's tool directive.
+GOMOBILE_REV="v0.0.0-20260821190718-4776eadac327"
 
 GOPATH_BIN="$(go env GOPATH)/bin"
 export PATH="${GOPATH_BIN}:${PATH}"
 export GOTOOLCHAIN=auto
 
 if ! command -v gomobile >/dev/null 2>&1; then
-    echo "gomobile not found in PATH. Installing gomobile and gobind..."
-    go install golang.org/x/mobile/cmd/gomobile@latest
-    go install golang.org/x/mobile/cmd/gobind@latest
+    echo "gomobile not found in PATH. Installing gomobile and gobind at ${GOMOBILE_REV}..."
+    go install "golang.org/x/mobile/cmd/gomobile@${GOMOBILE_REV}"
+    go install "golang.org/x/mobile/cmd/gobind@${GOMOBILE_REV}"
 fi
 
 # Allow callers to skip a target. Usage: build-mobile.sh --android-only / --ios-only
