@@ -1,13 +1,32 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 )
 
+// MaxEventPayloadBytes caps the size of a single event's JSON payload.
+// Beyond this, the writer blocks the single SQLite connection for too
+// long; the limit is enforced in EnqueueEvent and surfaced to the FFI
+// surface as a typed ErrPayloadTooLarge error.
+const MaxEventPayloadBytes = 64 * 1024
+
+// ErrPayloadTooLarge is returned by EnqueueEvent when payloadJSON exceeds
+// MaxEventPayloadBytes. The branchdam FFI surface maps this to
+// branchdam.Error{Code: "PAYLOAD_TOO_LARGE"}.
+var ErrPayloadTooLarge = errors.New("event payload too large")
+
 // EnqueueEvent inserts a new event into the event queue with a generated UUIDv7.
+// The payload is rejected with ErrPayloadTooLarge if it exceeds
+// MaxEventPayloadBytes; this prevents a single misbehaving caller from
+// blocking the queue's single-connection serialisation.
 func (q *Queue) EnqueueEvent(eventType, payloadJSON string) (string, error) {
+	if len(payloadJSON) > MaxEventPayloadBytes {
+		return "", fmt.Errorf("%w: %d > %d", ErrPayloadTooLarge, len(payloadJSON), MaxEventPayloadBytes)
+	}
+
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -31,7 +50,8 @@ func (q *Queue) EnqueueEvent(eventType, payloadJSON string) (string, error) {
 	return eventUUID, nil
 }
 
-// ClaimPendingEvents retrieves pending event items eligible for transmission.
+// ClaimPendingEvents atomically claims a batch of event items eligible
+// for transmission. Atomic via UPDATE...RETURNING.
 func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries int) ([]*EventItem, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -40,14 +60,23 @@ func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries
 	cutoff := now - retryBackoffSecs
 
 	query := `
-	SELECT id, event_uuid, event_type, payload_json, status, retry_count,
-	       last_attempt_unix, error_msg, created_at_unix, updated_at_unix
-	FROM event_queue
-	WHERE status = 'PENDING' AND retry_count < ? AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
-	ORDER BY id ASC
-	LIMIT ?
+	UPDATE event_queue
+	SET status = 'IN_PROGRESS',
+	    last_attempt_unix = ?,
+	    updated_at_unix    = ?
+	WHERE id IN (
+	  SELECT id FROM event_queue
+	  WHERE status = 'PENDING'
+	    AND retry_count < ?
+	    AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
+	    AND cancel_requested = 0
+	  ORDER BY id ASC
+	  LIMIT ?
+	)
+	RETURNING id, event_uuid, event_type, payload_json, status, retry_count,
+	          last_attempt_unix, error_msg, created_at_unix, updated_at_unix
 	`
-	rows, err := q.db.Query(query, maxRetries, cutoff, limit)
+	rows, err := q.db.Query(query, now, now, maxRetries, cutoff, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to claim pending events: %w", err)
 	}

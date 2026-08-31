@@ -74,7 +74,14 @@ func (q *Queue) GetUploadItemByBlake3Hash(hash string) (*UploadItem, error) {
 	return &item, nil
 }
 
-// ClaimPendingUploads retrieves pending upload items eligible for attempt, reclaiming stale in-progress items.
+// ClaimPendingUploads atomically claims a batch of pending upload items.
+// Atomic via a single UPDATE...RETURNING statement so two concurrent
+// goroutines (or processes) cannot double-claim the same id.
+//
+// Only PENDING items are claimed. Stale IN_PROGRESS items (left over
+// from a crashed session) are reclaimed separately by Open's startup
+// recovery, not here. This split keeps the hot path simple and the
+// race-free claim focused on the items that are actually new work.
 func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetries int) ([]*UploadItem, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -83,17 +90,24 @@ func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetrie
 	cutoff := now - retryBackoffSecs
 
 	query := `
-	SELECT id, local_path, target_filename, target_dir, fast_hash, blake3_hash,
-	       camera_model, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
-	       error_msg, node_uuid, created_at_unix, updated_at_unix
-	FROM upload_queue
-	WHERE (status = 'PENDING' OR (status = 'IN_PROGRESS' AND last_attempt_unix <= ?))
-	  AND retry_count < ?
-	  AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
-	ORDER BY id ASC
-	LIMIT ?
+	UPDATE upload_queue
+	SET status = 'IN_PROGRESS',
+	    last_attempt_unix = ?,
+	    updated_at_unix    = ?
+	WHERE id IN (
+	  SELECT id FROM upload_queue
+	  WHERE status = 'PENDING'
+	    AND retry_count < ?
+	    AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
+	    AND cancel_requested = 0
+	  ORDER BY id ASC
+	  LIMIT ?
+	)
+	RETURNING id, local_path, target_filename, target_dir, fast_hash, blake3_hash,
+	          camera_model, size_bytes, captured_at_unix, status, retry_count,
+	          last_attempt_unix, error_msg, node_uuid, created_at_unix, updated_at_unix
 	`
-	rows, err := q.db.Query(query, cutoff, maxRetries, cutoff, limit)
+	rows, err := q.db.Query(query, now, now, maxRetries, cutoff, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to claim pending uploads: %w", err)
 	}
