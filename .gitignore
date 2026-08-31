@@ -79,3 +79,10 @@ tmp/
 !.env.example
 *.pem
 *.key
+
+# Mobile library build artifacts (gomobile output)
+*.aar
+*.xcframework/
+
+# Superpowers working notes (audits, specs, plans)
+docs/superpowers/

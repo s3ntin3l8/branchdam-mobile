@@ -6,7 +6,7 @@ Native iOS companion module for branchDAM built with SwiftUI, Swift Concurrency,
 
 - **UI Layer:** SwiftUI views with dual-pane support and safe space reclaim audit queue.
 - **Background Ingest:** `BGAppRefreshTask` and `PHPhotoLibraryChangeObserver` tracking camera roll mutations.
-- **Native Core:** C-archive bridge (`BranchDamCoreBridge.swift`) linking `BranchDamCoreHeader.h` and `libbranchdamcore.a`.
+- **Native Core:** Swift wrapper (`BranchDamCoreBridge.swift`) around the gomobile-bound `BranchDam.xcframework` produced by `make mobile-build-ios`. Sub-issue A wires the bridge; sub-issue B fleshes out the engine API.
 
 ## Sideloading with Personal Apple ID
 
