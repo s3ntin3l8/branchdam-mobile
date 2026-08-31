@@ -26,8 +26,8 @@
 		A1000013 /* AppleOtgIngestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* AppleOtgIngestManager.swift */; };
 		A1000014 /* AppleOtgImportConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* AppleOtgImportConfirmationView.swift */; };
 		A1000015 /* AppleCameraRollImportNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* AppleCameraRollImportNotifier.swift */; };
-		A1000020 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
-		A1000021 /* BranchDamCore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1000020 /* branchdam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; };
+		A1000021 /* branchdam.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A1000101 /* ApplePairDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000101 /* ApplePairDetectorTests.swift */; };
 		A1000102 /* AppleSafeSpaceManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000102 /* AppleSafeSpaceManagerTests.swift */; };
 		A1000103 /* AppleTrashSyncObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000103 /* AppleTrashSyncObserverTests.swift */; };
@@ -40,7 +40,7 @@
 		A100010A /* AppleOtgIngestManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010A /* AppleOtgIngestManagerTests.swift */; };
 		A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010B /* AppleCameraRollImportNotifierTests.swift */; };
 		A100010C /* AppleEditCorrelatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010C /* AppleEditCorrelatorTests.swift */; };
-		A1000120 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
+		A1000120 /* branchdam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,7 +60,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				A1000021 /* BranchDamCore.xcframework in Embed Frameworks */,
+				A1000021 /* branchdam.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -85,12 +85,11 @@
 		A200000E /* SafeSpaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeSpaceView.swift; sourceTree = "<group>"; };
 		A200000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A2000011 /* BranchDamCoreHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BranchDamCoreHeader.h; sourceTree = "<group>"; };
 		A2000012 /* AppleOtgCardScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgCardScanner.swift; sourceTree = "<group>"; };
 		A2000013 /* AppleOtgIngestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManager.swift; sourceTree = "<group>"; };
 		A2000014 /* AppleOtgImportConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgImportConfirmationView.swift; sourceTree = "<group>"; };
 		A2000015 /* AppleCameraRollImportNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifier.swift; sourceTree = "<group>"; };
-		A2000020 /* BranchDamCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDamCore.xcframework; path = BranchDamCore.xcframework; sourceTree = "<group>"; };
+		A2000020 /* branchdam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = branchdam.xcframework; path = branchdam.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
 		A2000102 /* AppleSafeSpaceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerTests.swift; sourceTree = "<group>"; };
@@ -111,7 +110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000020 /* BranchDamCore.xcframework in Frameworks */,
+				A1000020 /* branchdam.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,7 +118,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000120 /* BranchDamCore.xcframework in Frameworks */,
+				A1000120 /* branchdam.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,7 +154,6 @@
 		A4000003 /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				A2000011 /* BranchDamCoreHeader.h */,
 				A2000003 /* BranchDamCoreBridge.swift */,
 			);
 			path = Core;
@@ -216,9 +214,9 @@
 		A4000020 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				A2000020 /* BranchDamCore.xcframework */,
+				A2000020 /* branchdam.xcframework */,
 			);
-			name = Frameworks;
+			path = Frameworks;
 			sourceTree = "<group>";
 		};
 		A4000100 /* BranchDAMTests */ = {
@@ -452,11 +450,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
@@ -474,7 +472,7 @@
 				PRODUCT_NAME = BranchDAM;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -491,11 +489,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
@@ -513,7 +511,7 @@
 				PRODUCT_NAME = BranchDAM;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -531,11 +529,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -547,7 +545,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BranchDAM.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BranchDAM";
@@ -566,11 +564,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -582,7 +580,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BranchDAM.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BranchDAM";

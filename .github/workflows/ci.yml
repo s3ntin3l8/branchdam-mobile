@@ -22,10 +22,14 @@ jobs:
           go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
 
-      - name: Test Core with coverage
+      - name: Test core/ packages with coverage
         run: |
           cd core
           go test -race -v -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Test branchdam public package
+        run: |
+          go test -race -v .
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -57,6 +61,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Pin the Xcode version explicitly. The default Xcode that ships
+      # with the macos-14 image can change, and the iPhone 16 simulator
+      # isn't guaranteed to be present in every future release. Xcode
+      # 15.4 is the version this project has been validated against.
+      - name: Select Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
@@ -65,7 +76,7 @@ jobs:
 
       - name: Build Go Core xcframework
         run: |
-          ./scripts/build-ios-framework.sh
+          ./scripts/build-mobile.sh --ios-only
 
       - name: Run iOS Unit Tests
         run: |
@@ -89,6 +100,19 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: 'gradle'
+
+      - name: Set up Android SDK & NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;25.1.8937393'
+
+      - name: Build Go Core AAR
+        # ANDROID_HOME is exported by setup-android into $GITHUB_ENV; ANDROID_NDK_HOME
+        # follows the standard layout ($ANDROID_HOME/ndk/<version>).
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
+        run: |
+          ./scripts/build-mobile.sh --android-only
 
       - name: Run Android Unit Tests
         run: |

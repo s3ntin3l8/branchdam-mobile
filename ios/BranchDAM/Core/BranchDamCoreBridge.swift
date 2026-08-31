@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(branchdam)
+import branchdam
+#endif
 
 public struct SafeSpaceCandidateVerdict: Codable, Equatable {
     public let localId: String
@@ -18,14 +21,23 @@ public struct SafeSpaceCandidateVerdict: Codable, Equatable {
     }
 }
 
+/// Bridge between the Swift shells (camera-roll observer, BGTask manager,
+/// audit UI) and the gomobile-bound `branchdam` Go engine. Sub-issue A wires
+/// the bridge to the new framework; sub-issues B/E replace the mock-fallback
+/// branches with real engine calls.
 public class BranchDamCoreBridge {
     public static let shared = BranchDamCoreBridge()
 
+    #if canImport(branchdam)
+    private var engine: branchdam.Engine?
+    #endif
     private var isInitialized = false
     private var mockOffloadedMedia: [String: Bool] = [:]
 
     private init() {}
 
+    /// Initialize the Go engine. Returns true on success. A's stub engine
+    /// always succeeds; B's real engine opens the SQLite queue and HTTP client.
     public func initialize(
         dbPath: String,
         baseURL: String,
@@ -33,14 +45,40 @@ public class BranchDamCoreBridge {
         agentID: String = "iphone-companion",
         version: String = "0.1.0"
     ) -> Bool {
-        #if canImport(BranchDamCore)
-        var error: NSError?
-        let ok = BindingsInitCore(dbPath, baseURL, apiKey, agentID, version, &error)
-        self.isInitialized = ok && error == nil
-        return self.isInitialized
+        #if canImport(branchdam)
+        do {
+            let opts = branchdam.EngineOptions()
+            opts.dbPath = dbPath
+            opts.baseURL = baseURL
+            opts.apiKey = apiKey
+            opts.agentID = agentID
+            opts.clientVersion = version
+            opts.httpTimeoutSec = 0
+            let e = try branchdam.Engine.newEngine(opts)
+            self.engine = e
+            self.isInitialized = true
+            return true
+        } catch {
+            self.isInitialized = false
+            return false
+        }
         #else
         self.isInitialized = true
         return true
+        #endif
+    }
+
+    /// Reported version of the bound Go engine. Useful for diagnostics and
+    /// smoke tests confirming the artifact loaded.
+    public static var engineVersion: String {
+        #if canImport(branchdam)
+        // gomobile binds Go's `Version() string` (no error return) as a
+        // non-throwing Swift method. The try/catch from the previous draft
+        // was dead code and triggered a Swift 6 "no calls to throwing
+        // functions" warning.
+        return branchdam.version()
+        #else
+        return "unavailable"
         #endif
     }
 
@@ -50,14 +88,9 @@ public class BranchDamCoreBridge {
         capturedAtUnix: Int64,
         localID: String
     ) -> Int64 {
-        #if canImport(BranchDamCore)
-        var outId: Int64 = 0
-        var error: NSError?
-        let ok = BindingsEnqueueMedia(localPath, filename, capturedAtUnix, localID, "", &outId, &error)
-        return (ok && error == nil) ? outId : 0
-        #else
+        // Sub-issue B wires the real engine call. Until then, return a
+        // positive ID so callers that only check for failure keep working.
         return 1
-        #endif
     }
 
     public func enqueueLineageEvent(
@@ -67,66 +100,27 @@ public class BranchDamCoreBridge {
         resolver: String = "ios_apple_camera_pair",
         confidence: Double = 1.00
     ) -> String {
-        #if canImport(BranchDamCore)
-        var error: NSError?
-        let res = BindingsEnqueueLineageEvent(parentUUID, childUUID, relationshipType, resolver, confidence, &error)
-        return error == nil ? res : ""
-        #else
         return UUID().uuidString
-        #endif
     }
 
     public func enqueueDeleteEvent(nodeUUID: String) -> String {
-        #if canImport(BranchDamCore)
-        var error: NSError?
-        let res = BindingsEnqueueDeleteEvent(nodeUUID, &error)
-        return error == nil ? res : ""
-        #else
         return UUID().uuidString
-        #endif
     }
 
     public func syncBatch(timeoutSecs: Int32 = 120, batchSize: Int32 = 10) -> (uploaded: Int32, eventsSent: Int32) {
-        #if canImport(BranchDamCore)
-        var error: NSError?
-        if let res = BindingsSyncBatch(Int(timeoutSecs), Int(batchSize), &error), error == nil {
-            return (uploaded: Int32(res.uploaded), eventsSent: Int32(res.eventsSent))
-        }
         return (uploaded: 0, eventsSent: 0)
-        #else
-        return (uploaded: 0, eventsSent: 0)
-        #endif
     }
 
     public func isMediaOffloaded(localID: String) -> Bool {
-        #if canImport(BranchDamCore)
-        return BindingsIsMediaOffloaded(localID)
-        #else
         return mockOffloadedMedia[localID] ?? false
-        #endif
     }
 
     public func setMediaOffloaded(localID: String, isOffloaded: Bool) -> Bool {
-        #if canImport(BranchDamCore)
-        var error: NSError?
-        let ok = BindingsSetMediaOffloaded(localID, isOffloaded, &error)
-        return ok && error == nil
-        #else
         mockOffloadedMedia[localID] = isOffloaded
         return true
-        #endif
     }
 
     public func fetchNamingTemplate() -> String {
-        #if canImport(BranchDamCore)
-        var error: NSError?
-        let res = BindingsFetchNamingTemplate(&error)
-        if error == nil && !res.isEmpty {
-            return res
-        }
         return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
-        #else
-        return "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
-        #endif
     }
 }
