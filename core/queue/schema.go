@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS upload_queue (
     last_attempt_unix   INTEGER NOT NULL DEFAULT 0,
     error_msg           TEXT    NOT NULL DEFAULT '',
     node_uuid           TEXT    NOT NULL DEFAULT '',
+    cancel_requested    INTEGER NOT NULL DEFAULT 0,
     created_at_unix     INTEGER NOT NULL,
     updated_at_unix     INTEGER NOT NULL
 );
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS event_queue (
     retry_count         INTEGER NOT NULL DEFAULT 0,
     last_attempt_unix   INTEGER NOT NULL DEFAULT 0,
     error_msg           TEXT    NOT NULL DEFAULT '',
+    cancel_requested    INTEGER NOT NULL DEFAULT 0,
     created_at_unix     INTEGER NOT NULL,
     updated_at_unix     INTEGER NOT NULL
 );

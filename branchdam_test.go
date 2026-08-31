@@ -1,6 +1,9 @@
 package branchdam
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestVersionNonEmpty(t *testing.T) {
 	if v := Version(); v == "" {
@@ -9,7 +12,12 @@ func TestVersionNonEmpty(t *testing.T) {
 }
 
 func TestNewEngineDefaultsClientVersion(t *testing.T) {
-	e, err := NewEngine(EngineOptions{})
+	dir := t.TempDir()
+	e, err := NewEngine(EngineOptions{
+		DBPath:  filepath.Join(dir, "engine.db"),
+		BaseURL: "http://localhost:8080",
+		AgentID: "test-agent",
+	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}
@@ -20,7 +28,13 @@ func TestNewEngineDefaultsClientVersion(t *testing.T) {
 }
 
 func TestNewEnginePreservesExplicitClientVersion(t *testing.T) {
-	e, err := NewEngine(EngineOptions{ClientVersion: "1.2.3-custom"})
+	dir := t.TempDir()
+	e, err := NewEngine(EngineOptions{
+		DBPath:        filepath.Join(dir, "engine.db"),
+		BaseURL:       "http://localhost:8080",
+		AgentID:       "test-agent",
+		ClientVersion: "1.2.3-custom",
+	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}
@@ -31,7 +45,12 @@ func TestNewEnginePreservesExplicitClientVersion(t *testing.T) {
 }
 
 func TestEngineCloseIdempotent(t *testing.T) {
-	e, err := NewEngine(EngineOptions{})
+	dir := t.TempDir()
+	e, err := NewEngine(EngineOptions{
+		DBPath:  filepath.Join(dir, "engine.db"),
+		BaseURL: "http://localhost:8080",
+		AgentID: "test-agent",
+	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}
@@ -40,5 +59,50 @@ func TestEngineCloseIdempotent(t *testing.T) {
 	}
 	if err := e.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
+	}
+}
+
+func TestNewEngineValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		opts EngineOptions
+	}{
+		{"empty DBPath", EngineOptions{BaseURL: "http://x", AgentID: "a"}},
+		{"empty BaseURL", EngineOptions{DBPath: "/tmp/x.db", AgentID: "a"}},
+		{"bad BaseURL", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "://bad", AgentID: "a"}},
+		{"non-http scheme", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "ftp://x", AgentID: "a"}},
+		{"empty AgentID", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "http://x"}},
+		{"negative timeout", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "http://x", AgentID: "a", HTTPTimeoutSec: -1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewEngine(tt.opts)
+			if err == nil {
+				t.Fatalf("NewEngine: expected INVALID_INPUT error, got nil")
+			}
+			be, ok := err.(*Error)
+			if !ok {
+				t.Fatalf("NewEngine: error is not *Error: %T %v", err, err)
+			}
+			if be.Code != "INVALID_INPUT" {
+				t.Fatalf("NewEngine: Code = %q, want %q", be.Code, "INVALID_INPUT")
+			}
+		})
+	}
+}
+
+func TestNewEngineValidatesSchemeHTTPSOrHTTP(t *testing.T) {
+	dir := t.TempDir()
+	for _, scheme := range []string{"https", "http"} {
+		t.Run(scheme, func(t *testing.T) {
+			_, err := NewEngine(EngineOptions{
+				DBPath:  filepath.Join(dir, "engine-"+scheme+".db"),
+				BaseURL: scheme + "://localhost:8080",
+				AgentID: "a",
+			})
+			if err != nil {
+				t.Fatalf("NewEngine with %s scheme: %v", scheme, err)
+			}
+		})
 	}
 }
