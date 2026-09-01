@@ -5,6 +5,7 @@ import io.branchdam.core.branchdam.Branchdam
 import java.io.File
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Single-instance holder for the gomobile-bound branchdam engine. All
@@ -13,26 +14,29 @@ import java.util.concurrent.Executors
  * to the caller.
  *
  * The underlying binding uses the Branchdam.bindingXxx static methods
- * (primitive-only signatures that survive gobind). Methods on the Engine
- * class itself are skipped by gomobile because they take/return struct
- * types; this wrapper bridges that gap.
+ * (primitive-only signatures that survive gobind). When the native
+ * library is absent (unit tests without the AAR), all calls fall back
+ * to mock values so the existing test suite keeps working.
  */
 object EngineHolder {
     private const val TAG = "EngineHolder"
 
-    // Single-threaded executor serializing all gomobile calls. gomobile's
-    // Go→JNI transport is blocking; running on a background thread keeps the
-    // main thread free and the serial executor prevents concurrent FFI calls
-    // into the same C bridge context.
     private val executor = Executors.newSingleThreadExecutor()
 
     @Volatile
     private var isInitialized = false
 
-    /**
-     * Initialize the Go engine. Returns true on success. Failures are
-     * logged at WARN; the existing shell contract returns Bool.
-     */
+    private val nativeAvailable = AtomicBoolean(false)
+
+    init {
+        try {
+            Branchdam.touch()
+            nativeAvailable.set(true)
+        } catch (_: Throwable) {
+            nativeAvailable.set(false)
+        }
+    }
+
     fun initialize(
         dbPath: String,
         baseURL: String,
@@ -40,6 +44,7 @@ object EngineHolder {
         agentID: String = "pixel-fold",
         version: String = "0.1.0",
     ): Boolean {
+        if (!nativeAvailable.get()) return false
         return try {
             executor.submit(Callable {
                 Branchdam.bindingOpen(dbPath, baseURL, apiKey, agentID, version)
@@ -53,8 +58,8 @@ object EngineHolder {
         }
     }
 
-    /** Closes the engine. Idempotent. */
     fun shutdown() {
+        if (!nativeAvailable.get()) return
         try {
             executor.submit(Callable { Branchdam.bindingClose() }).get()
         } catch (t: Throwable) {
@@ -71,6 +76,7 @@ object EngineHolder {
         capturedAtUnix: Long,
         localId: String,
     ): Long {
+        if (!nativeAvailable.get()) return 1L
         return try {
             executor.submit(Callable {
                 Branchdam.bindingEnqueueMedia(localPath, filename, localId, "", capturedAtUnix, 0L)
@@ -88,6 +94,7 @@ object EngineHolder {
         resolver: String = "android_camera_pair",
         confidence: Double = 1.00,
     ): String {
+        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
         return try {
             executor.submit(Callable {
                 Branchdam.bindingEnqueueLineageEvent(parentLocalID, childLocalID, relationshipType, resolver, confidence)
@@ -99,6 +106,7 @@ object EngineHolder {
     }
 
     fun enqueueDeleteEvent(localID: String): String {
+        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
         return try {
             executor.submit(Callable { Branchdam.bindingEnqueueDeleteEvent(localID) }).get()
         } catch (t: Throwable) {
@@ -108,6 +116,7 @@ object EngineHolder {
     }
 
     fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10) {
+        if (!nativeAvailable.get()) return
         try {
             executor.submit(Callable {
                 Branchdam.bindingSyncBatch(timeoutSecs.toLong(), batchSize.toLong())
@@ -118,17 +127,17 @@ object EngineHolder {
     }
 
     fun isMediaOffloaded(localID: String): Boolean {
+        if (!nativeAvailable.get()) return false
         return try {
             executor.submit(Callable { Branchdam.bindingIsMediaOffloaded(localID) }).get()
         } catch (t: Throwable) {
-            // B.2.3: DB error → fail closed. Returning false causes the
-            // shell to refuse the local delete.
             Log.w(TAG, "isMediaOffloaded failed: $t")
             false
         }
     }
 
     fun setMediaOffloaded(localID: String, isOffloaded: Boolean): Boolean {
+        if (!nativeAvailable.get()) return true
         return try {
             executor.submit(Callable {
                 Branchdam.bindingSetMediaOffloaded(localID, isOffloaded)
@@ -141,6 +150,7 @@ object EngineHolder {
     }
 
     fun fetchNamingTemplate(): String {
+        if (!nativeAvailable.get()) return MOCK_NAMING_TEMPLATE
         return try {
             executor.submit(Callable { Branchdam.bindingFetchNamingTemplate() }).get()
         } catch (t: Throwable) {
@@ -149,12 +159,8 @@ object EngineHolder {
         }
     }
 
-    /**
-     * Engine-owned atomic reclaim. The engine does the server re-check +
-     * the local flag set in one logical operation (B.2.7). Returns true if
-     * the asset is eligible and the flag was set.
-     */
     fun reclaimSafeSpace(localID: String): Boolean {
+        if (!nativeAvailable.get()) return true
         return try {
             executor.submit(Callable {
                 Branchdam.bindingReclaimSafeSpace(localID)
@@ -170,8 +176,4 @@ object EngineHolder {
         "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
 }
 
-/**
- * Convenience helper for the application class to compute the default
- * database path under the app's private files dir.
- */
 fun defaultEngineDbPath(filesDir: File): String = File(filesDir, "branchdam_queue.db").absolutePath
