@@ -32,7 +32,7 @@ final class AppleSafeSpaceManagerEligibleTests: XCTestCase {
             ],
             deletionHandler: { _ in
                 deleteCalled = true
-                true
+                return true
             }
         )
 
