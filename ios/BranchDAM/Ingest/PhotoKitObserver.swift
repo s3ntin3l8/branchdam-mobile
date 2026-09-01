@@ -157,10 +157,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
 
                 // Check PHAssetResource for video component (Live Photo).
                 let resources = PHAssetResource.assetResources(for: asset)
-                let hasVideoComponent = resources.contains { resource in
+                let hasVideoComponent = resources.contains(where: { resource in
                     let rawValue = resource.type.rawValue
                     return rawValue == "public.paired-video" || rawValue == "public.alternate-video"
-                }
+                })
                 if hasVideoComponent {
                     let stillId = "ph://\(item.localIdentifier)"
                     let videoId = stillId // Same asset contains both
