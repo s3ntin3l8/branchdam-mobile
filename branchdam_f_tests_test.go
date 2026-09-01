@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
 )
@@ -179,15 +178,13 @@ func TestReclaimSafeSpace_TierIneligible(t *testing.T) {
 	}
 }
 
-// TestReclaimSafeSpace_ServerTimeout: a node-status request that
-// hangs causes ReclaimSafeSpace to surface a Go error. The engine's
-// HTTP client will eventually return; we use a server that responds
-// only after the test closes it, so the in-flight request fails.
-func TestReclaimSafeSpace_ServerTimeout(t *testing.T) {
-	// Server that signals "ready" when it has accepted the node-status
-	// request, then blocks until the test releases it.
-	release := make(chan struct{})
-	gotRequest := make(chan struct{}, 1)
+// TestReclaimSafeSpace_TransientNetworkError: the server returns a
+// 500 Internal Server Error to node-status. The engine wraps this
+// as a client.ClientError with CodeNetworkError. The branchdam
+// wrapper maps this to INTERNAL (transient) rather than
+// VERIFIED_REQUIRED, so the shell can distinguish a server outage
+// from a genuine ineligible verdict.
+func TestReclaimSafeSpace_TransientNetworkError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/agent/handshake":
@@ -197,24 +194,16 @@ func TestReclaimSafeSpace_ServerTimeout(t *testing.T) {
 				ServerVersion: "test-1.0",
 			})
 		case "/api/v1/agent/node-status":
-			select {
-			case gotRequest <- struct{}{}:
-			default:
-			}
-			<-release
-			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{})
+			// Simulate a server-side error. The engine treats this as
+			// a network-level failure (the client returns ClientError
+			// with CodeNetworkError for non-2xx responses).
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("server overloaded"))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
-	t.Cleanup(func() {
-		select {
-		case <-release:
-		default:
-			close(release)
-		}
-		server.Close()
-	})
+	t.Cleanup(server.Close)
 
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
@@ -229,40 +218,95 @@ func TestReclaimSafeSpace_ServerTimeout(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = e.Close() })
 
-	if err := e.queue.RecordLocalMedia("ph://hang-1", "hang-node", "b3-hang-1", "ACTIVE"); err != nil {
+	if err := e.queue.RecordLocalMedia("ph://transient-1", "transient-node", "b3-transient-1", "ACTIVE"); err != nil {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
 
-	type result struct {
-		verdict SafeSpaceVerdict
-		err     error
+	v, err := e.ReclaimSafeSpace("ph://transient-1")
+	if v.Eligible {
+		t.Fatalf("expected Eligible=false on server error, got %+v", v)
 	}
-	done := make(chan result, 1)
-	go func() {
-		v, err := e.ReclaimSafeSpace("ph://hang-1")
-		done <- result{v, err}
-	}()
+	if err == nil {
+		t.Fatalf("expected non-nil error on server 500, got nil")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("error type = %T, want *Error", err)
+	}
+	// Transient network errors should map to INTERNAL, not
+	// VERIFIED_REQUIRED. The shell can then distinguish "try
+	// again later" from "this node is not verified".
+	if be.Code == CodeVerifiedRequired {
+		t.Fatalf("Code = %q, want INTERNAL (transient network error, not ineligible verdict)", be.Code)
+	}
+}
 
-	// Wait for the server to receive the node-status request, then
-	// release it with an empty status list (which the engine treats
-	// as "server has no record of node" → non-Eligible).
-	<-gotRequest
-	close(release)
+// TestReclaimSafeSpace_NoRecordOnServer: the server responds to
+// node-status with an empty list (the nodeUUID is unknown to the
+// server). The engine treats this as "server has no record of node"
+// and returns Eligible=false with a non-nil error mapped to
+// VERIFIED_REQUIRED.
+//
+// Note: this does NOT exercise a server hang or the engine's 30s
+// HTTP client timeout (client.go:33). For a true timeout test, see
+// the suggestion in the F#62 audit follow-up; the engine's timeout
+// path requires a server that never responds and a test runtime
+// measured in seconds, which is impractical for unit tests. The
+// real 30s timeout is covered by integration tests on a real
+// device with a hung server.
+func TestReclaimSafeSpace_NoRecordOnServer(t *testing.T) {
+	// Server that responds immediately with an empty
+	// NodeStatusResponse (no status for the requested nodeUUID).
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/agent/handshake":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(client.HandshakeResponse{
+				OK:            true,
+				ServerVersion: "test-1.0",
+			})
+		case "/api/v1/agent/node-status":
+			// Empty list: server has no record of the requested node.
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
 
-	select {
-	case r := <-done:
-		if r.verdict.Eligible {
-			t.Fatalf("expected Eligible=false on empty server response, got %+v", r.verdict)
-		}
-		// Empty list is treated as "no record" — not necessarily a
-		// connection error. The point of this test is that the
-		// engine returns a non-Eligible verdict and surfaces the
-		// error to the caller, rather than silently passing.
-		if r.err == nil {
-			t.Fatalf("expected non-nil error on empty server response, got nil")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("ReclaimSafeSpace did not return after server release")
+	dir := t.TempDir()
+	e, err := NewEngine(EngineOptions{
+		DBPath:        filepath.Join(dir, "engine.db"),
+		BaseURL:       server.URL,
+		APIKey:        "test",
+		AgentID:       "test-agent",
+		ClientVersion: "test-1.0",
+	})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	t.Cleanup(func() { _ = e.Close() })
+
+	if err := e.queue.RecordLocalMedia("ph://unknown-1", "unknown-node", "b3-unknown-1", "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
+
+	v, err := e.ReclaimSafeSpace("ph://unknown-1")
+	if v.Eligible {
+		t.Fatalf("expected Eligible=false on empty server response, got %+v", v)
+	}
+	// Empty list is treated as "no record" — the engine returns
+	// Eligible=false and a non-nil error mapped to VERIFIED_REQUIRED.
+	if err == nil {
+		t.Fatalf("expected non-nil error on empty server response, got nil")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("error type = %T, want *Error", err)
+	}
+	if be.Code != CodeVerifiedRequired {
+		t.Fatalf("Code = %q, want %q", be.Code, CodeVerifiedRequired)
 	}
 }
 
