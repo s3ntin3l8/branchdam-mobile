@@ -34,6 +34,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
 
     private var lastScannedDate: Date = Date().addingTimeInterval(-3600)
     private var isObserving = false
+    private let lineageQueue = DispatchQueue(label: "com.branchdam.mobile.lineage", qos: .utility)
 
     public func startObserving() {
         guard !isObserving else { return }
@@ -100,6 +101,12 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
                         localID: item.localIdentifier
                     )
                 }
+
+                // E.6: Lineage pipeline runs for BOTH auto-import and
+                // confirmation-based import. Recording edges before
+                // confirmation is safe — the engine deduplicates by local ID.
+                runLineageDetection(discovered)
+
                 BackgroundSyncManager.shared.triggerImmediateSync()
             } else {
                 AppleCameraRollImportNotifier.shared.stagePendingAssets(discovered)
@@ -107,9 +114,63 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
                     count: discovered.count,
                     assetIdentifiers: discovered.map { $0.localIdentifier }
                 )
+
+                // E.6: Lineage detection even for confirmation-based import.
+                runLineageDetection(discovered)
             }
         }
 
         return discovered
+    }
+
+    private func runLineageDetection(_ assets: [DiscoveredAsset]) {
+        lineageQueue.async {
+            // ProRAW pair detection (DNG + HEIC/JPEG companions).
+            let raws = assets.filter { $0.isRaw == true }
+            let jpegs = assets.filter { $0.isRaw == false && $0.isVideo == false }
+            if !raws.isEmpty && !jpegs.isEmpty {
+                let pairs = ApplePairDetector.findProRawPairs(
+                    masters: raws.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) },
+                    derivatives: jpegs.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) }
+                )
+                _ = ApplePairDetector.registerPairs(pairs: pairs)
+            }
+
+            // Edit correlation (in-phone editor exports -> camera roll master).
+            let editDerivatives = assets.filter { item in
+                item.filename.contains("Edited", ignoreCase: true) ||
+                    item.filename.contains("Restored", ignoreCase: true)
+            }
+            if !editDerivatives.isEmpty {
+                let edits = AppleEditCorrelator.findAppEdits(
+                    masters: assets.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename) },
+                    derivatives: editDerivatives.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, app: "ios_editor") }
+                )
+                _ = AppleEditCorrelator.registerEditLineage(edits: edits)
+            }
+
+            // Live Photo detection (still + motion video pair).
+            let livePhotoAssets = assets.filter { !$0.isVideo! && $0.pixelWidth > 0 }
+            for item in livePhotoAssets {
+                let results = PHAsset.fetchAssets(withLocalIdentifiers: [item.localIdentifier], options: nil)
+                guard let asset = results.firstObject else { continue }
+                let pairAssets = asset.avAsset as? AVAsset
+                _ = pairAssets  // Live Photo pairing requires AVFoundation — stub for now
+
+                // Check PHAssetResource for motion-photo subtypes
+                let resources = PHAssetResource.assetResources(for: asset)
+                let hasVideoComponent = resources.contains { $0.type == .pairedVideo || $0.type == .alternateVideo }
+                if hasVideoComponent {
+                    let stillId = "ph://\(item.localIdentifier)"
+                    let videoId = stillId // Same asset contains both
+                    _ = LivePhotoExtractor.linkLivePhoto(
+                        stillId: stillId,
+                        videoId: videoId,
+                        stillFilename: item.filename,
+                        videoFilename: item.filename
+                    )
+                }
+            }
+        }
     }
 }
