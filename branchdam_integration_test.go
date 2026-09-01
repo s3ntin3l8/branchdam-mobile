@@ -252,8 +252,8 @@ func TestSetCancelFlag_BreakSync(t *testing.T) {
 		t.Fatalf("EnqueueMedia: %v", err)
 	}
 
-	// Pre-set the cancel flag; the claim WHERE clause filters by
-	// cancel_requested = 0, so the claim returns 0 rows.
+	// RequestCancel sets the in-process atomic flag; SyncUploads
+	// checks it before claiming, so no rows are picked up.
 	if err := e.SetCancelFlag(); err != nil {
 		t.Fatalf("SetCancelFlag: %v", err)
 	}

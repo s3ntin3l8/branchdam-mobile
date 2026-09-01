@@ -47,24 +47,6 @@ func (q *Queue) Close() error {
 	return nil
 }
 
-// IsCancelRequested returns the current value of the upload cancel flag.
-// The flag is intended to be checked between items; the engine reads it
-// after every successful upload.
-//
-// Note: cancel state is now tracked in-process on the Engine
-// (sync/atomic). The SQLite flag is retained for diagnostics; the
-// engine's SyncUploads / SyncEvents capture+reset their own
-// in-process flag at the start of each batch.
-func (q *Queue) IsCancelRequested() (bool, error) {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	var v int
-	if err := q.db.QueryRow(`SELECT cancel_requested FROM upload_queue LIMIT 1`).Scan(&v); err != nil {
-		return false, fmt.Errorf("read upload cancel flag: %w", err)
-	}
-	return v == 1, nil
-}
-
 func nowUnix() int64 {
 	return time.Now().Unix()
 }

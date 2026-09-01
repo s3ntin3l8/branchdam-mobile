@@ -160,7 +160,7 @@ object EngineHolder {
     }
 
     fun reclaimSafeSpace(localID: String): Boolean {
-        if (!nativeAvailable.get()) return true
+        if (!nativeAvailable.get()) return false
         return try {
             executor.submit(Callable {
                 Branchdam.bindingReclaimSafeSpace(localID)

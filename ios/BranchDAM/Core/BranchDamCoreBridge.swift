@@ -282,7 +282,7 @@ public class BranchDamCoreBridge {
         return (eligible, reason)
         #else
         _ = localID
-        return (true, "")
+        return (false, "engine not available")
         #endif
     }
 }
