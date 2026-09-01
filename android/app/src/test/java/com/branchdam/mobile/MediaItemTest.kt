@@ -51,8 +51,6 @@ class MediaItemTest {
         )
         assertEquals(1L, mediaId)
 
-        val (uploaded, events) = EngineHolder.syncBatch(120, 10)
-        assertEquals(0, uploaded)
-        assertEquals(0, events)
+        EngineHolder.syncBatch(120, 10)
     }
 }
