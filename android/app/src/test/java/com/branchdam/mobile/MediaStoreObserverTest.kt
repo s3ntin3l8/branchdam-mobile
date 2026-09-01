@@ -49,7 +49,8 @@ class MediaStoreObserverTest {
         val stopMethod = observerClass.getMethod("unregister")
         assertNotNull(startMethod)
         assertNotNull(stopMethod)
-        assertEquals(void.class, startMethod.returnType)
-        assertEquals(void.class, stopMethod.returnType)
+        // Kotlin's Unit maps to Java's void.class at runtime.
+        assertEquals(Unit::class.java, startMethod.returnType)
+        assertEquals(Unit::class.java, stopMethod.returnType)
     }
 }
