@@ -18,11 +18,25 @@ object SafeSpaceManager {
      * 1. Confirms node is archived and verified on Tier 3 NAS storage.
      * 2. Sets is_offloaded = 1 in SQLite queue.db to suppress deletion sync.
      * 3. Deletes local full-res file via MediaStore.
+     *
+     * @param engineReclaim optional test seam: returns true if the engine
+     *   confirms the asset is safely reclaimable. Defaults to
+     *   [EngineHolder.reclaimSafeSpace].
+     * @param deleteLocal optional test seam: deletes the local MediaStore
+     *   row for the given URI. Defaults to `contentResolver.delete`.
      */
     fun reclaimSafeSpace(
         context: Context,
         candidateUris: List<String>,
-        statusChecker: (uri: String) -> Pair<Boolean, Long> // returns Pair(isVerified, sizeBytes)
+        statusChecker: (uri: String) -> Pair<Boolean, Long>,
+        engineReclaim: (uri: String) -> Boolean = { EngineHolder.reclaimSafeSpace(it) },
+        deleteLocal: (context: Context, uri: String) -> Boolean = { ctx, u ->
+            try {
+                ctx.contentResolver.delete(Uri.parse(u), null, null) > 0
+            } catch (_: Exception) {
+                false
+            }
+        },
     ): SafeSpaceResult {
         var eligibleCount = 0
         var reclaimedCount = 0
@@ -41,10 +55,10 @@ object SafeSpaceManager {
             // local flag, and only returns Eligible=true on success.
             // The shell deletes the local copy only after the engine
             // confirms the asset is safely archived.
-            val eligible = EngineHolder.reclaimSafeSpace(uriString)
+            val eligible = engineReclaim(uriString)
             if (eligible) {
                 // 2. Delete the local copy AFTER the engine confirms.
-                val deleted = deleteLocalMedia(context, Uri.parse(uriString))
+                val deleted = deleteLocal(context, uriString)
                 if (deleted) {
                     reclaimedCount++
                     freedBytes += sizeBytes
@@ -65,15 +79,5 @@ object SafeSpaceManager {
             reclaimedCount = reclaimedCount,
             freedBytesEstimate = freedBytes
         )
-    }
-
-    private fun deleteLocalMedia(context: Context, uri: Uri): Boolean {
-        return try {
-            val rows = context.contentResolver.delete(uri, null, null)
-            rows > 0
-        } catch (_: Exception) {
-            // SecurityException or mock fallback
-            false
-        }
     }
 }
