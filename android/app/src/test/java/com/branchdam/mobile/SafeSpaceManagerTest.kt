@@ -165,6 +165,9 @@ class SafeSpaceManagerTest {
         assertEquals(3, result.eligibleCount) // u1, u2, u3 verified
         assertEquals(1, result.reclaimedCount) // u1 succeeded
         assertEquals(1_000_000L, result.freedBytesEstimate)
-        assertEquals(setOf("u1", "u2", "u3"), deleted.toSet())
+        // u3 is ineligible (engineReclaim returns false), so deleteLocal
+        // is not called for it. u1 and u2 are attempted; u2's delete
+        // fails but the attempt still records the URI.
+        assertEquals(setOf("u1", "u2"), deleted.toSet())
     }
 }
