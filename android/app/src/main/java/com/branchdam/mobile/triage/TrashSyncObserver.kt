@@ -77,14 +77,8 @@ object TrashSyncObserver {
         val bundle = android.os.Bundle().apply {
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
             if (sinceUnix > 0) {
-                putString(
-                    MediaStore.QUERY_ARG_SQL_SELECTION,
-                    "${MediaStore.MediaColumns.DATE_TRASHED} > ?"
-                )
-                putStringArray(
-                    MediaStore.QUERY_ARG_SQL_SELECTION_ARGS,
-                    arrayOf(sinceUnix.toString())
-                )
+                putString("sql_selection", "date_trashed > ?")
+                putStringArray("sql_selection_args", arrayOf(sinceUnix.toString()))
             }
         }
 
