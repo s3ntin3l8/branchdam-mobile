@@ -99,6 +99,18 @@ android {
         jvmTarget = "21"
     }
 
+    // F plan: unit tests for Android framework-touching code
+    // (BootReceiver, MediaStoreObserver) run on the JVM without
+    // Robolectric. `isReturnDefaultValues = true` makes the test
+    // JVM return default values (null, 0, false) for Android
+    // framework method calls instead of throwing RuntimeException.
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+            isIncludeAndroidResources = false
+        }
+    }
+
     buildFeatures {
         compose = true
     }

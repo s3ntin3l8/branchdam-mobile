@@ -44,7 +44,8 @@ class BranchDamApplication : Application() {
 
         const val PREFS_NAME = "branchdam_prefs"
         const val KEY_SERVER_URL = "server_url"
-        const val KEY_API_KEY = "api_key"
+        // pragma: allowlist secret
+        const val KEY_API_KEY = "api_key" // pragma: allowlist secret
         const val KEY_AGENT_ID = "agent_id"
         const val DEFAULT_SERVER_URL = "http://10.0.2.2:8080"
         const val DEFAULT_AGENT_ID_PREFIX = "pixel-fold-"

@@ -1,10 +1,12 @@
 package com.branchdam.mobile
 
+import android.content.Context
 import com.branchdam.mobile.triage.SafeSpaceManager
 import com.branchdam.mobile.triage.SafeSpaceResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.mock
 
 /**
  * Tests for [SafeSpaceManager.reclaimSafeSpace] using the test seams
@@ -13,6 +15,16 @@ import org.junit.Test
  * lambdas that record what was called.
  */
 class SafeSpaceManagerTest {
+
+    /**
+     * The context is only used by the default `deleteLocal` (which
+     * calls `contentResolver.delete`). Since every test in this file
+     * overrides `deleteLocal`, the context is never dereferenced.
+     * We pass a mock to satisfy the non-null parameter type without
+     * actually constructing a Context (which would require Android
+     * framework classes).
+     */
+    private val stubContext: Context = mock()
 
     @Test
     fun testSafeSpaceResultModel() {
@@ -34,7 +46,7 @@ class SafeSpaceManagerTest {
         // Engine says "eligible", delete succeeds → reclaimedCount=1.
         val reclaimed = mutableListOf<String>()
         val result = SafeSpaceManager.reclaimSafeSpace(
-            context = null!!, // never used because deleteLocal is overridden
+            context = stubContext,
             candidateUris = listOf("content://media/external/images/1"),
             statusChecker = { _ -> true to 1_000_000L },
             engineReclaim = { true },
@@ -56,7 +68,7 @@ class SafeSpaceManagerTest {
         // Engine says "not eligible" → delete is NOT called, reclaimedCount=0.
         var deleteCalled = false
         val result = SafeSpaceManager.reclaimSafeSpace(
-            context = null!!,
+            context = stubContext,
             candidateUris = listOf("content://media/external/images/2"),
             statusChecker = { _ -> true to 1_000_000L },
             engineReclaim = { false },
@@ -79,7 +91,7 @@ class SafeSpaceManagerTest {
         var engineCalled = false
         var deleteCalled = false
         val result = SafeSpaceManager.reclaimSafeSpace(
-            context = null!!,
+            context = stubContext,
             candidateUris = listOf("content://media/external/images/3"),
             statusChecker = { _ -> false to 0L },
             engineReclaim = {
@@ -105,7 +117,7 @@ class SafeSpaceManagerTest {
         // setMediaOffloaded(rollback) is called.
         val rolledBack = mutableListOf<Pair<String, Boolean>>()
         val result = SafeSpaceManager.reclaimSafeSpace(
-            context = null!!,
+            context = stubContext,
             candidateUris = listOf("content://media/external/images/4"),
             statusChecker = { _ -> true to 500_000L },
             engineReclaim = { true },
@@ -131,7 +143,7 @@ class SafeSpaceManagerTest {
         // 4 items: 2 verified, 1 ineligible, 1 delete-fails.
         val deleted = mutableListOf<String>()
         val result = SafeSpaceManager.reclaimSafeSpace(
-            context = null!!,
+            context = stubContext,
             candidateUris = listOf("u1", "u2", "u3", "u4"),
             statusChecker = { uri ->
                 when (uri) {
