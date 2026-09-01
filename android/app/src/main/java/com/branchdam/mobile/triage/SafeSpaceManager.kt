@@ -41,8 +41,8 @@ object SafeSpaceManager {
             // local flag, and only returns Eligible=true on success.
             // The shell deletes the local copy only after the engine
             // confirms the asset is safely archived.
-            val verdict = EngineHolder.reclaimSafeSpace(uriString)
-            if (verdict.eligible) {
+            val eligible = EngineHolder.reclaimSafeSpace(uriString)
+            if (eligible) {
                 // 2. Delete the local copy AFTER the engine confirms.
                 val deleted = deleteLocalMedia(context, Uri.parse(uriString))
                 if (deleted) {

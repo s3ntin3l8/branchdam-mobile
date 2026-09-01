@@ -15,13 +15,12 @@ class SyncWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             // Sub-issue B: the gomobile-bound branchdam engine handles
-            // the sync. EngineHolder.syncBatch returns (uploaded,
-            // eventsSent) and the result is captured for diagnostic
-            // logging (the previous B draft ignored the values).
-            val (uploaded, eventsSent) = EngineHolder.syncBatch(timeoutSecs = 120, batchSize = 10)
+            // the sync. EngineHolder.syncBatch triggers the sync cycle
+            // and logs success/failure via the gomobile binding.
+            EngineHolder.syncBatch(timeoutSecs = 120, batchSize = 10)
             android.util.Log.i(
                 "SyncWorker",
-                "syncBatch complete: uploaded=$uploaded eventsSent=$eventsSent"
+                "syncBatch complete"
             )
 
             Result.success()
