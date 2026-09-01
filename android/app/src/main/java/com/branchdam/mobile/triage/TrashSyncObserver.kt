@@ -17,11 +17,20 @@ data class TrashedMediaItem(
 object TrashSyncObserver {
 
     /**
-     * Inspects MediaStore for recently trashed items (IS_TRASHED = 1 on Android 11+).
-     * If the item was an intentional offload (Free Up Space), suppression is applied.
-     * Otherwise, enqueues EVENT_NODE_DELETED to remove derivative export from Immich.
+     * Inspects MediaStore for trashed items (IS_TRASHED = 1 on Android 11+).
+     * Items already present in [processedUris] are skipped to avoid
+     * re-enqueueing delete events for items lingering in the recycle bin
+     * (up to 30 days). Newly processed URIs are added to [processedUris].
+     *
+     * If the item was an intentional offload (Free Up Space), suppression
+     * is applied. Otherwise, enqueues EVENT_NODE_DELETED to remove the
+     * derivative export from Immich.
      */
-    fun processTrashedItems(context: Context, nodeUuidLookup: (contentUri: String) -> String?): Int {
+    fun processTrashedItems(
+        context: Context,
+        processedUris: MutableSet<String>,
+        nodeUuidLookup: (contentUri: String) -> String?
+    ): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return 0
         }
@@ -30,6 +39,11 @@ object TrashSyncObserver {
         var eventsEnqueued = 0
 
         for (item in trashedItems) {
+            // Skip items already processed in a previous onChange.
+            if (item.contentUri in processedUris) {
+                continue
+            }
+
             // Check if this deletion was an intentional offload.
             // EngineHolder's isMediaOffloaded is the B.2.3 fail-closed
             // path: a DB error returns false so the deletion is
@@ -37,6 +51,7 @@ object TrashSyncObserver {
             val isOffloaded = EngineHolder.isMediaOffloaded(item.contentUri)
             if (isOffloaded) {
                 // Suppress EVENT_NODE_DELETED - retain remote master and Immich export
+                processedUris.add(item.contentUri)
                 continue
             }
 
@@ -45,11 +60,18 @@ object TrashSyncObserver {
                 EngineHolder.enqueueDeleteEvent(nodeUuid)
                 eventsEnqueued++
             }
+
+            // Mark processed regardless of enqueue success to avoid
+            // silent infinite retry loops for items with no server node UUID.
+            processedUris.add(item.contentUri)
         }
 
         return eventsEnqueued
     }
 
+    /**
+     * Queries MediaStore for all currently trashed items (Android 11+).
+     */
     fun queryTrashedMedia(context: Context): List<TrashedMediaItem> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return emptyList()
