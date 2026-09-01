@@ -66,6 +66,10 @@ public struct WelcomeView: View {
             DispatchQueue.main.async {
                 authorizationStatus = status
                 if status == .authorized || status == .limited {
+                    // E.1: On first-launch grant, start the engine and
+                    // observer immediately so the user gets a live pipeline
+                    // rather than waiting for a full app relaunch.
+                    BranchDamApp.startEngineIfNeeded()
                     showMainApp = true
                 }
             }

@@ -26,8 +26,10 @@ public struct ContentView: View {
                     }
             }
 
-            // E.5: Photo authorization banner when access is denied/restricted.
-            if authorizationStatus == .denied || authorizationStatus == .restricted {
+            // E.5: Photo authorization banner when access is not yet granted.
+            // Shows for .notDetermined (Set Up Later path), .denied, and
+            // .restricted so users always have an in-app path to enable access.
+            if authorizationStatus == .notDetermined || authorizationStatus == .denied || authorizationStatus == .restricted {
                 VStack {
                     PhotoAuthorizationBanner(status: authorizationStatus)
                     Spacer()
@@ -76,6 +78,11 @@ public struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            // If the user granted access in Settings while the app was
+            // backgrounded, start the engine + observer now.
+            if authorizationStatus == .authorized || authorizationStatus == .limited {
+                BranchDamApp.startEngineIfNeeded()
+            }
         }
     }
 }
@@ -91,14 +98,26 @@ struct PhotoAuthorizationBanner: View {
             Text(bannerMessage)
                 .font(.caption)
                 .multilineTextAlignment(.center)
-            Button(action: openSettings) {
-                Text("Open Settings")
-                    .font(.caption.bold())
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.orange)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+            if status == .notDetermined {
+                Button(action: requestAccess) {
+                    Text("Grant Camera Roll Access")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+            } else {
+                Button(action: openSettings) {
+                    Text("Open Settings")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.orange)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
             }
         }
         .padding(12)
@@ -118,6 +137,20 @@ struct PhotoAuthorizationBanner: View {
 
     private var bannerMessage: String {
         "branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters."
+    }
+
+    private func requestAccess() {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in
+            DispatchQueue.main.async {
+                // The parent ContentView's onReceive will re-evaluate
+                // authorizationStatus on next foreground cycle; trigger
+                // engine init immediately if access was granted.
+                let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+                if status == .authorized || status == .limited {
+                    BranchDamApp.startEngineIfNeeded()
+                }
+            }
+        }
     }
 
     private func openSettings() {

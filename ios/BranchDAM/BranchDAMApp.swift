@@ -12,7 +12,7 @@ struct BranchDAMApp: App {
         // access has already been granted. WelcomeView handles the
         // first-launch permission request flow.
         if authorizationStatus == .authorized || authorizationStatus == .limited {
-            initializeEngineAndObservers()
+            Self.startEngineIfNeeded()
         }
 
         BackgroundSyncManager.shared.registerBackgroundTasks()
@@ -30,7 +30,10 @@ struct BranchDAMApp: App {
         }
     }
 
-    private func initializeEngineAndObservers() {
+    /// E.1: Idempotent engine + observer startup. Safe to call from both
+    /// the app init (pre-authorized path) and the WelcomeView grant path.
+    static func startEngineIfNeeded() {
+        guard !BranchDamCoreBridge.shared.isInitialized else { return }
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         let dbPath = paths[0].appendingPathComponent("branchdam_queue.db").path
 

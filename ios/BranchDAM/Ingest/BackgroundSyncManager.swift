@@ -90,7 +90,7 @@ public class BackgroundSyncManager {
             defer { completionLock.unlock() }
             guard !completed else { return }
             completed = true
-            task.setTaskCompleted(success: result.uploaded > 0 || result.eventsSent > 0)
+            task.setTaskCompleted(success: true)
             self.scheduleBackgroundSync()
         }
     }

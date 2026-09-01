@@ -45,7 +45,7 @@ public class BranchDamCoreBridge {
     #if canImport(branchdam)
     private var engine: branchdam.Engine?
     #endif
-    private var isInitialized = false
+    private(set) var isInitialized = false
     private var mockOffloadedMedia: [String: Bool] = [:]
 
     private init() {}
