@@ -99,7 +99,6 @@ func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetrie
 	  WHERE status = 'PENDING'
 	    AND retry_count < ?
 	    AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
-	    AND cancel_requested = 0
 	  ORDER BY id ASC
 	  LIMIT ?
 	)

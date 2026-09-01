@@ -291,13 +291,11 @@ func TestSyncUploads_CancelFlagHonored(t *testing.T) {
 		}
 	}
 
-	// Pre-set the cancel flag so the first claim's WHERE clause
-	// (cancel_requested = 0) filters everything out.
-	if err := q.RequestCancel(); err != nil {
-		t.Fatalf("RequestCancel: %v", err)
-	}
-
+	// Pre-set the in-process cancel flag; the engine's SyncUploads
+	// swaps it back to false at the start of the batch, then observes
+	// the captured value and returns 0 with no items claimed.
 	eng := New(q, nil)
+	eng.RequestCancel()
 	count, err := eng.SyncUploads(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("SyncUploads: %v", err)
@@ -308,6 +306,69 @@ func TestSyncUploads_CancelFlagHonored(t *testing.T) {
 	// Items should still be PENDING (claim filtered by cancel flag).
 	if pending, _ := q.CountPendingUploads(); pending != 3 {
 		t.Fatalf("expected 3 pending, got %d (cancel should not have claimed anything)", pending)
+	}
+}
+
+// TestSyncUploads_CancelDoesNotStallNextBatch: B.2.2 — after a
+// SetCancelFlag, the next SyncBatch must reset the flag and process
+// items normally. Without the reset, the cancel would be permanent
+// and every subsequent SyncBatch would claim zero rows.
+func TestSyncUploads_CancelDoesNotStallNextBatch(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_resume_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	var uploads int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uploads++
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(client.UploadResponse{
+			OK:       true,
+			NodeUUID: "resume-node-1",
+			Status:   "UPLOADED",
+		})
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "k", AgentID: "a"})
+	eng := New(q, c)
+
+	testFilePath := filepath.Join(tempDir, "PXL_RESUME.dng")
+	if err := os.WriteFile(testFilePath, []byte("resume"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, err := eng.EnqueueLocalCapture(testFilePath, "PXL_RESUME.dng", 1724000000, "local_uri_resume"); err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+
+	// 1) Cancel before the first sync.
+	eng.RequestCancel()
+	first, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("first SyncUploads: %v", err)
+	}
+	if first != 0 {
+		t.Fatalf("first SyncUploads: expected 0 (cancelled), got %d", first)
+	}
+	if uploads != 0 {
+		t.Fatalf("server saw %d uploads after cancel, want 0", uploads)
+	}
+
+	// 2) Next SyncBatch — engine resets the flag and processes the
+	// item. Without the reset, this would still be 0.
+	second, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("second SyncUploads: %v", err)
+	}
+	if second != 1 {
+		t.Fatalf("second SyncUploads: expected 1 (resumed), got %d", second)
+	}
+	if uploads != 1 {
+		t.Fatalf("server saw %d uploads after resume, want 1", uploads)
 	}
 }
 

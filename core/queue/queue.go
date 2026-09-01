@@ -47,28 +47,14 @@ func (q *Queue) Close() error {
 	return nil
 }
 
-// RequestCancel flips the cancel_requested flag on both queues. The
-// in-flight SyncUploads / SyncEvents honor the flag at the next
-// per-item checkpoint and break the loop.
-//
-// Safe to call multiple times; the flag is reset by the next
-// ClaimPendingUploads / ClaimPendingEvents call.
-func (q *Queue) RequestCancel() error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	now := nowUnix()
-	if _, err := q.db.Exec(`UPDATE upload_queue SET cancel_requested = 1, updated_at_unix = ? WHERE cancel_requested = 0`, now); err != nil {
-		return fmt.Errorf("set upload cancel flag: %w", err)
-	}
-	if _, err := q.db.Exec(`UPDATE event_queue SET cancel_requested = 1, updated_at_unix = ? WHERE cancel_requested = 0`, now); err != nil {
-		return fmt.Errorf("set event cancel flag: %w", err)
-	}
-	return nil
-}
-
 // IsCancelRequested returns the current value of the upload cancel flag.
 // The flag is intended to be checked between items; the engine reads it
 // after every successful upload.
+//
+// Note: cancel state is now tracked in-process on the Engine
+// (sync/atomic). The SQLite flag is retained for diagnostics; the
+// engine's SyncUploads / SyncEvents capture+reset their own
+// in-process flag at the start of each batch.
 func (q *Queue) IsCancelRequested() (bool, error) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -77,21 +63,6 @@ func (q *Queue) IsCancelRequested() (bool, error) {
 		return false, fmt.Errorf("read upload cancel flag: %w", err)
 	}
 	return v == 1, nil
-}
-
-// ResetCancelFlags clears cancel_requested on both queues. Called by the
-// engine at the start of each SyncBatch.
-func (q *Queue) ResetCancelFlags() error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	now := nowUnix()
-	if _, err := q.db.Exec(`UPDATE upload_queue SET cancel_requested = 0, updated_at_unix = ? WHERE cancel_requested = 1`, now); err != nil {
-		return fmt.Errorf("reset upload cancel flag: %w", err)
-	}
-	if _, err := q.db.Exec(`UPDATE event_queue SET cancel_requested = 0, updated_at_unix = ? WHERE cancel_requested = 1`, now); err != nil {
-		return fmt.Errorf("reset event cancel flag: %w", err)
-	}
-	return nil
 }
 
 func nowUnix() int64 {

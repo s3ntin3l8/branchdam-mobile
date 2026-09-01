@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync/atomic"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
 	"github.com/s3ntin3l8/branchdam-mobile/core/hasher"
@@ -24,6 +25,20 @@ func isNotFoundErr(err error) bool {
 type Engine struct {
 	q *queue.Queue
 	c *client.Client
+
+	// cancelRequested is an atomic flag that the shell's SetCancelFlag
+	// (via the branchdam FFI) sets and SyncUploads / SyncEvents read
+	// + reset at the start of each batch. In-process atomic (not a
+	// SQLite column) so a single cancel never persists across
+	// syncs — this was the critical bug Hermes flagged in B.2.2.
+	cancelRequested atomic.Bool
+}
+
+// RequestCancel sets the in-process cancel flag. The next
+// SyncUploads / SyncEvents call observes it and returns the
+// partial-sync counts; subsequent syncs are unaffected.
+func (e *Engine) RequestCancel() {
+	e.cancelRequested.Store(true)
 }
 
 type SafeSpaceCandidate struct {
@@ -134,6 +149,17 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		batchSize = 5
 	}
 
+	// B.2.2: capture + reset the cancel flag at the start of each
+	// SyncBatch. The flag is in-process (atomic.Bool), so a single
+	// SetCancelFlag only affects the in-flight sync. The shell can
+	// safely re-sync after a cancel without being stuck.
+	cancelled := e.cancelRequested.Swap(false)
+
+	if cancelled {
+		slog.Info("engine: sync cancelled before claim")
+		return 0, ctx.Err()
+	}
+
 	items, err := e.q.ClaimPendingUploads(batchSize, 10, 5)
 	if err != nil {
 		return 0, fmt.Errorf("claim uploads failed: %w", err)
@@ -141,9 +167,9 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 
 	completedCount := 0
 	for _, item := range items {
-		// B.2.2: check the SQLite-backed cancel flag between items so a
-		// concurrent SetCancelFlag from the shell halts the batch.
-		if cancel, _ := e.q.IsCancelRequested(); cancel {
+		// B.2.2: also check the flag between items so a
+		// SetCancelFlag mid-batch halts gracefully.
+		if e.cancelRequested.Load() {
 			return completedCount, ctx.Err()
 		}
 		if ctx.Err() != nil {
@@ -225,6 +251,14 @@ func (e *Engine) SyncEvents(ctx context.Context, batchSize int) (int, error) {
 		batchSize = 10
 	}
 
+	// B.2.2: see SyncUploads.
+	cancelled := e.cancelRequested.Swap(false)
+
+	if cancelled {
+		slog.Info("engine: event sync cancelled before claim")
+		return 0, ctx.Err()
+	}
+
 	events, err := e.q.ClaimPendingEvents(batchSize, 10, 5)
 	if err != nil {
 		return 0, fmt.Errorf("claim events failed: %w", err)
@@ -232,8 +266,7 @@ func (e *Engine) SyncEvents(ctx context.Context, batchSize int) (int, error) {
 
 	sentCount := 0
 	for _, evt := range events {
-		// B.2.2: cancel flag check.
-		if cancel, _ := e.q.IsCancelRequested(); cancel {
+		if e.cancelRequested.Load() {
 			return sentCount, ctx.Err()
 		}
 		if ctx.Err() != nil {

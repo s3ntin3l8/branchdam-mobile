@@ -69,7 +69,6 @@ func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries
 	  WHERE status = 'PENDING'
 	    AND retry_count < ?
 	    AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
-	    AND cancel_requested = 0
 	  ORDER BY id ASC
 	  LIMIT ?
 	)

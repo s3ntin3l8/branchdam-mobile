@@ -405,15 +405,14 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 }
 
 // SetCancelFlag requests an in-flight SyncBatch to stop at the next
-// per-item checkpoint. Idempotent. The flag is reset by the next
-// ClaimPendingUploads call.
+// per-item checkpoint. The flag is captured and reset at the start of
+// each SyncBatch, so a single SetCancelFlag only affects the in-flight
+// sync; subsequent syncs are unaffected. (B.2.2)
 func (e *Engine) SetCancelFlag() error {
-	if e.queue == nil {
+	if e.engine == nil {
 		return newError(CodeDBError, "engine not open")
 	}
-	if err := e.queue.RequestCancel(); err != nil {
-		return newError(CodeDBError, "set cancel flag: %v", err)
-	}
+	e.engine.RequestCancel()
 	return nil
 }
 

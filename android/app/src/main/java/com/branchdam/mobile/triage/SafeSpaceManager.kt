@@ -48,6 +48,13 @@ object SafeSpaceManager {
                 if (deleted) {
                     reclaimedCount++
                     freedBytes += sizeBytes
+                } else {
+                    // Rollback: if delete fails the file is still on disk
+                    // but the engine already set is_offloaded=1. Without
+                    // rollback the asset is permanently unreachable — the
+                    // engine treats it as intentionally offloaded and
+                    // suppresses any future reclaim attempts.
+                    EngineHolder.setMediaOffloaded(uriString, false)
                 }
             }
         }

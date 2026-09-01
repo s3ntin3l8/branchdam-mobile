@@ -1,16 +1,18 @@
 package com.branchdam.mobile
 
 import android.util.Log
-import io.branchdam.core.Confidence
-import io.branchdam.core.Engine
-import io.branchdam.core.EngineOptions
-import io.branchdam.core.EnqueueMediaOptions
-import io.branchdam.core.SafeSpaceCandidate
-import io.branchdam.core.SafeSpaceVerdict
-import io.branchdam.core.SyncOptions
-import io.branchdam.core.SyncResult
+import io.branchdam.core.branchdam.Confidence
+import io.branchdam.core.branchdam.Engine
+import io.branchdam.core.branchdam.EngineOptions
+import io.branchdam.core.branchdam.EnqueueMediaOptions
+import io.branchdam.core.branchdam.SafeSpaceCandidate
+import io.branchdam.core.branchdam.SafeSpaceVerdict
+import io.branchdam.core.branchdam.SyncOptions
+import io.branchdam.core.branchdam.SyncResult
 import java.io.File
+import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 /**
  * Single-instance holder for the gomobile-bound branchdam engine. Replaces
@@ -31,6 +33,12 @@ object EngineHolder {
     private const val TAG = "EngineHolder"
 
     private val mockOffloadedMedia = ConcurrentHashMap<String, Boolean>()
+
+    // Single-threaded executor serializing all gomobile calls. gomobile's
+    // Go→JNI transport is blocking; running on a background thread keeps the
+    // main thread free and the serial executor prevents concurrent FFI calls
+    // into the same C bridge context.
+    private val executor = Executors.newSingleThreadExecutor()
 
     @Volatile
     private var engine: Engine? = null
@@ -57,8 +65,7 @@ object EngineHolder {
             opts.agentID = agentID
             opts.clientVersion = version
             opts.httpTimeoutSec = 0
-            val e = Engine.newEngine(opts)
-            engine = e
+            engine = executor.submit(Callable { Engine.newEngine(opts) }).get()
             isInitialized = true
             true
         } catch (t: Throwable) {
@@ -72,7 +79,7 @@ object EngineHolder {
     fun shutdown() {
         val e = engine ?: return
         try {
-            e.close()
+            executor.submit(Callable { e.close() }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "engine.close failed: $t")
         }
@@ -95,7 +102,7 @@ object EngineHolder {
             opts.filename = filename
             opts.capturedAtUnix = capturedAtUnix
             opts.localID = localID
-            e.enqueueMedia(opts)
+            executor.submit(Callable { e.enqueueMedia(opts) }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "enqueueMedia failed: $t")
             0L
@@ -112,7 +119,9 @@ object EngineHolder {
         val e = engine ?: return mockEnqueueLineageEvent()
         return try {
             val conf = Confidence.valueOf(confidence.toFloat())
-            e.enqueueLineageEvent(parentLocalID, childLocalID, relationshipType, resolver, conf)
+            executor.submit(Callable {
+                e.enqueueLineageEvent(parentLocalID, childLocalID, relationshipType, resolver, conf)
+            }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "enqueueLineageEvent failed: $t")
             ""
@@ -122,7 +131,7 @@ object EngineHolder {
     fun enqueueDeleteEvent(localID: String): String {
         val e = engine ?: return mockEnqueueDeleteEvent()
         return try {
-            e.enqueueDeleteEvent(localID)
+            executor.submit(Callable { e.enqueueDeleteEvent(localID) }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "enqueueDeleteEvent failed: $t")
             ""
@@ -137,7 +146,7 @@ object EngineHolder {
             opts.batchSize = batchSize
             opts.includeEvents = true
             opts.includeUploads = true
-            val r: SyncResult = e.syncBatch(opts)
+            val r: SyncResult = executor.submit(Callable { e.syncBatch(opts) }).get()
             Pair(r.uploaded.toInt(), r.eventsSent.toInt())
         } catch (t: Throwable) {
             Log.w(TAG, "syncBatch failed: $t")
@@ -148,7 +157,7 @@ object EngineHolder {
     fun isMediaOffloaded(localID: String): Boolean {
         val e = engine ?: return mockOffloadedMedia[localID] ?: false
         return try {
-            e.isMediaOffloaded(localID)
+            executor.submit(Callable { e.isMediaOffloaded(localID) }).get()
         } catch (t: Throwable) {
             // B.2.3: DB error → fail closed. Returning false here causes
             // the shell to refuse the local delete, which is the invariant
@@ -164,7 +173,7 @@ object EngineHolder {
             return true
         }
         return try {
-            e.setMediaOffloaded(localID, isOffloaded)
+            executor.submit(Callable { e.setMediaOffloaded(localID, isOffloaded) }).get()
             true
         } catch (t: Throwable) {
             Log.w(TAG, "setMediaOffloaded failed: $t")
@@ -175,7 +184,7 @@ object EngineHolder {
     fun fetchNamingTemplate(): String {
         val e = engine ?: return MOCK_NAMING_TEMPLATE
         return try {
-            e.fetchNamingTemplate()
+            executor.submit(Callable { e.fetchNamingTemplate() }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "fetchNamingTemplate failed: $t")
             MOCK_NAMING_TEMPLATE
@@ -196,7 +205,7 @@ object EngineHolder {
             }
         }
         return try {
-            e.reclaimSafeSpace(localID)
+            executor.submit(Callable { e.reclaimSafeSpace(localID) }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "reclaimSafeSpace failed: $t")
             SafeSpaceVerdict().also {
