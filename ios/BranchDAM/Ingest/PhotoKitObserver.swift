@@ -126,8 +126,8 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
     private func runLineageDetection(_ assets: [DiscoveredAsset]) {
         lineageQueue.async {
             // ProRAW pair detection (DNG + HEIC/JPEG companions).
-            let raws: [DiscoveredAsset] = assets.filter({ $0.isRaw == true })
-            let jpegs: [DiscoveredAsset] = assets.filter({ ($0.isRaw == false) && ($0.isVideo == false) })
+            let raws: [DiscoveredAsset] = assets.filter({ (asset: DiscoveredAsset) -> Bool in asset.isRaw == true })
+            let jpegs: [DiscoveredAsset] = assets.filter({ (asset: DiscoveredAsset) -> Bool in (asset.isRaw == false) && (asset.isVideo == false) })
             if !raws.isEmpty && !jpegs.isEmpty {
                 let pairs = ApplePairDetector.findProRawPairs(
                     masters: raws.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) },
@@ -137,7 +137,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
             }
 
             // Edit correlation (in-phone editor exports -> camera roll master).
-            let editDerivatives: [DiscoveredAsset] = assets.filter({ item in
+            let editDerivatives: [DiscoveredAsset] = assets.filter({ (item: DiscoveredAsset) -> Bool in
                 item.filename.contains("Edited", ignoreCase: true) ||
                     item.filename.contains("Restored", ignoreCase: true)
             })
