@@ -21,6 +21,7 @@ class MediaStoreObserver(
 ) : ContentObserver(handler) {
 
     private val lastScannedTimestamp = AtomicLong(System.currentTimeMillis() / 1000L - 60)
+    private val lastTrashScanTimestamp = AtomicLong(0L)
 
     fun register() {
         val resolver = context.contentResolver
@@ -36,10 +37,12 @@ class MediaStoreObserver(
         super.onChange(selfChange, uri)
         scanAndEnqueueNewMedia()
 
-        // D.4: Trash sync — check for user-trashed items not from intentional offload.
-        // The delete event is keyed by localID (content URI), which the engine
-        // resolves server-side. No separate node-UUID lookup is needed here.
-        val deletedCount = TrashSyncObserver.processTrashedItems(context) { contentUri ->
+        // D.4: Trash sync — only process items trashed since the last scan
+        // to avoid re-enqueueing delete events for items lingering in the
+        // recycle bin (up to 30 days on Android 11+).
+        val trashSince = lastTrashScanTimestamp.get()
+        lastTrashScanTimestamp.set(System.currentTimeMillis() / 1000L)
+        val deletedCount = TrashSyncObserver.processTrashedItems(context, trashSince) { contentUri ->
             contentUri
         }
         if (deletedCount > 0) {

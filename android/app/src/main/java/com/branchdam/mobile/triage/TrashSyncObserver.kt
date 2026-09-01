@@ -18,15 +18,23 @@ object TrashSyncObserver {
 
     /**
      * Inspects MediaStore for recently trashed items (IS_TRASHED = 1 on Android 11+).
+     * Only items trashed after [sinceUnix] are processed — items already processed
+     * in a previous scan are skipped to avoid re-enqueueing delete events for
+     * items lingering in the recycle bin (up to 30 days).
+     *
      * If the item was an intentional offload (Free Up Space), suppression is applied.
      * Otherwise, enqueues EVENT_NODE_DELETED to remove derivative export from Immich.
      */
-    fun processTrashedItems(context: Context, nodeUuidLookup: (contentUri: String) -> String?): Int {
+    fun processTrashedItems(
+        context: Context,
+        sinceUnix: Long = 0L,
+        nodeUuidLookup: (contentUri: String) -> String?
+    ): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return 0
         }
 
-        val trashedItems = queryTrashedMedia(context)
+        val trashedItems = queryTrashedMedia(context, sinceUnix)
         var eventsEnqueued = 0
 
         for (item in trashedItems) {
@@ -50,7 +58,11 @@ object TrashSyncObserver {
         return eventsEnqueued
     }
 
-    fun queryTrashedMedia(context: Context): List<TrashedMediaItem> {
+    /**
+     * Queries MediaStore for items trashed after [sinceUnix].
+     * Android 11+ only (uses IS_TRASHED and DATE_TRASHED columns).
+     */
+    fun queryTrashedMedia(context: Context, sinceUnix: Long = 0L): List<TrashedMediaItem> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return emptyList()
         }
@@ -64,6 +76,16 @@ object TrashSyncObserver {
 
         val bundle = android.os.Bundle().apply {
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
+            if (sinceUnix > 0) {
+                putString(
+                    MediaStore.QUERY_ARG_SQL_SELECTION,
+                    "${MediaStore.MediaColumns.DATE_TRASHED} > ?"
+                )
+                putStringArray(
+                    MediaStore.QUERY_ARG_SQL_SELECTION_ARGS,
+                    arrayOf(sinceUnix.toString())
+                )
+            }
         }
 
         try {
