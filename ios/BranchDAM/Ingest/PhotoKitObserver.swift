@@ -127,7 +127,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
         lineageQueue.async {
             // ProRAW pair detection (DNG + HEIC/JPEG companions).
             let raws = assets.filter { $0.isRaw == true }
-            let jpegs = assets.filter { $0.isRaw == false && $0.isVideo == false }
+            let jpegs = assets.filter { ($0.isRaw == false) && ($0.isVideo == false) }
             if !raws.isEmpty && !jpegs.isEmpty {
                 let pairs = ApplePairDetector.findProRawPairs(
                     masters: raws.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) },
@@ -150,16 +150,17 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
             }
 
             // Live Photo detection (still + motion video pair).
-            let livePhotoAssets = assets.filter { !$0.isVideo! && $0.pixelWidth > 0 }
+            let livePhotoAssets = assets.filter { ($0.isVideo != true) && $0.pixelWidth > 0 }
             for item in livePhotoAssets {
                 let results = PHAsset.fetchAssets(withLocalIdentifiers: [item.localIdentifier], options: nil)
                 guard let asset = results.firstObject else { continue }
-                let pairAssets = asset.avAsset as? AVAsset
-                _ = pairAssets  // Live Photo pairing requires AVFoundation — stub for now
 
-                // Check PHAssetResource for motion-photo subtypes
+                // Check PHAssetResource for video component (Live Photo).
                 let resources = PHAssetResource.assetResources(for: asset)
-                let hasVideoComponent = resources.contains { $0.type == .pairedVideo || $0.type == .alternateVideo }
+                let hasVideoComponent = resources.contains { resource in
+                    let rawValue = resource.type.rawValue
+                    return rawValue == "public.paired-video" || rawValue == "public.alternate-video"
+                }
                 if hasVideoComponent {
                     let stillId = "ph://\(item.localIdentifier)"
                     let videoId = stillId // Same asset contains both
