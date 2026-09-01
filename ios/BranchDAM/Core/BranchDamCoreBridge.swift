@@ -282,7 +282,7 @@ public class BranchDamCoreBridge {
         return (eligible, reason)
         #else
         guard isInitialized else { return (false, "engine not initialized") }
-        _ = localID
+        mockOffloadedMedia[localID] = true
         return (true, "")
         #endif
     }
