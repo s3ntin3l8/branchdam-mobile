@@ -4,15 +4,20 @@ import android.content.Context
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
-import android.os.Looper
+import android.os.HandlerThread
 import android.provider.MediaStore
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.lineage.EditCorrelator
+import com.branchdam.mobile.lineage.MotionPhotoExtractor
+import com.branchdam.mobile.lineage.PairDetector
 import com.branchdam.mobile.service.SyncScheduler
+import com.branchdam.mobile.triage.TrashSyncObserver
+import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
 class MediaStoreObserver(
     private val context: Context,
-    handler: Handler = Handler(Looper.getMainLooper())
+    handler: Handler = Handler(HandlerThread("MediaStoreObserver").apply { start() }.looper)
 ) : ContentObserver(handler) {
 
     private val lastScannedTimestamp = AtomicLong(System.currentTimeMillis() / 1000L - 60)
@@ -30,6 +35,16 @@ class MediaStoreObserver(
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
         scanAndEnqueueNewMedia()
+
+        // D.4: Trash sync — check for user-trashed items not from intentional offload.
+        // The delete event is keyed by localID (content URI), which the engine
+        // resolves server-side. No separate node-UUID lookup is needed here.
+        val deletedCount = TrashSyncObserver.processTrashedItems(context) { contentUri ->
+            contentUri
+        }
+        if (deletedCount > 0) {
+            SyncScheduler.triggerImmediateSync(context)
+        }
     }
 
     fun scanAndEnqueueNewMedia(): Int {
@@ -60,6 +75,10 @@ class MediaStoreObserver(
                         localId = item.contentUri
                     )
                 }
+
+                // D.3: Lineage pipeline — detect pairs, edits, and motion photos.
+                runLineageDetection(newItems)
+
                 SyncScheduler.triggerImmediateSync(context)
             } else {
                 com.branchdam.mobile.service.ImportConfirmationNotifier.stagePendingItems(newItems)
@@ -72,5 +91,36 @@ class MediaStoreObserver(
         }
 
         return newItems.size
+    }
+
+    private fun runLineageDetection(newItems: List<MediaItem>) {
+        // Pair detection (DNG + JPEG companion pairs).
+        val pairs = PairDetector.findPairs(newItems)
+        PairDetector.registerPairLineage(pairs)
+
+        // Edit correlation (in-phone editor exports → camera roll master).
+        val editDerivatives = newItems.filter { item ->
+            item.filePath.contains("Edited", ignoreCase = true) ||
+                item.filePath.contains("Restored", ignoreCase = true) ||
+                item.filePath.contains("Luminar", ignoreCase = true)
+        }
+        if (editDerivatives.isNotEmpty()) {
+            val edits = EditCorrelator.findInPhoneEdits(newItems, editDerivatives)
+            EditCorrelator.registerEditLineage(edits)
+        }
+
+        // Motion photo detection — DNG/HEIF motion photos with embedded micro video.
+        for (item in newItems.filter { !it.isVideo }) {
+            val file = File(item.filePath)
+            if (MotionPhotoExtractor.detectMotionPhoto(file).isMotionPhoto) {
+                EngineHolder.enqueueLineageEvent(
+                    parentLocalID = item.contentUri,
+                    childLocalID = item.contentUri,
+                    relationshipType = "MOTION_PHOTO_CONTAINS",
+                    resolver = "android_motion_photo_xmp",
+                    confidence = 1.00
+                )
+            }
+        }
     }
 }
