@@ -81,7 +81,7 @@ public struct ContentView: View {
             // If the user granted access in Settings while the app was
             // backgrounded, start the engine + observer now.
             if authorizationStatus == .authorized || authorizationStatus == .limited {
-                BranchDamApp.startEngineIfNeeded()
+                BranchDamCoreBridge.shared.startEngineIfNeeded()
             }
         }
     }
@@ -147,7 +147,7 @@ struct PhotoAuthorizationBanner: View {
                 // engine init immediately if access was granted.
                 let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
                 if status == .authorized || status == .limited {
-                    BranchDamApp.startEngineIfNeeded()
+                    BranchDamCoreBridge.shared.startEngineIfNeeded()
                 }
             }
         }

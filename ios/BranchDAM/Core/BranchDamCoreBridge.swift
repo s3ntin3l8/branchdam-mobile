@@ -84,6 +84,24 @@ public class BranchDamCoreBridge {
         #endif
     }
 
+    /// E.1: Idempotent engine startup. Safe to call from both the app
+    /// init (pre-authorized path) and the WelcomeView grant path.
+    /// No-ops if the engine is already initialized.
+    public func startEngineIfNeeded() {
+        guard !isInitialized else { return }
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let dbPath = paths[0].appendingPathComponent("branchdam_queue.db").path
+
+        _ = initialize(
+            dbPath: dbPath,
+            baseURL: "",
+            agentID: "iphone-pro",
+            version: "0.1.0"
+        )
+
+        PhotoKitObserver.shared.startObserving()
+    }
+
     /// Reported version of the bound Go engine. Useful for diagnostics
     /// and smoke tests confirming the artifact loaded.
     public static var engineVersion: String {
