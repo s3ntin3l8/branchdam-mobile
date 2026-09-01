@@ -114,7 +114,8 @@ class SafeSpaceManagerTest {
     @Test
     fun testReclaimDeleteFailureRollsBack() {
         // Engine says eligible, delete fails → reclaimedCount=0,
-        // setMediaOffloaded(rollback) is called.
+        // AND the rollback seam must be called with (uri, false)
+        // so the asset is not permanently marked offloaded.
         val rolledBack = mutableListOf<Pair<String, Boolean>>()
         val result = SafeSpaceManager.reclaimSafeSpace(
             context = stubContext,
@@ -122,20 +123,25 @@ class SafeSpaceManagerTest {
             statusChecker = { _ -> true to 500_000L },
             engineReclaim = { true },
             deleteLocal = { _, _ -> false }, // delete fails
+            setOffloaded = { uri, flag ->
+                rolledBack.add(uri to flag)
+                true
+            },
         )
 
-        // The rollback path calls EngineHolder.setMediaOffloaded which
-        // returns true (mock when native is absent) without throwing.
-        // We can't intercept it without DI, but we can verify the
-        // result is still 0 reclaimed.
+        // B.2.7 invariant: when delete fails after the engine sets
+        // is_offloaded=1, the shell MUST call setMediaOffloaded(uri, false)
+        // to prevent the asset from being permanently unreachable.
+        // If this assertion fails, the rollback path was removed
+        // and the asset is permanently marked offloaded (PR #54 leak).
+        assertEquals(1, rolledBack.size)
+        assertEquals("content://media/external/images/4" to false, rolledBack[0])
+
+        // The result still shows 0 reclaimed (delete failed).
         assertEquals(1, result.totalChecked)
         assertEquals(1, result.eligibleCount)
         assertEquals(0, result.reclaimedCount)
         assertEquals(0L, result.freedBytesEstimate)
-        // The rollback setMediaOffloaded call goes to EngineHolder
-        // directly (not the test seam), so it returns true via the
-        // native-absent path. The point of this test is that
-        // reclaimedCount=0 when delete fails, regardless of rollback.
     }
 
     @Test

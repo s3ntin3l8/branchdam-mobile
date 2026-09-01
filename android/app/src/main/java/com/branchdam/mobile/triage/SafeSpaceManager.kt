@@ -24,6 +24,10 @@ object SafeSpaceManager {
      *   [EngineHolder.reclaimSafeSpace].
      * @param deleteLocal optional test seam: deletes the local MediaStore
      *   row for the given URI. Defaults to `contentResolver.delete`.
+     * @param setOffloaded optional test seam: sets the engine's offloaded
+     *   flag. Defaults to [EngineHolder.setMediaOffloaded]. Called on
+     *   the rollback path when deleteLocal fails, to prevent the asset
+     *   from being permanently marked offloaded.
      */
     fun reclaimSafeSpace(
         context: Context,
@@ -36,6 +40,9 @@ object SafeSpaceManager {
             } catch (_: Exception) {
                 false
             }
+        },
+        setOffloaded: (uri: String, isOffloaded: Boolean) -> Boolean = { uri, flag ->
+            EngineHolder.setMediaOffloaded(uri, flag)
         },
     ): SafeSpaceResult {
         var eligibleCount = 0
@@ -68,7 +75,7 @@ object SafeSpaceManager {
                     // rollback the asset is permanently unreachable — the
                     // engine treats it as intentionally offloaded and
                     // suppresses any future reclaim attempts.
-                    EngineHolder.setMediaOffloaded(uriString, false)
+                    setOffloaded(uriString, false)
                 }
             }
         }
