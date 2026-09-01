@@ -69,11 +69,11 @@ object EngineHolder {
         localPath: String,
         filename: String,
         capturedAtUnix: Long,
-        localID: String,
+        localId: String,
     ): Long {
         return try {
             executor.submit(Callable {
-                Branchdam.bindingEnqueueMedia(localPath, filename, localID, "", capturedAtUnix, 0L)
+                Branchdam.bindingEnqueueMedia(localPath, filename, localId, "", capturedAtUnix, 0L)
             }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "enqueueMedia failed: $t")
