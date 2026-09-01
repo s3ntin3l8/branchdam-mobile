@@ -1,8 +1,8 @@
 import SwiftUI
 
 public struct SafeSpaceView: View {
-    @State private var estimatedSavingsMB: Int = 1450
-    @State private var verifiedCount: Int = 34
+    @State private var reclaimableMB: Int = 0
+    @State private var verifiedCount: Int = 0
     @State private var isReclaimed = false
 
     public init() {}
@@ -11,7 +11,7 @@ public struct SafeSpaceView: View {
         NavigationStack {
             VStack(spacing: 24) {
                 VStack(spacing: 8) {
-                    Text("\(estimatedSavingsMB) MB")
+                    Text("\(reclaimableMB) MB")
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .foregroundColor(.accentColor)
                     Text("Reclaimable Storage")
@@ -27,7 +27,7 @@ public struct SafeSpaceView: View {
                 Button(action: {
                     isReclaimed = true
                 }) {
-                    Text(isReclaimed ? "Storage Reclaimed ✓" : "Free Up \(estimatedSavingsMB) MB")
+                    Text(isReclaimed ? "Storage Reclaimed" : "Free Up \(reclaimableMB) MB")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -35,10 +35,19 @@ public struct SafeSpaceView: View {
                         .foregroundColor(.white)
                         .cornerRadius(16)
                 }
-                .disabled(isReclaimed)
+                .disabled(isReclaimed || reclaimableMB == 0)
                 .padding()
             }
             .navigationTitle("Safe Space")
+            .onAppear { loadCandidates() }
         }
+    }
+
+    private func loadCandidates() {
+        // E.7: Show 0 until the real candidates API is wired.
+        // A UI onAppear must not trigger syncBatch (which uploads media).
+        // The bridge's reclaimSafeSpace handles server re-verification.
+        reclaimableMB = 0
+        verifiedCount = 0
     }
 }

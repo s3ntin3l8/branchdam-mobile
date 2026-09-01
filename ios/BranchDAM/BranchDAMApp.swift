@@ -1,22 +1,20 @@
 import SwiftUI
 import UserNotifications
+import Photos
 
 @main
 struct BranchDAMApp: App {
 
     init() {
-        // Initialize Core Engine and PhotoKit observer
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let dbPath = paths[0].appendingPathComponent("branchdam_queue.db").path
+        let authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
 
-        _ = BranchDamCoreBridge.shared.initialize(
-            dbPath: dbPath,
-            baseURL: "http://10.0.2.2:8080",
-            agentID: "iphone-pro",
-            version: "0.1.0"
-        )
+        // Only initialize engine and start observing if camera-roll
+        // access has already been granted. WelcomeView handles the
+        // first-launch permission request flow.
+        if authorizationStatus == .authorized || authorizationStatus == .limited {
+            BranchDamCoreBridge.shared.startEngineIfNeeded()
+        }
 
-        PhotoKitObserver.shared.startObserving()
         BackgroundSyncManager.shared.registerBackgroundTasks()
         AppleCameraRollImportNotifier.shared.registerNotificationCategories()
         UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -28,7 +26,7 @@ struct BranchDAMApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            WelcomeView()
         }
     }
 }

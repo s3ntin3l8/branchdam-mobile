@@ -86,3 +86,6 @@ tmp/
 
 # Superpowers working notes (audits, specs, plans)
 docs/superpowers/
+
+# Agent worktrees
+.worktrees/

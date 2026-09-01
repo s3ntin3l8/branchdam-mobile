@@ -45,7 +45,7 @@ public class BranchDamCoreBridge {
     #if canImport(branchdam)
     private var engine: branchdam.Engine?
     #endif
-    private var isInitialized = false
+    private(set) var isInitialized = false
     private var mockOffloadedMedia: [String: Bool] = [:]
 
     private init() {}
@@ -82,6 +82,24 @@ public class BranchDamCoreBridge {
         self.isInitialized = true
         return true
         #endif
+    }
+
+    /// E.1: Idempotent engine startup. Safe to call from both the app
+    /// init (pre-authorized path) and the WelcomeView grant path.
+    /// No-ops if the engine is already initialized.
+    public func startEngineIfNeeded() {
+        guard !isInitialized else { return }
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let dbPath = paths[0].appendingPathComponent("branchdam_queue.db").path
+
+        _ = initialize(
+            dbPath: dbPath,
+            baseURL: "",
+            agentID: "iphone-pro",
+            version: "0.1.0"
+        )
+
+        PhotoKitObserver.shared.startObserving()
     }
 
     /// Reported version of the bound Go engine. Useful for diagnostics
@@ -284,6 +302,21 @@ public class BranchDamCoreBridge {
         guard isInitialized else { return (false, "engine not initialized") }
         mockOffloadedMedia[localID] = true
         return (true, "")
+        #endif
+    }
+
+    /// E.4: Sets the in-process cancel flag. The next SyncUploads/SyncEvents
+    /// call will observe the flag and return early. Called by the BGTask
+    /// expiration handler so the Go engine stops HTTP transfers promptly.
+    ///
+    /// IMPORTANT: This bypasses the serial workQueue because the Go engine's
+    /// cancel flag is an atomic.Bool checked between upload items. Calling
+    /// via workQueue.sync would deadlock when syncBatch is already running
+    /// on that queue. The gomobile seq channel handles thread safety.
+    public func setCancelFlag() {
+        #if canImport(branchdam)
+        guard let engine = self.engine else { return }
+        _ = try? engine.setCancelFlag()
         #endif
     }
 }

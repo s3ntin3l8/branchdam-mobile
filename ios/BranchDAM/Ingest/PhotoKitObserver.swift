@@ -34,6 +34,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
 
     private var lastScannedDate: Date = Date().addingTimeInterval(-3600)
     private var isObserving = false
+    private let lineageQueue = DispatchQueue(label: "com.branchdam.mobile.lineage", qos: .utility)
 
     public func startObserving() {
         guard !isObserving else { return }
@@ -100,6 +101,12 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
                         localID: item.localIdentifier
                     )
                 }
+
+                // E.6: Lineage pipeline runs for BOTH auto-import and
+                // confirmation-based import. Recording edges before
+                // confirmation is safe — the engine deduplicates by local ID.
+                runLineageDetection(discovered)
+
                 BackgroundSyncManager.shared.triggerImmediateSync()
             } else {
                 AppleCameraRollImportNotifier.shared.stagePendingAssets(discovered)
@@ -107,9 +114,46 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
                     count: discovered.count,
                     assetIdentifiers: discovered.map { $0.localIdentifier }
                 )
+
+                // E.6: Lineage detection even for confirmation-based import.
+                runLineageDetection(discovered)
             }
         }
 
         return discovered
+    }
+
+    private func runLineageDetection(_ assets: [DiscoveredAsset]) {
+        lineageQueue.async {
+            // ProRAW pair detection (DNG + HEIC/JPEG companions).
+            let raws: [DiscoveredAsset] = assets.filter({ (asset: DiscoveredAsset) -> Bool in asset.isRaw == true })
+            let jpegs: [DiscoveredAsset] = assets.filter({ (asset: DiscoveredAsset) -> Bool in (asset.isRaw == false) && (asset.isVideo == false) })
+            if !raws.isEmpty && !jpegs.isEmpty {
+                let pairs = ApplePairDetector.findProRawPairs(
+                    masters: raws.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) },
+                    derivatives: jpegs.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) }
+                )
+                _ = ApplePairDetector.registerPairs(pairs: pairs)
+            }
+
+            // Edit correlation (in-phone editor exports -> camera roll master).
+            let editDerivatives: [DiscoveredAsset] = assets.filter({ (item: DiscoveredAsset) -> Bool in
+                item.filename.lowercased().contains("edited") ||
+                    item.filename.lowercased().contains("restored")
+            })
+            if !editDerivatives.isEmpty {
+                let edits = AppleEditCorrelator.findAppEdits(
+                    masters: assets.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename) },
+                    derivatives: editDerivatives.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, app: "ios_editor") }
+                )
+                _ = AppleEditCorrelator.registerEditLineage(edits: edits)
+            }
+
+            // Live Photo detection — the motion track shares the same
+            // PHAsset localIdentifier, so there is no distinct video
+            // asset to create a lineage edge against. Deferred until
+            // the server exposes a motion-track sub-resource API.
+            // for item in livePhotoAssets { ... }
+        }
     }
 }
