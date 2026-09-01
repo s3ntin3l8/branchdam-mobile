@@ -485,7 +485,13 @@ func (e *Engine) ReclaimSafeSpace(localID string) (SafeSpaceVerdict, error) {
 	}
 	verdict, err := e.engine.SafeSpaceReclaim(context.Background(), localID)
 	if err != nil {
-		return SafeSpaceVerdict{LocalID: localID, Reason: err.Error()}, errToError(err)
+		// Any non-nil error from the engine's SafeSpaceReclaim means
+		// "cannot safely reclaim" (not verified, wrong tier, server
+		// unreachable, local flag set failed). Map all of these to
+		// VERIFIED_REQUIRED so the shell can distinguish them from a
+		// successful Eligible=true response.
+		return SafeSpaceVerdict{LocalID: localID, Reason: err.Error()},
+			newError(CodeVerifiedRequired, "reclaim ineligible: %s", err.Error())
 	}
 	if !verdict.Eligible {
 		return SafeSpaceVerdict{LocalID: localID, Reason: verdict.Reason},
