@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -74,20 +75,39 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 
 	resp, err := c.uploadClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("upload transfer failed: %w", err)
+		return nil, &ClientError{
+			Code:    CodeNetworkError,
+			Message: "upload transfer failed",
+			Cause:   err,
+		}
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	// B.2.4: bound the response body. 1 MiB is generous for the
+	// metadata responses /api/v1/agent/upload returns.
+	respBody, err := readResponseBody(resp.Body)
 	if err != nil {
+		var ce *ClientError
+		if errors.As(err, &ce) {
+			return nil, ce
+		}
 		return nil, fmt.Errorf("failed to read upload response: %w", err)
 	}
 
+	// B.2.6: 409 handling. The audit found the pre-B behaviour
+	// treated 409 as a soft dedup even with an empty NodeUUID, which
+	// was the source of "asset permanently orphaned" reports. Now:
+	//  - 409 + parseable NodeUUID  -> DedupError (existing soft case)
+	//  - 409 + empty NodeUUID      -> DEDUP_NO_NODE_UUID (new hard error)
 	if resp.StatusCode == http.StatusConflict {
-		// Always treat 409 as a dedup response, with or without a parseable nodeUuid.
-		// A 409 with no nodeUuid is logged as a soft dedup so the item isn't retried indefinitely.
 		var dedupResp UploadResponse
 		_ = json.Unmarshal(respBody, &dedupResp)
+		if dedupResp.NodeUUID == "" {
+			return nil, &ClientError{
+				Code:    CodeDedupNoNodeUUID,
+				Message: "server returned 409 without a parseable nodeUuid",
+			}
+		}
 		return nil, &DedupError{
 			DedupResponse: DedupResponse{
 				NodeUUID: dedupResp.NodeUUID,
@@ -97,12 +117,25 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("upload rejected with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, &ClientError{
+			Code:    CodeNetworkError,
+			Message: fmt.Sprintf("upload rejected with status %d: %s", resp.StatusCode, string(respBody)),
+		}
 	}
 
 	var uploadResp UploadResponse
 	if err := json.Unmarshal(respBody, &uploadResp); err != nil {
 		return nil, fmt.Errorf("failed to decode upload response: %w", err)
+	}
+
+	// B.2.6: server-claimed BLAKE3 verification. If the server
+	// returns a hash and it doesn't match what we sent, refuse
+	// the response.
+	if uploadResp.Blake3Hash != "" && opts.Blake3Hash != "" && uploadResp.Blake3Hash != opts.Blake3Hash {
+		return nil, &ClientError{
+			Code:    CodeHashMismatch,
+			Message: fmt.Sprintf("server returned blake3 %q, expected %q", uploadResp.Blake3Hash, opts.Blake3Hash),
+		}
 	}
 
 	if resp.Header.Get("X-Dedup") == "true" || resp.Header.Get("X-Dedup") == "1" || uploadResp.Status == "DEDUPLICATED" {

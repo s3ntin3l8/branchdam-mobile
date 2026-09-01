@@ -17,12 +17,14 @@ public struct AppleSafeSpaceReport: Equatable {
 
 public class AppleSafeSpaceManager {
 
-    /**
-     * Executes safe space reclaim on iOS:
-     * 1. Confirms node verification on Tier 3 NAS.
-     * 2. Flags is_offloaded = 1 in SQLite queue.db.
-     * 3. Deletes local full-res asset copy via PHPhotoLibrary or deletionHandler.
-     */
+    /// Executes safe space reclaim on iOS.
+    ///
+    /// For each candidate the engine re-queries the server for current
+    /// verified + tier state and sets the offloaded flag atomically
+    /// (B.2.7). The shell only deletes the local file after the engine
+    /// confirms eligibility. If the local delete fails the offloaded
+    /// flag is rolled back so the asset remains a future reclaim
+    /// candidate.
     public static func reclaimSafeSpace(
         candidates: [(localId: String, sizeBytes: Int64, isVerified: Bool)],
         deletionHandler: ((_ localId: String) -> Bool)? = nil
@@ -35,6 +37,9 @@ public class AppleSafeSpaceManager {
             guard candidate.isVerified else { continue }
             verifiedCount += 1
 
+            let verdict = BranchDamCoreBridge.shared.reclaimSafeSpace(localID: candidate.localId)
+            guard verdict.eligible else { continue }
+
             let deleted: Bool
             if let customDelete = deletionHandler {
                 deleted = customDelete(candidate.localId)
@@ -43,9 +48,10 @@ public class AppleSafeSpaceManager {
             }
 
             if deleted {
-                _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: candidate.localId, isOffloaded: true)
                 reclaimedCount += 1
                 bytesFreed += candidate.sizeBytes
+            } else {
+                _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: candidate.localId, isOffloaded: false)
             }
         }
 

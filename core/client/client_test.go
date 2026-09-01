@@ -299,8 +299,11 @@ func TestUploadStream_DedupConflictError(t *testing.T) {
 }
 
 func TestUploadStream_DedupConflictError_NoNodeUUID(t *testing.T) {
-	// Server returns 409 but no nodeUuid in body — must still be treated as DedupError
-	// so the engine can mark the item complete instead of failing it.
+	// Server returns 409 with no parseable nodeUuid in the body. The
+	// audit found that the pre-B behaviour treated this as a soft
+	// dedup (empty NodeUUID), which silently orphaned the asset.
+	// Now: 409 + empty NodeUUID is a hard DEDUP_NO_NODE_UUID error
+	// so the engine can fail loud and re-queue.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		w.Write([]byte(`{"error":"duplicate"}`))
@@ -318,8 +321,96 @@ func TestUploadStream_DedupConflictError_NoNodeUUID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on 409 with no nodeUuid, got nil")
 	}
-	_, ok := AsDedupResponse(err)
+	if _, ok := AsDedupResponse(err); ok {
+		t.Fatalf("expected 409-without-nodeUuid NOT to be a DedupError, got one (err: %v)", err)
+	}
+	ce, ok := err.(*ClientError)
 	if !ok {
-		t.Fatalf("expected 409-without-nodeUuid to still be AsDedupResponse, got false (err: %v)", err)
+		t.Fatalf("expected *ClientError, got %T: %v", err, err)
+	}
+	if ce.Code != CodeDedupNoNodeUUID {
+		t.Fatalf("Code = %q, want %q", ce.Code, CodeDedupNoNodeUUID)
+	}
+}
+
+// TestRequestHeaders_NoAuthorizationHeader: T2-6 — the API key is sent
+// only in X-API-Key, never in Authorization: Bearer. Previously both
+// were set, doubling the key's surface in any log line.
+func TestRequestHeaders_NoAuthorizationHeader(t *testing.T) {
+	var sawXAPIKey, sawAuth bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawXAPIKey = r.Header.Get("X-API-Key") == "secret-key"
+		sawAuth = r.Header.Get("Authorization") != ""
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(HandshakeResponse{OK: true})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "secret-key", AgentID: "agent"})
+	if _, err := c.Handshake(context.Background(), ""); err != nil {
+		t.Fatalf("Handshake: %v", err)
+	}
+	if !sawXAPIKey {
+		t.Fatalf("X-API-Key header not set")
+	}
+	if sawAuth {
+		t.Fatalf("Authorization header should not be set (T2-6)")
+	}
+}
+
+// TestResponseBody_TooLarge: B.2.4 — server returns >1 MiB body; the
+// client surfaces RESPONSE_TOO_LARGE rather than OOM-ing.
+func TestResponseBody_TooLarge(t *testing.T) {
+	// Build a server that returns a body larger than MaxResponseBodyBytes.
+	big := bytes.Repeat([]byte("x"), MaxResponseBodyBytes+1024)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(big)
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent"})
+	_, err := c.Handshake(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error on oversized response, got nil")
+	}
+	ce, ok := err.(*ClientError)
+	if !ok {
+		t.Fatalf("error type = %T, want *ClientError", err)
+	}
+	if ce.Code != CodeResponseTooLarge {
+		t.Fatalf("Code = %q, want %q", ce.Code, CodeResponseTooLarge)
+	}
+}
+
+// TestUploadStream_HashMismatch: B.2.6 — server returns a different
+// BLAKE3 than we sent; the client surfaces HASH_MISMATCH.
+func TestUploadStream_HashMismatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(UploadResponse{
+			OK:         true,
+			NodeUUID:   "node-uuid-1",
+			Blake3Hash: "b3_server_hash",
+		})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent"})
+	_, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("payload")),
+		7,
+		"hash_mismatch.dng",
+		UploadOptions{Blake3Hash: "b3_client_hash"},
+	)
+	if err == nil {
+		t.Fatal("expected error on hash mismatch, got nil")
+	}
+	ce, ok := err.(*ClientError)
+	if !ok {
+		t.Fatalf("error type = %T, want *ClientError", err)
+	}
+	if ce.Code != CodeHashMismatch {
+		t.Fatalf("Code = %q, want %q", ce.Code, CodeHashMismatch)
 	}
 }

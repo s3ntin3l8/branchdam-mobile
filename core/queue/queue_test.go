@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -222,4 +223,106 @@ func MarkUploadExhaustedForTest(q *Queue, id int64) error {
 	defer q.mu.Unlock()
 	_, err := q.db.Exec(`UPDATE upload_queue SET status = 'FAILED', retry_count = 5 WHERE id = ?`, id)
 	return err
+}
+
+// TestClaimPendingUploads_NoDoubleClaim verifies that the atomic
+// UPDATE...RETURNING claim prevents two concurrent goroutines from
+// claiming the same row. With the pre-B.2.1 SELECT-then-UPDATE pattern,
+// this test would flake; with UPDATE...RETURNING it is deterministic.
+func TestClaimPendingUploads_NoDoubleClaim(t *testing.T) {
+	q := newTestQueue(t)
+
+	// Enqueue 5 items.
+	for i := 0; i < 5; i++ {
+		_, err := q.EnqueueUpload(&UploadItem{
+			LocalPath:      "/sdcard/DCIM/Camera/file_" + string(rune('a'+i)) + ".dng",
+			TargetFilename: "file_" + string(rune('a'+i)) + ".dng",
+			Blake3Hash:     "b3" + string(rune('a'+i)),
+		})
+		if err != nil {
+			t.Fatalf("EnqueueUpload: %v", err)
+		}
+	}
+
+	// Spawn 10 goroutines all calling ClaimPendingUploads with limit=3.
+	// Each call should return a disjoint set of ids; the union should be
+	// at most 5 (the total number of pending rows).
+	const workers = 10
+	results := make(chan []*UploadItem, workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			items, err := q.ClaimPendingUploads(3, 0, 5)
+			if err != nil {
+				t.Errorf("ClaimPendingUploads: %v", err)
+				results <- nil
+				return
+			}
+			results <- items
+		}()
+	}
+
+	seen := map[int64]int{}
+	for i := 0; i < workers; i++ {
+		batch := <-results
+		for _, item := range batch {
+			seen[item.ID]++
+		}
+	}
+
+	// Each claimed id must appear in exactly one batch.
+	if len(seen) != 5 {
+		t.Fatalf("expected 5 distinct claimed ids, got %d (counts: %v)", len(seen), seen)
+	}
+	for id, count := range seen {
+		if count != 1 {
+			t.Fatalf("id %d claimed %d times, want 1", id, count)
+		}
+	}
+
+	// After all claims, no PENDING rows remain; the rows are now
+	// IN_PROGRESS (claimed atomically and held until the engine marks
+	// them complete or failed).
+	count, err := q.CountPendingUploads()
+	if err != nil {
+		t.Fatalf("CountPendingUploads: %v", err)
+	}
+	if count != 5 {
+		t.Fatalf("expected 5 IN_PROGRESS rows after claim, got %d", count)
+	}
+}
+
+// TestEnqueueEvent_PayloadTooLarge verifies the 64KB cap from T2-8.
+func TestEnqueueEvent_PayloadTooLarge(t *testing.T) {
+	q := newTestQueue(t)
+
+	// Just under the limit is accepted.
+	ok := make([]byte, MaxEventPayloadBytes-1)
+	for i := range ok {
+		ok[i] = 'a'
+	}
+	if _, err := q.EnqueueEvent("TEST_OK", string(ok)); err != nil {
+		t.Fatalf("just-under-limit payload rejected: %v", err)
+	}
+
+	// At the limit is rejected.
+	over := make([]byte, MaxEventPayloadBytes+1)
+	for i := range over {
+		over[i] = 'b'
+	}
+	_, err := q.EnqueueEvent("TEST_OVER", string(over))
+	if err == nil {
+		t.Fatalf("over-limit payload accepted")
+	}
+	if !errors.Is(err, ErrPayloadTooLarge) {
+		t.Fatalf("over-limit err = %v, want ErrPayloadTooLarge", err)
+	}
+
+	// Confirm the over-limit event was NOT inserted.
+	count, err := q.CountPendingEvents()
+	if err != nil {
+		t.Fatalf("CountPendingEvents: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 pending event (the OK one), got %d", count)
+	}
 }

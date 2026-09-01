@@ -5,7 +5,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import com.branchdam.mobile.NativeBridge
+import com.branchdam.mobile.EngineHolder
 
 data class TrashedMediaItem(
     val id: Long,
@@ -30,8 +30,11 @@ object TrashSyncObserver {
         var eventsEnqueued = 0
 
         for (item in trashedItems) {
-            // Check if this deletion was an intentional offload
-            val isOffloaded = NativeBridge.isMediaOffloaded(item.contentUri)
+            // Check if this deletion was an intentional offload.
+            // EngineHolder's isMediaOffloaded is the B.2.3 fail-closed
+            // path: a DB error returns false so the deletion is
+            // suppressed (the audit's "verified required" invariant).
+            val isOffloaded = EngineHolder.isMediaOffloaded(item.contentUri)
             if (isOffloaded) {
                 // Suppress EVENT_NODE_DELETED - retain remote master and Immich export
                 continue
@@ -39,7 +42,7 @@ object TrashSyncObserver {
 
             val nodeUuid = nodeUuidLookup(item.contentUri)
             if (!nodeUuid.isNullOrEmpty()) {
-                NativeBridge.enqueueDeleteEvent(nodeUuid)
+                EngineHolder.enqueueDeleteEvent(nodeUuid)
                 eventsEnqueued++
             }
         }

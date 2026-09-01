@@ -1,6 +1,6 @@
 package com.branchdam.mobile.lineage
 
-import com.branchdam.mobile.NativeBridge
+import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
 
 data class InPhoneEdit(
@@ -54,9 +54,9 @@ object EditCorrelator {
     fun registerEditLineage(edits: List<InPhoneEdit>): Int {
         var count = 0
         for (edit in edits) {
-            NativeBridge.enqueueLineageEvent(
-                parentUuid = edit.originalMaster.contentUri,
-                childUuid = edit.editedDerivative.contentUri,
+            EngineHolder.enqueueLineageEvent(
+                parentLocalID = edit.originalMaster.contentUri,
+                childLocalID = edit.editedDerivative.contentUri,
                 relationshipType = "DERIVED_FROM",
                 resolver = "in_phone_${edit.editorApp.lowercase().replace(" ", "_")}",
                 confidence = edit.confidence

@@ -6,7 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import com.branchdam.mobile.NativeBridge
+import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.service.SyncScheduler
 import java.util.concurrent.atomic.AtomicLong
 
@@ -53,7 +53,7 @@ class MediaStoreObserver(
             val autoImport = com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)
             if (autoImport) {
                 for (item in newItems) {
-                    NativeBridge.enqueueMedia(
+                    EngineHolder.enqueueMedia(
                         localPath = item.filePath,
                         filename = item.displayName,
                         capturedAtUnix = item.dateTakenUnix,
