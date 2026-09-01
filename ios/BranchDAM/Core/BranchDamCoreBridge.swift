@@ -290,12 +290,15 @@ public class BranchDamCoreBridge {
     /// E.4: Sets the in-process cancel flag. The next SyncUploads/SyncEvents
     /// call will observe the flag and return early. Called by the BGTask
     /// expiration handler so the Go engine stops HTTP transfers promptly.
+    ///
+    /// IMPORTANT: This bypasses the serial workQueue because the Go engine's
+    /// cancel flag is an atomic.Bool checked between upload items. Calling
+    /// via workQueue.sync would deadlock when syncBatch is already running
+    /// on that queue. The gomobile seq channel handles thread safety.
     public func setCancelFlag() {
         #if canImport(branchdam)
         guard let engine = self.engine else { return }
-        workQueue.sync {
-            _ = try? engine.setCancelFlag()
-        }
+        _ = try? engine.setCancelFlag()
         #endif
     }
 }

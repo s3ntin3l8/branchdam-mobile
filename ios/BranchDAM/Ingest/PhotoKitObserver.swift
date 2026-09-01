@@ -126,8 +126,8 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
     private func runLineageDetection(_ assets: [DiscoveredAsset]) {
         lineageQueue.async {
             // ProRAW pair detection (DNG + HEIC/JPEG companions).
-            let raws = assets.filter { $0.isRaw == true }
-            let jpegs = assets.filter { ($0.isRaw == false) && ($0.isVideo == false) }
+            let raws = assets.filter(where: { $0.isRaw == true })
+            let jpegs = assets.filter(where: { ($0.isRaw == false) && ($0.isVideo == false) })
             if !raws.isEmpty && !jpegs.isEmpty {
                 let pairs = ApplePairDetector.findProRawPairs(
                     masters: raws.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) },
@@ -137,10 +137,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
             }
 
             // Edit correlation (in-phone editor exports -> camera roll master).
-            let editDerivatives = assets.filter { item in
+            let editDerivatives = assets.filter(where: { item in
                 item.filename.contains("Edited", ignoreCase: true) ||
                     item.filename.contains("Restored", ignoreCase: true)
-            }
+            })
             if !editDerivatives.isEmpty {
                 let edits = AppleEditCorrelator.findAppEdits(
                     masters: assets.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename) },
@@ -149,29 +149,11 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
                 _ = AppleEditCorrelator.registerEditLineage(edits: edits)
             }
 
-            // Live Photo detection (still + motion video pair).
-            let livePhotoAssets = assets.filter { ($0.isVideo != true) && $0.pixelWidth > 0 }
-            for item in livePhotoAssets {
-                let results = PHAsset.fetchAssets(withLocalIdentifiers: [item.localIdentifier], options: nil)
-                guard let asset = results.firstObject else { continue }
-
-                // Check PHAssetResource for video component (Live Photo).
-                let resources = PHAssetResource.assetResources(for: asset)
-                let hasVideoComponent = resources.contains(where: { resource in
-                    let rawValue = resource.type.rawValue
-                    return rawValue == "public.paired-video" || rawValue == "public.alternate-video"
-                })
-                if hasVideoComponent {
-                    let stillId = "ph://\(item.localIdentifier)"
-                    let videoId = stillId // Same asset contains both
-                    _ = LivePhotoExtractor.linkLivePhoto(
-                        stillId: stillId,
-                        videoId: videoId,
-                        stillFilename: item.filename,
-                        videoFilename: item.filename
-                    )
-                }
-            }
+            // Live Photo detection — the motion track shares the same
+            // PHAsset localIdentifier, so there is no distinct video
+            // asset to create a lineage edge against. Deferred until
+            // the server exposes a motion-track sub-resource API.
+            // for item in livePhotoAssets { ... }
         }
     }
 }
