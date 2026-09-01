@@ -281,8 +281,9 @@ public class BranchDamCoreBridge {
         }
         return (eligible, reason)
         #else
+        guard isInitialized else { return (false, "engine not initialized") }
         _ = localID
-        return (false, "engine not available")
+        return (true, "")
         #endif
     }
 }
