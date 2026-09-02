@@ -104,6 +104,15 @@ android {
     // Robolectric. `isReturnDefaultValues = true` makes the test
     // JVM return default values (null, 0, false) for Android
     // framework method calls instead of throwing RuntimeException.
+    //
+    // Trade-off: this turns every android.jar method into a silent
+    // default-returning stub, which can mask real behavior (e.g.
+    // WorkManager.getInstance chains, ContentResolver paths) and
+    // give false confidence. The lifecycle/onChange paths that
+    // depend on real framework behavior are covered by
+    // instrumentation tests in androidTest/. The structural tests
+    // here verify the API surface and contract, not the full
+    // lifecycle.
     testOptions {
         unitTests {
             isReturnDefaultValues = true

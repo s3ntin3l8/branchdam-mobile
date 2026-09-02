@@ -148,6 +148,7 @@ class SafeSpaceManagerTest {
     fun testReclaimMixedBatch() {
         // 4 items: 2 verified, 1 ineligible, 1 delete-fails.
         val deleted = mutableListOf<String>()
+        val rolledBack = mutableListOf<Pair<String, Boolean>>()
         val result = SafeSpaceManager.reclaimSafeSpace(
             context = stubContext,
             candidateUris = listOf("u1", "u2", "u3", "u4"),
@@ -165,6 +166,10 @@ class SafeSpaceManagerTest {
                 deleted.add(uri)
                 uri != "u2" // u2 delete fails
             },
+            setOffloaded = { uri, flag ->
+                rolledBack.add(uri to flag)
+                true
+            },
         )
 
         assertEquals(4, result.totalChecked)
@@ -175,5 +180,10 @@ class SafeSpaceManagerTest {
         // is not called for it. u1 and u2 are attempted; u2's delete
         // fails but the attempt still records the URI.
         assertEquals(setOf("u1", "u2"), deleted.toSet())
+        // B.2.7 invariant: u2's delete failed, so the rollback
+        // seam must be called with (u2, false) to prevent the
+        // asset from being permanently marked offloaded. u1 and u3
+        // do not trigger rollback (u1 succeeded, u3 was ineligible).
+        assertEquals(listOf("u2" to false), rolledBack)
     }
 }
