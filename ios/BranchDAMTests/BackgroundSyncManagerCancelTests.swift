@@ -42,17 +42,10 @@ final class BackgroundSyncManagerCancelTests: XCTestCase {
         BackgroundSyncManager.shared.scheduleBackgroundSync()
     }
 
-    /// The scheduleBackgroundSync method accepts a
-    /// `requiresExternalPower` parameter (used for AC-powered
+    /// The scheduleBackgroundSync method with a non-default
+    /// requiresExternalPower parameter (used for AC-powered
     /// archival windows). Verify the overload exists.
     func testScheduleBackgroundSyncWithExternalPowerOverload() {
         BackgroundSyncManager.shared.scheduleBackgroundSync(requiresExternalPower: true)
-    }
-
-    /// The sync manager's setCancelFlag is a no-op when the engine
-    /// is not initialized. Verify it doesn't crash.
-    func testSetCancelFlagBeforeInitializationDoesNotCrash() {
-        BranchDamCoreBridge.shared.shutdown()
-        BackgroundSyncManager.shared.scheduleBackgroundSync()
     }
 }

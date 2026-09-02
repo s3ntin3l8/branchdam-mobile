@@ -6,50 +6,41 @@ import Photos
 /// camera-roll access is denied, restricted, or not yet determined.
 ///
 /// Extracted from ContentView.swift to its own file (and made public)
-/// so the unit test target can access it. The banner is a SwiftUI View;
-/// these tests verify the data-driven behavior (title text, button
-/// label) by inspecting the view's body via the `body` property and
-/// the public `init`/`status` surface.
+/// so the unit test target can access it.
 final class PhotoAuthorizationBannerTests: XCTestCase {
 
-    func testRendersWhenDenied() {
+    func testTitleForDenied() {
         let banner = PhotoAuthorizationBanner(status: .denied)
-        XCTAssertEqual(banner.status, .denied)
-        // The banner body should be non-nil (renders without crashing).
-        // SwiftUI's `body` is a computed property; accessing it forces
-        // evaluation and is the standard way to verify a view can be
-        // constructed in a test.
-        _ = banner.body
+        XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Denied")
     }
 
-    func testRendersWhenRestricted() {
+    func testTitleForRestricted() {
         let banner = PhotoAuthorizationBanner(status: .restricted)
-        XCTAssertEqual(banner.status, .restricted)
-        _ = banner.body
+        XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Restricted")
     }
 
-    func testRendersWhenNotDetermined() {
+    func testTitleForNotDetermined() {
         let banner = PhotoAuthorizationBanner(status: .notDetermined)
-        XCTAssertEqual(banner.status, .notDetermined)
-        _ = banner.body
+        XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Needed")
     }
 
-    func testRendersWhenAuthorized() {
-        // The ContentView only shows the banner for .notDetermined,
-        // .denied, and .restricted. But the banner itself can be
-        // constructed for any status — verify it doesn't crash.
+    func testTitleForAuthorized() {
+        // The ContentView only shows the banner for notDetermined,
+        // denied, restricted. But the banner itself can be
+        // constructed for any status. Verify the title falls
+        // through to the default for authorized (it should not be
+        // "Denied" or "Restricted" — those are wrong for granted access).
         let banner = PhotoAuthorizationBanner(status: .authorized)
-        XCTAssertEqual(banner.status, .authorized)
-        _ = banner.body
+        XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Needed")
     }
 
-    func testStatusIsPubliclyReadable() {
-        // The F plan calls for the banner to render when status is
-        // .denied and the tap to open Settings. The status is
-        // publicly readable so the parent view can decide which
-        // banner variant to show.
-        let denied = PhotoAuthorizationBanner(status: .denied)
-        let notDetermined = PhotoAuthorizationBanner(status: .notDetermined)
-        XCTAssertNotEqual(denied.status, notDetermined.status)
+    func testBodyRendersWithoutCrashing() {
+        // Force evaluation of `body` to verify the view can be
+        // constructed in a test (catches missing `var body: some View`
+        // declarations or broken modifier chains).
+        for status: PHAuthorizationStatus in [.authorized, .denied, .restricted, .notDetermined] {
+            let banner = PhotoAuthorizationBanner(status: status)
+            _ = banner.body
+        }
     }
 }

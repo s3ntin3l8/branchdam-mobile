@@ -48,7 +48,11 @@ public struct PhotoAuthorizationBanner: View {
         .padding(.top, 8)
     }
 
-    private var bannerTitle: String {
+    /// The banner title for the current status. Exposed as `internal`
+    /// so the unit test target can verify the title matches the
+    /// expected message for each PHAuthorizationStatus case (denied,
+    /// restricted, notDetermined, authorized).
+    var bannerTitle: String {
         switch status {
         case .denied: return "Camera Roll Access Denied"
         case .restricted: return "Camera Roll Access Restricted"

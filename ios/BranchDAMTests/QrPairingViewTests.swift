@@ -55,26 +55,25 @@ final class QrPairingViewTests: XCTestCase {
     // not orphan the documents-directory DB)
 
     func testDocumentsDirectoryDBPathIsNotInTmp() {
-        // The QrPairingView's "Connect" button calls
-        // `defaultDBPath()` which returns a documents-directory path.
-        // Verify the path is under .documentDirectory and NOT under
-        // .temporaryDirectory (i.e., NOT in /tmp).
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let expectedPath = paths[0].appendingPathComponent("branchdam_queue.db").path
+        // Call the real SUT function and assert on its output. If
+        // QrPairingView.defaultDBPath() regressed to the temp
+        // directory, this test would fail.
+        let view = QrPairingView()
+        let path = view.defaultDBPath()
 
         // The path must end with "branchdam_queue.db"
-        XCTAssertTrue(expectedPath.hasSuffix("branchdam_queue.db"),
-                      "DB path must end with branchdam_queue.db, got: \(expectedPath)")
+        XCTAssertTrue(path.hasSuffix("branchdam_queue.db"),
+                      "DB path must end with branchdam_queue.db, got: \(path)")
 
         // The path must NOT contain /tmp/ (i.e., not in the temp directory)
         let tmpPath = NSTemporaryDirectory()
-        XCTAssertFalse(expectedPath.hasPrefix(tmpPath),
-                       "DB path must not be in /tmp, got: \(expectedPath)")
+        XCTAssertFalse(path.hasPrefix(tmpPath),
+                       "DB path must not be in /tmp, got: \(path)")
 
         // The path must be under the app's documents directory
-        let docsPath = paths[0].path
-        XCTAssertTrue(expectedPath.hasPrefix(docsPath),
-                      "DB path must be under documents directory, got: \(expectedPath)")
+        let docsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].path
+        XCTAssertTrue(path.hasPrefix(docsPath),
+                      "DB path must be under documents directory, got: \(path)")
     }
 
     func testApplePairingConfigEquatable() {

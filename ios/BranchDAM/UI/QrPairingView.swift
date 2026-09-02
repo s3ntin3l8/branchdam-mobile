@@ -104,7 +104,9 @@ public struct QrPairingView: View {
     }
 
     /// E.9: Documents-directory DB path. Never /tmp.
-    private func defaultDBPath() -> String {
+    /// Exposed as `internal` so the unit test target can verify
+    /// the path is under the documents directory, not /tmp.
+    func defaultDBPath() -> String {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         return paths[0].appendingPathComponent("branchdam_queue.db").path
     }
