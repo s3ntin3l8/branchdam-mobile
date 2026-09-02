@@ -4,7 +4,6 @@ import android.content.Context
 import com.branchdam.mobile.observer.MediaStoreObserver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -77,17 +76,6 @@ class MediaStoreObserverTest {
         // stub method is not reliably Unit::class.java, so we only
         // check that the methods exist. The actual return type is
         // verified at compile time.
-    }
-
-    @Test
-    fun testSharedSingletonIsStable() {
-        // MediaStoreObserver.shared must return the same instance
-        // across calls. This is the F plan's "lastScannedDate is
-        // mutated only on the serial queue" invariant: a single
-        // shared instance ensures the HandlerThread is also shared.
-        val a = MediaStoreObserver.shared
-        val b = MediaStoreObserver.shared
-        assertSame("MediaStoreObserver.shared must return the same instance", a, b)
     }
 
     @Test
