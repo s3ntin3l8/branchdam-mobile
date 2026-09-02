@@ -19,13 +19,31 @@ final class PhotoKitObserverSerialTests: XCTestCase {
         // the singleton would remain registered and bleed into later
         // tests. A local instance is self-contained.
         let observer = PhotoKitObserver()
-        // Start observing multiple times — should not crash or
-        // double-register. The observer guards against this with
-        // `guard !isObserving else { return }`.
+
+        // Read private isObserving via reflection to verify
+        // idempotence (the guard !isObserving else { return } path).
+        let keyPath = \PhotoKitObserver as KeyPath<PhotoKitObserver, Bool>
+        func isObserving(_ o: PhotoKitObserver) -> Bool {
+            let ivar = class_getInstanceVariable(PhotoKitObserver.self, "isObserving")!
+            return object_getIvar(o, ivar) as! Bool
+        }
+
+        XCTAssertFalse(isObserving(observer), "fresh instance must not be observing")
+
         observer.startObserving()
+        XCTAssertTrue(isObserving(observer), "after first start, isObserving must be true")
+
+        // Second and third calls must NOT flip isObserving back to
+        // false — the guard returns early, so the state must remain
+        // unchanged. This is the actual idempotence assertion.
         observer.startObserving()
+        XCTAssertTrue(isObserving(observer), "second start must not change isObserving")
+
         observer.startObserving()
+        XCTAssertTrue(isObserving(observer), "third start must not change isObserving")
+
         observer.stopObserving()
+        XCTAssertFalse(isObserving(observer), "after stop, isObserving must be false")
     }
 
     func testStopObservingWithoutStartDoesNotCrash() {

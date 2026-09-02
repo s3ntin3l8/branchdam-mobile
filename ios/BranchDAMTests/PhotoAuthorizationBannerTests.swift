@@ -69,10 +69,11 @@ final class PhotoAuthorizationBannerTests: XCTestCase {
                     break
                 }
             } else {
-                // Fallback: if UIButton is not found in the hierarchy
-                // (SwiftUI may render differently), at minimum verify
-                // the body can be evaluated without crashing.
-                _ = banner.body
+                // If no UIButton is found in the hosted view hierarchy,
+                // the rendering branch is untested. Fail explicitly
+                // rather than silently passing — a SwiftUI rendering
+                // regression would go unnoticed otherwise.
+                XCTFail("No UIButton found in hosted view hierarchy for status \(status); cannot verify button label")
             }
         }
     }
