@@ -60,6 +60,18 @@ public struct PhotoAuthorizationBanner: View {
         }
     }
 
+    /// The button label for the current status. Exposed as `internal`
+    /// so the unit test target can verify the correct action button
+    /// text is shown for each status without relying on UIKit view
+    /// hierarchy walking (which is fragile across simulator environments).
+    var buttonLabel: String {
+        if status == .notDetermined {
+            return "Grant Camera Roll Access"
+        } else {
+            return "Open Settings"
+        }
+    }
+
     private var bannerMessage: String {
         "branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters."
     }
