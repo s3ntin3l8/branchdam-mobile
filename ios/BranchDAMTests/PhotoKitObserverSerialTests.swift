@@ -22,7 +22,6 @@ final class PhotoKitObserverSerialTests: XCTestCase {
 
         // Read private isObserving via reflection to verify
         // idempotence (the guard !isObserving else { return } path).
-        let keyPath = \PhotoKitObserver as KeyPath<PhotoKitObserver, Bool>
         func isObserving(_ o: PhotoKitObserver) -> Bool {
             let ivar = class_getInstanceVariable(PhotoKitObserver.self, "isObserving")!
             return object_getIvar(o, ivar) as! Bool
