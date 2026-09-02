@@ -27,8 +27,20 @@ final class BackgroundSyncManagerCancelTests: XCTestCase {
     /// The sync task identifier must match the
     /// BGTaskSchedulerPermittedIdentifiers entry in Info.plist. This
     /// is the entry point iOS uses to dispatch the background sync.
+    /// If the constant and the plist entry drift apart (each changed
+    /// independently), real BGTask registration breaks silently.
     func testSyncTaskIdMatchesInfoPlist() {
-        XCTAssertEqual(BackgroundSyncManager.syncTaskId, "com.branchdam.mobile.sync")
+        // Read the actual BGTaskSchedulerPermittedIdentifiers from
+        // the test bundle's Info.plist — this is the source of truth
+        // for iOS background-task registration.
+        guard let permittedIDs = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String] else {
+            XCTFail("BGTaskSchedulerPermittedIdentifiers missing from Info.plist")
+            return
+        }
+        XCTAssertTrue(
+            permittedIDs.contains(BackgroundSyncManager.syncTaskId),
+            "BackgroundSyncManager.syncTaskId \"\(BackgroundSyncManager.syncTaskId)\" not found in Info.plist's BGTaskSchedulerPermittedIdentifiers: \(permittedIDs)"
+        )
     }
 
     /// The scheduleBackgroundSync method submits a BGProcessingTaskRequest.

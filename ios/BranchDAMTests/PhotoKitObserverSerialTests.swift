@@ -9,10 +9,16 @@ import Photos
 ///
 /// lastScannedDate is private and not directly testable; we verify
 /// the DiscoveredAsset model and the start/stop observing idempotence.
+/// Tests that call startObserving/stopObserving use a fresh local
+/// instance rather than the shared singleton to prevent mid-test
+/// failures from leaking the observer's registration into later tests.
 final class PhotoKitObserverSerialTests: XCTestCase {
 
     func testStartObservingIsIdempotent() {
-        let observer = PhotoKitObserver.shared
+        // Use a fresh instance — if a test fails mid-registration,
+        // the singleton would remain registered and bleed into later
+        // tests. A local instance is self-contained.
+        let observer = PhotoKitObserver()
         // Start observing multiple times — should not crash or
         // double-register. The observer guards against this with
         // `guard !isObserving else { return }`.
@@ -24,7 +30,7 @@ final class PhotoKitObserverSerialTests: XCTestCase {
 
     func testStopObservingWithoutStartDoesNotCrash() {
         // stopObserving on a never-started observer must not crash.
-        let observer = PhotoKitObserver.shared
+        let observer = PhotoKitObserver()
         observer.stopObserving()
     }
 
