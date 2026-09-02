@@ -6,6 +6,7 @@ import com.branchdam.mobile.receiver.BootReceiver
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 /**
  * Tests for BootReceiver.onReceive action filtering. The receiver
@@ -13,11 +14,22 @@ import org.mockito.kotlin.mock
  * and MY_PACKAGE_REPLACED intents. Other actions (including null)
  * are no-ops.
  *
+ * With isReturnDefaultValues=true, the Intent constructor does NOT
+ * actually set the action string — it returns a stub where .action
+ * is null. We mock Intent and stub .action to return the correct
+ * constant value.
+ *
  * The receiver takes a scheduleSync lambda seam (defaulting to
  * SyncScheduler::schedulePeriodicSync). Tests inject a recording
  * lambda to verify which intents trigger the scheduler.
  */
 class BootReceiverTest {
+
+    private fun intentWithAction(action: String?): Intent {
+        val intent: Intent = mock()
+        whenever(intent.action).thenReturn(action)
+        return intent
+    }
 
     @Test
     fun testSchedulesSyncForBootCompleted() {
@@ -26,7 +38,7 @@ class BootReceiverTest {
         val receiver = BootReceiver(
             scheduleSync = { ctx -> scheduled.add(ctx) }
         )
-        receiver.onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
+        receiver.onReceive(context, intentWithAction(Intent.ACTION_BOOT_COMPLETED))
         assertEquals(1, scheduled.size)
         assertEquals(context, scheduled[0])
     }
@@ -38,7 +50,7 @@ class BootReceiverTest {
         val receiver = BootReceiver(
             scheduleSync = { ctx -> scheduled.add(ctx) }
         )
-        receiver.onReceive(context, Intent(Intent.ACTION_MY_PACKAGE_REPLACED))
+        receiver.onReceive(context, intentWithAction(Intent.ACTION_MY_PACKAGE_REPLACED))
         assertEquals(1, scheduled.size)
         assertEquals(context, scheduled[0])
     }
@@ -46,13 +58,12 @@ class BootReceiverTest {
     @Test
     fun testIgnoresOtherActions() {
         // PACKAGE_ADDED is NOT one of the receiver's target actions.
-        // The receiver must not call scheduleSync.
         val scheduled = mutableListOf<Context>()
         val context: Context = mock()
         val receiver = BootReceiver(
             scheduleSync = { ctx -> scheduled.add(ctx) }
         )
-        receiver.onReceive(context, Intent(Intent.ACTION_PACKAGE_ADDED))
+        receiver.onReceive(context, intentWithAction(Intent.ACTION_PACKAGE_ADDED))
         assertEquals(0, scheduled.size)
     }
 
@@ -63,8 +74,6 @@ class BootReceiverTest {
         val receiver = BootReceiver(
             scheduleSync = { ctx -> scheduled.add(ctx) }
         )
-        // The receiver reads intent?.action — null intent must be
-        // a no-op (the scheduleSync seam should not be called).
         receiver.onReceive(context, null)
         assertEquals(0, scheduled.size)
     }
@@ -72,8 +81,7 @@ class BootReceiverTest {
     @Test
     fun testIntentActionConstants() {
         // Regression guard for the action strings the receiver
-        // depends on. If these constants are renamed in a future
-        // platform update, the receiver's action filter breaks.
+        // depends on.
         assertEquals("android.intent.action.BOOT_COMPLETED", Intent.ACTION_BOOT_COMPLETED)
         assertEquals("android.intent.action.MY_PACKAGE_REPLACED", Intent.ACTION_MY_PACKAGE_REPLACED)
     }

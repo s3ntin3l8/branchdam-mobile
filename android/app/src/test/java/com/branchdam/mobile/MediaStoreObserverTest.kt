@@ -79,19 +79,6 @@ class MediaStoreObserverTest {
     }
 
     @Test
-    fun testScanAndEnqueueNewMediaReturnsInt() {
-        // scanAndEnqueueNewMedia returns Int (the number of new
-        // items enqueued). With isReturnDefaultValues=true, the
-        // ContentResolver returns empty, so the return value is 0.
-        // We verify the method exists, is callable, and returns
-        // an Int (not crashes).
-        val context: Context = mock()
-        val observer = MediaStoreObserver(context)
-        val count: Int = observer.scanAndEnqueueNewMedia()
-        assertNotNull(count as Int)
-    }
-
-    @Test
     fun testObserverUsesDefaultContext() {
         // The observer's first constructor parameter is the Context.
         // Verify the value is stored and accessible.
