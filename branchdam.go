@@ -148,6 +148,9 @@ func errToError(err error) *Error {
 //   - engine.ErrLocalFlagSetFailed (typed sentinel from
 //     core/engine) → DB_ERROR (transient; the local flag write
 //     failed, shell should retry)
+//   - engine.ErrLocalReadFailed (typed sentinel from
+//     core/engine) → DB_ERROR (transient; the local state lookup
+//     failed, shell should retry — NOT eligible/ineligible)
 //   - Everything else → VERIFIED_REQUIRED (ineligible; the node is
 //     not verified, on the wrong tier, or unknown to the server)
 func reclaimErrorToBranchdamError(err error) *Error {
@@ -170,6 +173,14 @@ func reclaimErrorToBranchdamError(err error) *Error {
 	// wraps the queue error with engine.ErrLocalFlagSetFailed; we
 	// match on the typed sentinel, not the message string.
 	if errors.Is(err, engine.ErrLocalFlagSetFailed) {
+		return newError(CodeDBError, "reclaim transient: %s", err.Error())
+	}
+
+	// Local DB failure when reading the state (SQLITE_BUSY,
+	// corruption, etc.). The engine wraps with ErrLocalReadFailed;
+	// this is a transient failure, NOT an eligible/ineligible
+	// verdict — the shell should retry.
+	if errors.Is(err, engine.ErrLocalReadFailed) {
 		return newError(CodeDBError, "reclaim transient: %s", err.Error())
 	}
 

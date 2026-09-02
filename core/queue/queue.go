@@ -47,10 +47,13 @@ func (q *Queue) Close() error {
 	return nil
 }
 
-// DB exposes the underlying *sql.DB. Exposed for branchdam FFI
-// tests that need to inject SQL-level failures (e.g. DROP TABLE
-// to force a SetMediaOffloaded error). Not part of the public API
-// for production callers.
+// DB returns the underlying *sql.DB. TEST-ONLY — not for production
+// use. Exposed so root-package integration tests (branchdam_f_tests)
+// can inject SQL-level failures (e.g. DROP TABLE, SQLite triggers)
+// to verify error-mapping in the FFI surface. The method lives here
+// rather than in a _test.go file because the callers are in a
+// different package (branchdam), which cannot access unexported
+// methods defined in queue's own _test.go files.
 func (q *Queue) DB() *sql.DB {
 	return q.db
 }

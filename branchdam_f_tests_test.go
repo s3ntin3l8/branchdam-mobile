@@ -1,7 +1,10 @@
 package branchdam
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
+	"github.com/s3ntin3l8/branchdam-mobile/core/engine"
 )
 
 // newTestEngineWithNodeStatus returns an engine and mock server where
@@ -371,6 +375,46 @@ func TestReclaimSafeSpace_LocalDBError(t *testing.T) {
 	// old conflation would silently mislabel DB outages.
 	if be.Code == CodeVerifiedRequired {
 		t.Fatalf("Code = %q, but a local DB failure must not be conflated with ineligible", be.Code)
+	}
+}
+
+// TestReclaimSafeSpace_LocalReadError: the engine's local-state
+// lookup (GetMediaByLocalID) fails with a DB error (e.g.
+// SQLITE_BUSY, corruption). This must map to DB_ERROR (transient,
+// retry) — NOT VERIFIED_REQUIRED ("verify your node"), which would
+// incorrectly tell the user their node has a problem when the real
+// issue is a transient local DB failure.
+//
+// SQLite does not support SELECT triggers, so we cannot force a
+// read failure at the SQL level. Instead, we test the error mapper
+// directly with engine.ErrLocalReadFailed — the same sentinel the
+// engine wraps at core/engine/engine.go:391. The mapper's contract
+// is: ErrLocalReadFailed → DB_ERROR (not VERIFIED_REQUIRED).
+func TestReclaimSafeSpace_LocalReadError(t *testing.T) {
+	// Simulate a wrapped ErrLocalReadFailed — exactly what the engine
+	// produces: fmt.Errorf("%w: %s", ErrLocalReadFailed, originalErr).
+	original := fmt.Errorf("local state lookup: %w", sql.ErrConnDone)
+	wrapped := fmt.Errorf("%w: %s", engine.ErrLocalReadFailed, original)
+
+	be := reclaimErrorToBranchdamError(wrapped)
+	if be == nil {
+		t.Fatal("reclaimErrorToBranchdamError returned nil")
+	}
+	// Local DB read failures must map to DB_ERROR (transient),
+	// not VERIFIED_REQUIRED (ineligible). A SQLITE_BUSY or
+	// corruption error is a transient infrastructure issue — the
+	// shell should retry, not tell the user to verify their node.
+	if be.Code != CodeDBError {
+		t.Fatalf("Code = %q, want %q (local DB read failure, not ineligible verdict)", be.Code, CodeDBError)
+	}
+	// And explicitly NOT VERIFIED_REQUIRED — the same regression
+	// guard as the write-failure test, but for the read path.
+	if be.Code == CodeVerifiedRequired {
+		t.Fatalf("Code = %q, but a local DB read failure must not be conflated with ineligible", be.Code)
+	}
+	// Verify the error chain includes the sentinel.
+	if !errors.Is(wrapped, engine.ErrLocalReadFailed) {
+		t.Fatalf("error chain does not contain engine.ErrLocalReadFailed")
 	}
 }
 
