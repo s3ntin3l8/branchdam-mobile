@@ -46,34 +46,32 @@ final class PhotoAuthorizationBannerTests: XCTestCase {
     /// - .notDetermined → "Grant Camera Roll Access"
     /// - .denied / .restricted → "Open Settings"
     ///
-    /// We walk the view hierarchy to find the first `Text` view inside
-    /// a `Button` and assert its content, which catches the rendering
-    /// branch being swapped or removed entirely.
+    /// We walk the view hierarchy to find UILabels containing the
+    /// expected button text. SwiftUI may not bridge UIButton into
+    /// the UIKit hierarchy, but Text views are always bridged as
+    /// UILabels.
     func testButtonLabelPerStatus() {
         for status: PHAuthorizationStatus in [.notDetermined, .denied, .restricted] {
             let banner = PhotoAuthorizationBanner(status: status)
             let hosting = UIHostingController(rootView: banner)
             hosting.loadViewIfNeeded()
 
-            // Find the first UIButton in the view hierarchy.
-            let buttons = hosting.view.subviews.flatMap { $0.recursiveSubviews.compactMap { $0 as? UIButton } }
-            if let button = buttons.first, let label = button.titleLabel?.text {
-                switch status {
-                case .notDetermined:
-                    XCTAssertEqual(label, "Grant Camera Roll Access",
-                                   "notDetermined banner should show 'Grant Camera Roll Access'")
-                case .denied, .restricted:
-                    XCTAssertEqual(label, "Open Settings",
-                                   "\(status) banner should show 'Open Settings'")
-                default:
-                    break
-                }
-            } else {
-                // If no UIButton is found in the hosted view hierarchy,
-                // the rendering branch is untested. Fail explicitly
-                // rather than silently passing — a SwiftUI rendering
-                // regression would go unnoticed otherwise.
-                XCTFail("No UIButton found in hosted view hierarchy for status \(status); cannot verify button label")
+            let allLabels = hosting.view.recursiveSubviews.compactMap { $0 as? UILabel }
+            let allText = allLabels.compactMap { $0.text }.joined(separator: " | ")
+
+            switch status {
+            case .notDetermined:
+                XCTAssertTrue(
+                    allLabels.contains { $0.text == "Grant Camera Roll Access" },
+                    "notDetermined banner must contain 'Grant Camera Roll Access' label. Found: \(allText)"
+                )
+            case .denied, .restricted:
+                XCTAssertTrue(
+                    allLabels.contains { $0.text == "Open Settings" },
+                    "\(status) banner must contain 'Open Settings' label. Found: \(allText)"
+                )
+            default:
+                break
             }
         }
     }

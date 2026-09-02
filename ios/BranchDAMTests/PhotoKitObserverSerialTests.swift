@@ -20,29 +20,27 @@ final class PhotoKitObserverSerialTests: XCTestCase {
         // tests. A local instance is self-contained.
         let observer = PhotoKitObserver()
 
-        // Read private isObserving via reflection to verify
-        // idempotence (the guard !isObserving else { return } path).
-        func isObserving(_ o: PhotoKitObserver) -> Bool {
-            let ivar = class_getInstanceVariable(PhotoKitObserver.self, "isObserving")!
-            return object_getIvar(o, ivar) as! Bool
+        // PhotoKitObserver is an NSObject subclass, so KVC works.
+        func readIsObserving() -> Bool {
+            (observer as AnyObject).value(forKey: "isObserving") as? Bool ?? false
         }
 
-        XCTAssertFalse(isObserving(observer), "fresh instance must not be observing")
+        XCTAssertFalse(readIsObserving(), "fresh instance must not be observing")
 
         observer.startObserving()
-        XCTAssertTrue(isObserving(observer), "after first start, isObserving must be true")
+        XCTAssertTrue(readIsObserving(), "after first start, isObserving must be true")
 
         // Second and third calls must NOT flip isObserving back to
         // false — the guard returns early, so the state must remain
         // unchanged. This is the actual idempotence assertion.
         observer.startObserving()
-        XCTAssertTrue(isObserving(observer), "second start must not change isObserving")
+        XCTAssertTrue(readIsObserving(), "second start must not change isObserving")
 
         observer.startObserving()
-        XCTAssertTrue(isObserving(observer), "third start must not change isObserving")
+        XCTAssertTrue(readIsObserving(), "third start must not change isObserving")
 
         observer.stopObserving()
-        XCTAssertFalse(isObserving(observer), "after stop, isObserving must be false")
+        XCTAssertFalse(readIsObserving(), "after stop, isObserving must be false")
     }
 
     func testStopObservingWithoutStartDoesNotCrash() {
