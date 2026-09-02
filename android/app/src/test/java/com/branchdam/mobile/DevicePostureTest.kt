@@ -6,29 +6,23 @@ import com.branchdam.mobile.ui.DevicePosture
 import com.branchdam.mobile.ui.toDevicePosture
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
 
 class DevicePostureTest {
 
     private fun foldingFeature(
-        state: Int,
-        orientation: Int
+        state: FoldingFeature.State,
+        orientation: FoldingFeature.Orientation
     ): FoldingFeature {
-        val constructor = FoldingFeature::class.java.getDeclaredConstructor(
-            android.graphics.Rect::class.java,
-            Int::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType
-        )
-        constructor.isAccessible = true
-        return constructor.newInstance(android.graphics.Rect(0, 0, 1000, 500), state, orientation)
+        return mock<FoldingFeature> {
+            on { this.state } doReturn state
+            on { this.orientation } doReturn orientation
+        }
     }
 
-    private fun windowLayoutInfo(vararg features: Any): WindowLayoutInfo {
-        val constructor = WindowLayoutInfo::class.java.getDeclaredConstructor(
-            java.util.List::class.java
-        )
-        constructor.isAccessible = true
-        val featuresList = features.filterIsInstance<FoldingFeature>()
-        return constructor.newInstance(featuresList)
+    private fun windowLayoutInfo(vararg features: FoldingFeature): WindowLayoutInfo {
+        return WindowLayoutInfo(features.toList())
     }
 
     @Test
