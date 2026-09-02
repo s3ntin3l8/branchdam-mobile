@@ -18,7 +18,9 @@ var (
 )
 
 // BindingOpen initialises the engine from primitive parameters.
-func BindingOpen(dbPath, baseURL, apiKey, agentID, clientVersion string) error {
+// devCleartextHosts is a comma-separated list of hosts allowed over
+// HTTP in debug builds; pass "" in production to require HTTPS.
+func BindingOpen(dbPath, baseURL, apiKey, agentID, clientVersion, devCleartextHosts string) error {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()
 
@@ -27,12 +29,23 @@ func BindingOpen(dbPath, baseURL, apiKey, agentID, clientVersion string) error {
 		bindingEngine = nil
 	}
 
+	var hosts []string
+	if devCleartextHosts != "" {
+		for _, h := range strings.Split(devCleartextHosts, ",") {
+			h = strings.TrimSpace(h)
+			if h != "" {
+				hosts = append(hosts, h)
+			}
+		}
+	}
+
 	e, err := NewEngine(EngineOptions{
-		DBPath:        dbPath,
-		BaseURL:       baseURL,
-		APIKey:        apiKey,
-		AgentID:       agentID,
-		ClientVersion: clientVersion,
+		DBPath:            dbPath,
+		BaseURL:           baseURL,
+		APIKey:            apiKey,
+		AgentID:           agentID,
+		ClientVersion:     clientVersion,
+		DevCleartextHosts: hosts,
 	})
 	if err != nil {
 		return err
@@ -106,8 +119,8 @@ func BindingSyncBatch(timeoutSecs, batchSize int64) error {
 		return fmt.Errorf("engine not open")
 	}
 	_, err := bindingEngine.SyncBatch(SyncOptions{
-		TimeoutSecs:   int(timeoutSecs),
-		BatchSize:     int(batchSize),
+		TimeoutSecs:    int(timeoutSecs),
+		BatchSize:      int(batchSize),
 		IncludeEvents:  true,
 		IncludeUploads: true,
 	})

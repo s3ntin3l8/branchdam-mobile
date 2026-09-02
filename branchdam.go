@@ -54,12 +54,13 @@ func Version() string {
 // NewEngine time only; methods on a successfully-constructed Engine assume
 // the options are valid.
 type EngineOptions struct {
-	DBPath         string
-	BaseURL        string
-	APIKey         string
-	AgentID        string
-	ClientVersion  string
-	HTTPTimeoutSec int
+	DBPath            string
+	BaseURL           string
+	APIKey            string
+	AgentID           string
+	ClientVersion     string
+	HTTPTimeoutSec    int
+	DevCleartextHosts []string // debug-only: hosts allowed over HTTP
 }
 
 // validate returns a typed Error for the first invalid field, or nil.
@@ -77,6 +78,9 @@ func (o EngineOptions) validate() *Error {
 	if parsed.Scheme != "https" && parsed.Scheme != "http" {
 		return &Error{Code: "INVALID_INPUT", Message: "BaseURL scheme must be http or https"}
 	}
+	if parsed.Scheme == "http" && !isHostInCleartextAllowlist(parsed.Hostname(), o.DevCleartextHosts) {
+		return &Error{Code: "INVALID_INPUT", Message: "HTTP requires HTTPS or explicit dev allowlist"}
+	}
 	if o.HTTPTimeoutSec < 0 {
 		return &Error{Code: "INVALID_INPUT", Message: "HTTPTimeoutSec must be >= 0"}
 	}
@@ -84,6 +88,18 @@ func (o EngineOptions) validate() *Error {
 		return &Error{Code: "INVALID_INPUT", Message: "AgentID is required"}
 	}
 	return nil
+}
+
+// isHostInCleartextAllowlist returns true if host appears in the
+// DevCleartextHosts list (exact match). Used to gate HTTP in debug
+// builds while requiring HTTPS in production (empty list).
+func isHostInCleartextAllowlist(host string, allowlist []string) bool {
+	for _, h := range allowlist {
+		if h == host {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------

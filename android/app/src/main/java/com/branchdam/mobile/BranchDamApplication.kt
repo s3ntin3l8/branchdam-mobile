@@ -29,12 +29,16 @@ class BranchDamApplication : Application() {
 
     private fun initCoreEngine(dbPath: String) {
         val config = readEngineConfig(this)
+        val cleartextHosts = if (BuildConfig.DEBUG) {
+            UrlValidator.DEV_CLEARTEXT_HOSTS.joinToString(",")
+        } else ""
         EngineHolder.initialize(
             dbPath = dbPath,
             baseURL = config.serverUrl,
             apiKey = config.apiKey,
             agentID = config.agentId,
             version = "0.1.0",
+            devCleartextHosts = cleartextHosts,
         )
     }
 

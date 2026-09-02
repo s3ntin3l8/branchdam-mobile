@@ -43,11 +43,12 @@ object EngineHolder {
         apiKey: String = "",
         agentID: String = "pixel-fold",
         version: String = "0.1.0",
+        devCleartextHosts: String = "",
     ): Boolean {
         if (!nativeAvailable.get()) return false
         return try {
             executor.submit(Callable {
-                Branchdam.bindingOpen(dbPath, baseURL, apiKey, agentID, version)
+                Branchdam.bindingOpen(dbPath, baseURL, apiKey, agentID, version, devCleartextHosts)
             }).get()
             isInitialized = true
             true

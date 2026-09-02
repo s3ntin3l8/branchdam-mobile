@@ -10,6 +10,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.branchdam.mobile.R
+import com.branchdam.mobile.UrlValidator
 
 data class PairingConfig(
     val serverUrl: String,
@@ -57,6 +58,9 @@ fun QrPairingScreen(
     var manualKey by remember { mutableStateOf("") }
     var namingTemplate by remember { mutableStateOf(initialNamingTemplate) }
     var syncOnMobileData by remember { mutableStateOf(com.branchdam.mobile.service.SyncScheduler.getSyncOnMobileData(context)) }
+    var urlError by remember { mutableStateOf<String?>(null) }
+
+    val isDebug = com.branchdam.mobile.BuildConfig.DEBUG
 
     Column(
         modifier = modifier
@@ -72,8 +76,15 @@ fun QrPairingScreen(
 
         OutlinedTextField(
             value = manualUrl,
-            onValueChange = { manualUrl = it },
+            onValueChange = {
+                manualUrl = it
+                urlError = if (it.isNotBlank() && !UrlValidator.isValidServerUrl(it, isDebug)) {
+                    "URL must use HTTPS" + if (isDebug) " or a local development host" else ""
+                } else null
+            },
             label = { Text("Server URL") },
+            isError = urlError != null,
+            supportingText = urlError?.let { err -> { Text(err) } },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -153,6 +164,10 @@ fun QrPairingScreen(
 
         Button(
             onClick = {
+                if (!UrlValidator.isValidServerUrl(manualUrl, isDebug)) {
+                    urlError = "URL must use HTTPS" + if (isDebug) " or a local development host" else ""
+                    return@Button
+                }
                 onPairingComplete(PairingConfig(manualUrl, manualKey, "pixel-10-fold"))
                 if (onFetchNamingTemplate != null) {
                     val fetched = onFetchNamingTemplate()
