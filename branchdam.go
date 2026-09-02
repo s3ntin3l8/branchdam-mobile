@@ -145,8 +145,9 @@ func errToError(err error) *Error {
 //
 //   - Network/IO errors (client.ClientError with NETWORK_ERROR or
 //     IO_ERROR) → INTERNAL (transient; shell should retry)
-//   - DB errors wrapping "set offloaded: ..." → DB_ERROR (transient;
-//     the local flag write failed, shell should retry)
+//   - engine.ErrLocalFlagSetFailed (typed sentinel from
+//     core/engine) → DB_ERROR (transient; the local flag write
+//     failed, shell should retry)
 //   - Everything else → VERIFIED_REQUIRED (ineligible; the node is
 //     not verified, on the wrong tier, or unknown to the server)
 func reclaimErrorToBranchdamError(err error) *Error {
@@ -166,9 +167,9 @@ func reclaimErrorToBranchdamError(err error) *Error {
 	}
 
 	// Local DB failure when writing the offloaded flag. The engine
-	// wraps it as "set offloaded: %w"; detect by substring since the
-	// queue package doesn't export a typed sentinel.
-	if strings.Contains(err.Error(), "set offloaded:") {
+	// wraps the queue error with engine.ErrLocalFlagSetFailed; we
+	// match on the typed sentinel, not the message string.
+	if errors.Is(err, engine.ErrLocalFlagSetFailed) {
 		return newError(CodeDBError, "reclaim transient: %s", err.Error())
 	}
 

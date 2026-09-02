@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
@@ -139,7 +140,7 @@ func TestReclaimSafeSpace_NotVerified(t *testing.T) {
 	if be.Code != "VERIFIED_REQUIRED" {
 		t.Fatalf("Code = %q, want VERIFIED_REQUIRED", be.Code)
 	}
-	if !contains(verdict.Reason, "not verified") {
+	if !strings.Contains(verdict.Reason, "not verified") {
 		t.Fatalf("Reason = %q, want substring 'not verified'", verdict.Reason)
 	}
 }
@@ -173,7 +174,7 @@ func TestReclaimSafeSpace_TierIneligible(t *testing.T) {
 	if be.Code != "VERIFIED_REQUIRED" {
 		t.Fatalf("Code = %q, want VERIFIED_REQUIRED", be.Code)
 	}
-	if !contains(verdict.Reason, "tier ineligible") {
+	if !strings.Contains(verdict.Reason, "tier ineligible") {
 		t.Fatalf("Reason = %q, want substring 'tier ineligible'", verdict.Reason)
 	}
 }
@@ -238,6 +239,13 @@ func TestReclaimSafeSpace_TransientNetworkError(t *testing.T) {
 	// again later" from "this node is not verified".
 	if be.Code == CodeVerifiedRequired {
 		t.Fatalf("Code = %q, want INTERNAL (transient network error, not ineligible verdict)", be.Code)
+	}
+	// Pin the positive expectation: the production code returns
+	// "INTERNAL" for transient network errors. If a future change
+	// remaps to any *other* wrong code (e.g. "DB_ERROR", "UNKNOWN"),
+	// this test would catch it.
+	if be.Code != "INTERNAL" {
+		t.Fatalf("Code = %q, want INTERNAL", be.Code)
 	}
 }
 
@@ -307,6 +315,62 @@ func TestReclaimSafeSpace_NoRecordOnServer(t *testing.T) {
 	}
 	if be.Code != CodeVerifiedRequired {
 		t.Fatalf("Code = %q, want %q", be.Code, CodeVerifiedRequired)
+	}
+}
+
+// TestReclaimSafeSpace_LocalDBError: the engine passes all gates
+// (server says verified + tier 3) but the local
+// SetMediaOffloaded write fails. This must map to DB_ERROR (not
+// VERIFIED_REQUIRED) so the shell can distinguish a transient
+// local-DB failure from a genuine ineligible verdict.
+//
+// We force the failure by installing a SQLite trigger that raises
+// an error on any UPDATE to local_media_state. The engine's
+// GetMediaByLocalID (a SELECT) succeeds, but the subsequent
+// SetMediaOffloaded UPDATE fires the trigger and fails.
+func TestReclaimSafeSpace_LocalDBError(t *testing.T) {
+	e, _ := newTestEngineWithServer(t)
+
+	// Record local media so the engine has a row to update.
+	if err := e.queue.RecordLocalMedia("ph://dbfail-1", "dbfail-node", "b3-dbfail-1", "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
+
+	// Install a trigger that raises an error on any UPDATE to
+	// local_media_state. This makes SetMediaOffloaded fail while
+	// keeping the table and rows intact for the SELECT path.
+	_, err := e.queue.DB().Exec(`
+		CREATE TRIGGER fail_offloaded_update
+		BEFORE UPDATE ON local_media_state
+		BEGIN
+			SELECT RAISE(FAIL, 'simulated local DB failure');
+		END
+	`)
+	if err != nil {
+		t.Fatalf("CREATE TRIGGER: %v", err)
+	}
+
+	v, err := e.ReclaimSafeSpace("ph://dbfail-1")
+	if v.Eligible {
+		t.Fatalf("expected Eligible=false on DB error, got %+v", v)
+	}
+	if err == nil {
+		t.Fatalf("expected non-nil error on DB failure, got nil")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("error type = %T, want *Error", err)
+	}
+	// Local DB failures must map to DB_ERROR, not VERIFIED_REQUIRED.
+	// The shell should retry on DB_ERROR; VERIFIED_REQUIRED would
+	// tell the user "this node is not verified" which is wrong.
+	if be.Code != CodeDBError {
+		t.Fatalf("Code = %q, want %q (local DB failure, not ineligible verdict)", be.Code, CodeDBError)
+	}
+	// And explicitly NOT VERIFIED_REQUIRED — a regression to the
+	// old conflation would silently mislabel DB outages.
+	if be.Code == CodeVerifiedRequired {
+		t.Fatalf("Code = %q, but a local DB failure must not be conflated with ineligible", be.Code)
 	}
 }
 
@@ -407,16 +471,4 @@ func TestSetCancelFlag_ResetOnClaim(t *testing.T) {
 	}
 }
 
-// contains is a small helper to avoid importing strings just for
-// substring checks.
-func contains(haystack, needle string) bool {
-	if len(needle) == 0 {
-		return true
-	}
-	for i := 0; i+len(needle) <= len(haystack); i++ {
-		if haystack[i:i+len(needle)] == needle {
-			return true
-		}
-	}
-	return false
-}
+// (strings.Contains from the stdlib is used above for substring checks.)

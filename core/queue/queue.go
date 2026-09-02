@@ -47,6 +47,14 @@ func (q *Queue) Close() error {
 	return nil
 }
 
+// DB exposes the underlying *sql.DB. Exposed for branchdam FFI
+// tests that need to inject SQL-level failures (e.g. DROP TABLE
+// to force a SetMediaOffloaded error). Not part of the public API
+// for production callers.
+func (q *Queue) DB() *sql.DB {
+	return q.db
+}
+
 func nowUnix() int64 {
 	return time.Now().Unix()
 }
