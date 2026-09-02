@@ -99,6 +99,27 @@ android {
         jvmTarget = "21"
     }
 
+    // F plan: unit tests for Android framework-touching code
+    // (BootReceiver, MediaStoreObserver) run on the JVM without
+    // Robolectric. `isReturnDefaultValues = true` makes the test
+    // JVM return default values (null, 0, false) for Android
+    // framework method calls instead of throwing RuntimeException.
+    //
+    // Trade-off: this turns every android.jar method into a silent
+    // default-returning stub, which can mask real behavior (e.g.
+    // WorkManager.getInstance chains, ContentResolver paths) and
+    // give false confidence. The lifecycle/onChange paths that
+    // depend on real framework behavior are covered by
+    // instrumentation tests in androidTest/. The structural tests
+    // here verify the API surface and contract, not the full
+    // lifecycle.
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+            isIncludeAndroidResources = false
+        }
+    }
+
     buildFeatures {
         compose = true
     }
@@ -128,4 +149,6 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.mockito:mockito-core:5.12.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
