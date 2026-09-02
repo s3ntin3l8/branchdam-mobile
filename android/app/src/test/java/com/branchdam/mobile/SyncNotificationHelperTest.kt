@@ -1,0 +1,86 @@
+package com.branchdam.mobile
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.pm.ServiceInfo
+import com.branchdam.mobile.service.SyncNotificationHelper
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
+
+class SyncNotificationHelperTest {
+
+    @Test
+    fun testChannelConstants() {
+        assertEquals("branchdam_sync_channel", SyncNotificationHelper.CHANNEL_ID)
+        assertEquals("branchDAM Sync", SyncNotificationHelper.CHANNEL_NAME)
+        assertEquals("Background sync progress", SyncNotificationHelper.CHANNEL_DESCRIPTION)
+    }
+
+    @Test
+    fun testNotificationConstants() {
+        assertEquals(4201, SyncNotificationHelper.NOTIFICATION_ID)
+        assertEquals("Syncing camera roll", SyncNotificationHelper.NOTIFICATION_TITLE)
+        assertTrue(
+            "notification text must mention 'branchDAM server'",
+            SyncNotificationHelper.NOTIFICATION_TEXT.contains("branchDAM server")
+        )
+    }
+
+    @Test
+    fun testNotificationIdsAreDistinctFromImportChannel() {
+        assertTrue(
+            "sync and import notification ids must differ",
+            SyncNotificationHelper.NOTIFICATION_ID != com.branchdam.mobile.service.ImportConfirmationNotifier.NOTIFICATION_ID
+        )
+    }
+
+    @Test
+    fun testForegroundServiceTypeConstant() {
+        assertEquals(1, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    }
+
+    @Test
+    fun testForegroundServiceTypeNeverNegative() {
+        assertTrue(SyncNotificationHelper.foregroundServiceType() >= 0)
+    }
+
+    @Test
+    fun testEnsureChannelDoesNotRecreateExistingChannel() {
+        val context: Context = mock()
+        val manager: NotificationManager = mock()
+        val existing: NotificationChannel = mock()
+        whenever(context.getSystemService(Context.NOTIFICATION_SERVICE))
+            .thenReturn(manager)
+        whenever(manager.getNotificationChannel(SyncNotificationHelper.CHANNEL_ID))
+            .thenReturn(existing)
+
+        SyncNotificationHelper.ensureChannel(context)
+        verify(manager, never()).createNotificationChannel(any<NotificationChannel>())
+    }
+
+    @Test
+    fun testCancelDoesNotThrowWhenManagerIsNull() {
+        val context: Context = mock()
+        whenever(context.getSystemService(Context.NOTIFICATION_SERVICE)).thenReturn(null)
+        SyncNotificationHelper.cancel(context)
+        verify(context).getSystemService(Context.NOTIFICATION_SERVICE)
+    }
+
+    @Test
+    fun testCancelInvokesNotificationManager() {
+        val context: Context = mock()
+        val manager: NotificationManager = mock()
+        whenever(context.getSystemService(Context.NOTIFICATION_SERVICE))
+            .thenReturn(manager)
+
+        SyncNotificationHelper.cancel(context)
+        verify(manager).cancel(SyncNotificationHelper.NOTIFICATION_ID)
+    }
+}
