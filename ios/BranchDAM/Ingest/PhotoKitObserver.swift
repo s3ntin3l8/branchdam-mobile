@@ -33,7 +33,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
     public static let shared = PhotoKitObserver()
 
     private var lastScannedDate: Date = Date().addingTimeInterval(-3600)
-    private var isObserving = false
+    @objc private dynamic var isObserving = false
     private let lineageQueue = DispatchQueue(label: "com.branchdam.mobile.lineage", qos: .utility)
 
     public func startObserving() {

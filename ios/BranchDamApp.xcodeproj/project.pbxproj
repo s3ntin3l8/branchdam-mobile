@@ -40,8 +40,14 @@
 		A100010A /* AppleOtgIngestManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010A /* AppleOtgIngestManagerTests.swift */; };
 		A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010B /* AppleCameraRollImportNotifierTests.swift */; };
 		A100010C /* AppleEditCorrelatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010C /* AppleEditCorrelatorTests.swift */; };
+		A100010D /* PhotoAuthorizationBannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010D /* PhotoAuthorizationBannerTests.swift */; };
+		A100010E /* QrPairingViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010E /* QrPairingViewTests.swift */; };
+		A100010F /* BackgroundSyncManagerCancelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010F /* BackgroundSyncManagerCancelTests.swift */; };
+		A1000110 /* AppleSafeSpaceManagerEligibleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */; };
+		A1000111 /* PhotoKitObserverSerialTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000111 /* PhotoKitObserverSerialTests.swift */; };
 		A1000016 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000016 /* WelcomeView.swift */; };
 		A1000017 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2000017 /* PrivacyInfo.xcprivacy */; };
+		A1000018 /* PhotoAuthorizationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000018 /* PhotoAuthorizationBanner.swift */; };
 		A1000120 /* branchdam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; };
 /* End PBXBuildFile section */
 
@@ -93,6 +99,7 @@
 		A2000015 /* AppleCameraRollImportNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifier.swift; sourceTree = "<group>"; };
 		A2000016 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		A2000017 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A2000018 /* PhotoAuthorizationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAuthorizationBanner.swift; sourceTree = "<group>"; };
 		A2000020 /* branchdam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = branchdam.xcframework; path = branchdam.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
@@ -107,6 +114,11 @@
 		A200010A /* AppleOtgIngestManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManagerTests.swift; sourceTree = "<group>"; };
 		A200010B /* AppleCameraRollImportNotifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifierTests.swift; sourceTree = "<group>"; };
 		A200010C /* AppleEditCorrelatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleEditCorrelatorTests.swift; sourceTree = "<group>"; };
+		A200010D /* PhotoAuthorizationBannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAuthorizationBannerTests.swift; sourceTree = "<group>"; };
+		A200010E /* QrPairingViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrPairingViewTests.swift; sourceTree = "<group>"; };
+		A200010F /* BackgroundSyncManagerCancelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManagerCancelTests.swift; sourceTree = "<group>"; };
+		A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerEligibleTests.swift; sourceTree = "<group>"; };
+		A2000111 /* PhotoKitObserverSerialTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitObserverSerialTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -213,6 +225,7 @@
 				A200000E /* SafeSpaceView.swift */,
 				A2000014 /* AppleOtgImportConfirmationView.swift */,
 				A2000016 /* WelcomeView.swift */,
+				A2000018 /* PhotoAuthorizationBanner.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -240,6 +253,11 @@
 				A200010A /* AppleOtgIngestManagerTests.swift */,
 				A200010B /* AppleCameraRollImportNotifierTests.swift */,
 				A200010C /* AppleEditCorrelatorTests.swift */,
+				A200010D /* PhotoAuthorizationBannerTests.swift */,
+				A200010E /* QrPairingViewTests.swift */,
+				A200010F /* BackgroundSyncManagerCancelTests.swift */,
+				A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */,
+				A2000111 /* PhotoKitObserverSerialTests.swift */,
 			);
 			path = BranchDAMTests;
 			sourceTree = "<group>";
@@ -359,6 +377,7 @@
 				A1000014 /* AppleOtgImportConfirmationView.swift in Sources */,
 				A1000015 /* AppleCameraRollImportNotifier.swift in Sources */,
 				A1000016 /* WelcomeView.swift in Sources */,
+				A1000018 /* PhotoAuthorizationBanner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -378,6 +397,11 @@
 				A100010A /* AppleOtgIngestManagerTests.swift in Sources */,
 				A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */,
 				A100010C /* AppleEditCorrelatorTests.swift in Sources */,
+				A100010D /* PhotoAuthorizationBannerTests.swift in Sources */,
+				A100010E /* QrPairingViewTests.swift in Sources */,
+				A100010F /* BackgroundSyncManagerCancelTests.swift in Sources */,
+				A1000110 /* AppleSafeSpaceManagerEligibleTests.swift in Sources */,
+				A1000111 /* PhotoKitObserverSerialTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
