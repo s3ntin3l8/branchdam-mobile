@@ -14,9 +14,10 @@ func TestVersionNonEmpty(t *testing.T) {
 func TestNewEngineDefaultsClientVersion(t *testing.T) {
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
-		DBPath:  filepath.Join(dir, "engine.db"),
-		BaseURL: "http://localhost:8080",
-		AgentID: "test-agent",
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           "http://localhost:8080",
+		AgentID:           "test-agent",
+		DevCleartextHosts: []string{"localhost"},
 	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
@@ -30,10 +31,11 @@ func TestNewEngineDefaultsClientVersion(t *testing.T) {
 func TestNewEnginePreservesExplicitClientVersion(t *testing.T) {
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
-		DBPath:        filepath.Join(dir, "engine.db"),
-		BaseURL:       "http://localhost:8080",
-		AgentID:       "test-agent",
-		ClientVersion: "1.2.3-custom",
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           "http://localhost:8080",
+		AgentID:           "test-agent",
+		ClientVersion:     "1.2.3-custom",
+		DevCleartextHosts: []string{"localhost"},
 	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
@@ -47,9 +49,10 @@ func TestNewEnginePreservesExplicitClientVersion(t *testing.T) {
 func TestEngineCloseIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
-		DBPath:  filepath.Join(dir, "engine.db"),
-		BaseURL: "http://localhost:8080",
-		AgentID: "test-agent",
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           "http://localhost:8080",
+		AgentID:           "test-agent",
+		DevCleartextHosts: []string{"localhost"},
 	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
@@ -67,12 +70,13 @@ func TestNewEngineValidation(t *testing.T) {
 		name string
 		opts EngineOptions
 	}{
-		{"empty DBPath", EngineOptions{BaseURL: "http://x", AgentID: "a"}},
+		{"empty DBPath", EngineOptions{BaseURL: "https://x", AgentID: "a"}},
 		{"empty BaseURL", EngineOptions{DBPath: "/tmp/x.db", AgentID: "a"}},
 		{"bad BaseURL", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "://bad", AgentID: "a"}},
 		{"non-http scheme", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "ftp://x", AgentID: "a"}},
-		{"empty AgentID", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "http://x"}},
-		{"negative timeout", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "http://x", AgentID: "a", HTTPTimeoutSec: -1}},
+		{"http without cleartext host", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "http://attacker.example.com", AgentID: "a"}},
+		{"empty AgentID", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "https://x"}},
+		{"negative timeout", EngineOptions{DBPath: "/tmp/x.db", BaseURL: "https://x", AgentID: "a", HTTPTimeoutSec: -1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -96,12 +100,88 @@ func TestNewEngineValidatesSchemeHTTPSOrHTTP(t *testing.T) {
 	for _, scheme := range []string{"https", "http"} {
 		t.Run(scheme, func(t *testing.T) {
 			_, err := NewEngine(EngineOptions{
-				DBPath:  filepath.Join(dir, "engine-"+scheme+".db"),
-				BaseURL: scheme + "://localhost:8080",
-				AgentID: "a",
+				DBPath:            filepath.Join(dir, "engine-"+scheme+".db"),
+				BaseURL:           scheme + "://localhost:8080",
+				AgentID:           "a",
+				DevCleartextHosts: []string{"localhost"},
 			})
 			if err != nil {
 				t.Fatalf("NewEngine with %s scheme: %v", scheme, err)
+			}
+		})
+	}
+}
+
+func TestNewEngineRejectsHTTPWithoutCleartextHost(t *testing.T) {
+	dir := t.TempDir()
+	_, err := NewEngine(EngineOptions{
+		DBPath:  filepath.Join(dir, "engine.db"),
+		BaseURL: "http://attacker.example.com",
+		AgentID: "a",
+	})
+	if err == nil {
+		t.Fatalf("NewEngine: expected INVALID_INPUT error for HTTP without cleartext host, got nil")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("NewEngine: error is not *Error: %T %v", err, err)
+	}
+	if be.Code != "INVALID_INPUT" {
+		t.Fatalf("NewEngine: Code = %q, want %q", be.Code, "INVALID_INPUT")
+	}
+}
+
+func TestNewEngineAllowsHTTPWithCleartextHost(t *testing.T) {
+	dir := t.TempDir()
+	_, err := NewEngine(EngineOptions{
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           "http://10.0.2.2:8080",
+		AgentID:           "a",
+		DevCleartextHosts: []string{"10.0.2.2", "localhost"},
+	})
+	if err != nil {
+		t.Fatalf("NewEngine with HTTP and cleartext host: %v", err)
+	}
+}
+
+func TestNewEngineRejectsHTTPWithWrongCleartextHost(t *testing.T) {
+	dir := t.TempDir()
+	_, err := NewEngine(EngineOptions{
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           "http://10.0.2.2:8080",
+		AgentID:           "a",
+		DevCleartextHosts: []string{"localhost"},
+	})
+	if err == nil {
+		t.Fatalf("NewEngine: expected INVALID_INPUT error for HTTP with non-matching cleartext host, got nil")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("NewEngine: error is not *Error: %T %v", err, err)
+	}
+	if be.Code != "INVALID_INPUT" {
+		t.Fatalf("NewEngine: Code = %q, want %q", be.Code, "INVALID_INPUT")
+	}
+}
+
+func TestIsHostInCleartextAllowlist(t *testing.T) {
+	tests := []struct {
+		host     string
+		list     []string
+		expected bool
+	}{
+		{"localhost", []string{"localhost", "10.0.2.2"}, true},
+		{"10.0.2.2", []string{"localhost", "10.0.2.2"}, true},
+		{"attacker.example.com", []string{"localhost", "10.0.2.2"}, false},
+		{"localhost", nil, false},
+		{"localhost", []string{}, false},
+		{"LOCALHOST", []string{"localhost"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			got := isHostInCleartextAllowlist(tt.host, tt.list)
+			if got != tt.expected {
+				t.Fatalf("isHostInCleartextAllowlist(%q, %v) = %v, want %v", tt.host, tt.list, got, tt.expected)
 			}
 		})
 	}
@@ -113,9 +193,10 @@ func TestNewEngineValidatesSchemeHTTPSOrHTTP(t *testing.T) {
 func TestIsMediaOffloaded_FailClosedOnDBError(t *testing.T) {
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
-		DBPath:  filepath.Join(dir, "engine.db"),
-		BaseURL: "http://localhost:8080",
-		AgentID: "test-agent",
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           "http://localhost:8080",
+		AgentID:           "test-agent",
+		DevCleartextHosts: []string{"localhost"},
 	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)

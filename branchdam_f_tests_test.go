@@ -66,11 +66,12 @@ func newTestEngineWithNodeStatus(t *testing.T, statuses map[string]client.NodeSt
 
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
-		DBPath:        filepath.Join(dir, "engine.db"),
-		BaseURL:       server.URL,
-		APIKey:        "test",
-		AgentID:       "test-agent",
-		ClientVersion: "test-1.0",
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           server.URL,
+		APIKey:            "test",
+		AgentID:           "test-agent",
+		ClientVersion:     "test-1.0",
+		DevCleartextHosts: []string{"127.0.0.1"},
 	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
@@ -212,11 +213,12 @@ func TestReclaimSafeSpace_TransientNetworkError(t *testing.T) {
 
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
-		DBPath:        filepath.Join(dir, "engine.db"),
-		BaseURL:       server.URL,
-		APIKey:        "test",
-		AgentID:       "test-agent",
-		ClientVersion: "test-1.0",
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           server.URL,
+		APIKey:            "test",
+		AgentID:           "test-agent",
+		ClientVersion:     "test-1.0",
+		DevCleartextHosts: []string{"127.0.0.1"},
 	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
@@ -289,11 +291,12 @@ func TestReclaimSafeSpace_NoRecordOnServer(t *testing.T) {
 
 	dir := t.TempDir()
 	e, err := NewEngine(EngineOptions{
-		DBPath:        filepath.Join(dir, "engine.db"),
-		BaseURL:       server.URL,
-		APIKey:        "test",
-		AgentID:       "test-agent",
-		ClientVersion: "test-1.0",
+		DBPath:            filepath.Join(dir, "engine.db"),
+		BaseURL:           server.URL,
+		APIKey:            "test",
+		AgentID:           "test-agent",
+		ClientVersion:     "test-1.0",
+		DevCleartextHosts: []string{"127.0.0.1"},
 	})
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
