@@ -22,6 +22,20 @@ func isNotFoundErr(err error) bool {
 	return errors.Is(err, sql.ErrNoRows)
 }
 
+// ErrLocalFlagSetFailed is wrapped by the engine's SafeSpaceReclaim
+// when the local SetMediaOffloaded write fails. The branchdam FFI
+// surface matches on this sentinel (via errors.Is) to distinguish
+// transient local-DB failures from genuine ineligible verdicts —
+// without depending on the error message string.
+var ErrLocalFlagSetFailed = errors.New("local flag set failed")
+
+// ErrLocalReadFailed is wrapped by the engine's SafeSpaceReclaim
+// when the local state-lookup fails with a non-ErrNoRows DB error
+// (e.g. SQLITE_BUSY, corruption). The FFI surface maps this to
+// DB_ERROR (transient, retry) — distinct from the ineligible
+// verdict that an ErrNoRows "not found" produces.
+var ErrLocalReadFailed = errors.New("local read failed")
+
 type Engine struct {
 	q *queue.Queue
 	c *client.Client
@@ -381,7 +395,7 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 			}, nil
 		}
 		return SafeSpaceVerdict{LocalID: localID, Reason: "local state lookup: " + err.Error()},
-			fmt.Errorf("local state lookup: %w", err)
+			fmt.Errorf("%w: %s", ErrLocalReadFailed, err)
 	}
 	if state == nil || state.NodeUUID == "" {
 		return SafeSpaceVerdict{
@@ -418,7 +432,7 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 	// All gates passed. Mark the local asset as offloaded.
 	if err := e.q.SetMediaOffloaded(localID, true); err != nil {
 		return SafeSpaceVerdict{LocalID: localID, Reason: "local flag set failed"},
-			fmt.Errorf("set offloaded: %w", err)
+			fmt.Errorf("%w: %v", ErrLocalFlagSetFailed, err)
 	}
 	return SafeSpaceVerdict{LocalID: localID, Eligible: true}, nil
 }

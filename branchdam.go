@@ -139,6 +139,56 @@ func errToError(err error) *Error {
 	return &Error{Code: "INTERNAL", Message: err.Error()}
 }
 
+// reclaimErrorToBranchdamError maps a non-nil error from the engine's
+// SafeSpaceReclaim to a *Error with a code that distinguishes
+// transient infrastructure failures from genuine ineligible verdicts.
+//
+//   - Network/IO errors (client.ClientError with NETWORK_ERROR or
+//     IO_ERROR) → INTERNAL (transient; shell should retry)
+//   - engine.ErrLocalFlagSetFailed (typed sentinel from
+//     core/engine) → DB_ERROR (transient; the local flag write
+//     failed, shell should retry)
+//   - engine.ErrLocalReadFailed (typed sentinel from
+//     core/engine) → DB_ERROR (transient; the local state lookup
+//     failed, shell should retry — NOT eligible/ineligible)
+//   - Everything else → VERIFIED_REQUIRED (ineligible; the node is
+//     not verified, on the wrong tier, or unknown to the server)
+func reclaimErrorToBranchdamError(err error) *Error {
+	// Already a *Error? Pass through (defensive — shouldn't happen
+	// from the engine, but cheap to check).
+	var be *Error
+	if errors.As(err, &be) {
+		return be
+	}
+
+	// Network or IO failure from the HTTP client.
+	var ce *client.ClientError
+	if errors.As(err, &ce) {
+		if ce.Code == client.CodeNetworkError || ce.Code == client.CodeIOError {
+			return newError("INTERNAL", "reclaim transient: %s", err.Error())
+		}
+	}
+
+	// Local DB failure when writing the offloaded flag. The engine
+	// wraps the queue error with engine.ErrLocalFlagSetFailed; we
+	// match on the typed sentinel, not the message string.
+	if errors.Is(err, engine.ErrLocalFlagSetFailed) {
+		return newError(CodeDBError, "reclaim transient: %s", err.Error())
+	}
+
+	// Local DB failure when reading the state (SQLITE_BUSY,
+	// corruption, etc.). The engine wraps with ErrLocalReadFailed;
+	// this is a transient failure, NOT an eligible/ineligible
+	// verdict — the shell should retry.
+	if errors.Is(err, engine.ErrLocalReadFailed) {
+		return newError(CodeDBError, "reclaim transient: %s", err.Error())
+	}
+
+	// Ineligible verdict from the engine (not verified, wrong tier,
+	// no record, node not found).
+	return newError(CodeVerifiedRequired, "reclaim ineligible: %s", err.Error())
+}
+
 // ---------------------------------------------------------------------------
 // EnqueueMedia
 // ---------------------------------------------------------------------------
@@ -485,7 +535,16 @@ func (e *Engine) ReclaimSafeSpace(localID string) (SafeSpaceVerdict, error) {
 	}
 	verdict, err := e.engine.SafeSpaceReclaim(context.Background(), localID)
 	if err != nil {
-		return SafeSpaceVerdict{LocalID: localID, Reason: err.Error()}, errToError(err)
+		// Distinguish transient infrastructure failures (network, DB)
+		// from genuine ineligible verdicts. The shell should retry on
+		// transient errors and only surface "verify your node" to the
+		// user when the engine confirms the node is ineligible.
+		//
+		// - ClientError with NETWORK_ERROR / IO_ERROR: transient
+		// - Errors wrapping a queue DB error ("set offloaded: ..."): transient
+		// - Everything else: ineligible (not verified, wrong tier, no record)
+		return SafeSpaceVerdict{LocalID: localID, Reason: err.Error()},
+			reclaimErrorToBranchdamError(err)
 	}
 	if !verdict.Eligible {
 		return SafeSpaceVerdict{LocalID: localID, Reason: verdict.Reason},
