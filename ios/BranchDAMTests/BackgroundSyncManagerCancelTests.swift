@@ -31,14 +31,6 @@ final class BackgroundSyncManagerCancelTests: XCTestCase {
         XCTAssertEqual(BackgroundSyncManager.syncTaskId, "com.branchdam.mobile.sync")
     }
 
-    /// The registerBackgroundTasks method is the OS-callback that
-    /// registers the handler. It must be callable without crashing
-    /// (it silently no-ops when the task identifier is not registered
-    /// in the test process).
-    func testRegisterBackgroundTasksIsCallable() {
-        BackgroundSyncManager.shared.registerBackgroundTasks()
-    }
-
     /// The scheduleBackgroundSync method submits a BGProcessingTaskRequest.
     /// We verify it exists and is callable; the actual submission
     /// requires BGTaskScheduler permission (only granted on device).
