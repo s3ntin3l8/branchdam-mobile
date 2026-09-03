@@ -173,6 +173,44 @@ object EngineHolder {
         }
     }
 
+    /**
+     * Streams localPath through the BLAKE3-256 hasher and returns the
+     * 64-hex-character digest. Used by the OTG ingest pipeline (T2-7) to
+     * verify a staged file's bytes match what the source claimed before
+     * the upload-side hash is computed. Returns null when the engine is
+     * unavailable or the hash can't be computed — the caller treats that
+     * as "verify skipped, defer to upload-side BLAKE3".
+     */
+    fun computeBlake3Hex(localPath: String): String? {
+        if (!nativeAvailable.get()) return null
+        return try {
+            executor.submit(Callable { Branchdam.bindingComputeHashes(localPath) })
+                .get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "computeBlake3Hex($localPath) failed: $t")
+            null
+        }
+    }
+
+    /**
+     * Returns the BLAKE3-256 hash most recently recorded against localID
+     * in the local_media_state table, or "" if the localID has never
+     * been ingested. Used by the OTG ingest pipeline (T2-7) to detect
+     * the "same localID, different bytes" case that usually indicates a
+     * failing SD card mid-scan: the caller logs a warning when the prior
+     * hash is non-empty AND differs from the freshly computed hash.
+     */
+    fun lookupBlake3ForLocalID(localID: String): String {
+        if (!nativeAvailable.get() || localID.isEmpty()) return ""
+        return try {
+            executor.submit(Callable { Branchdam.bindingLookupBlake3ForLocalID(localID) })
+                .get() ?: ""
+        } catch (t: Throwable) {
+            Log.w(TAG, "lookupBlake3ForLocalID($localID) failed: $t")
+            ""
+        }
+    }
+
     private const val MOCK_NAMING_TEMPLATE =
         "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
 }

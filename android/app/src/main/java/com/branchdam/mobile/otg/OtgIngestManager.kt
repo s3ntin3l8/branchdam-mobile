@@ -2,6 +2,8 @@ package com.branchdam.mobile.otg
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
+import com.branchdam.mobile.EngineHolder
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,19 +29,47 @@ data class OtgIngestProgress(
         get() = if (totalBytes > 0) (bytesProcessed.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f) else 0f
 }
 
+/**
+ * One file-level failure observed during an OTG ingest pass. Surfaced in
+ * [OtgState.Completed.fileErrors] so the post-ingest dialog can show the
+ * user which files were skipped and why (typically "File too large to
+ * ingest" when the candidate exceeds [OtgIngestManager.MAX_OTG_STAGE_BYTES]
+ * or "Copy failed mid-stream; SD card may be failing" when the bytes copied
+ * don't match the candidate's reported sizeBytes).
+ */
+data class OtgIngestFileError(
+    val candidate: OtgMediaCandidate,
+    val message: String,
+)
+
 sealed class OtgState {
     object Idle : OtgState()
     data class Scanning(val deviceLabel: String) : OtgState()
     data class AwaitingConfirmation(val scanResult: OtgScanResult) : OtgState()
     data class Ingesting(val progress: OtgIngestProgress) : OtgState()
-    data class Completed(val importedCount: Int, val totalBytes: Long) : OtgState()
+    data class Completed(
+        val importedCount: Int,
+        val totalBytes: Long,
+        val fileErrors: List<OtgIngestFileError> = emptyList(),
+    ) : OtgState()
     data class Error(val message: String) : OtgState()
 }
+
+/**
+ * Optional callback for hashes the post-copy BLAKE3 verifier observes for a
+ * given candidate. The first value is the freshly-computed hash, the second
+ * is the prior hash recorded in the queue (empty string when this is the
+ * first time we've seen the localID). Used by the OTG ingest pipeline to
+ * log a warning when the two differ — usually a sign that the source SD
+ * card is returning inconsistent bytes between scans.
+ */
+typealias OtgHashObserver = (candidate: OtgMediaCandidate, freshHashHex: String, priorHashHex: String) -> Unit
 
 class OtgIngestManager(
     private val context: Context? = null,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val hashObserver: OtgHashObserver? = null,
 ) {
     private val _state = MutableStateFlow<OtgState>(OtgState.Idle)
     val state: StateFlow<OtgState> = _state.asStateFlow()
@@ -101,6 +131,7 @@ class OtgIngestManager(
             val totalBytes = scanResult.totalSizeBytes
             var bytesProcessed = 0L
             var importedCount = 0
+            val fileErrors = mutableListOf<OtgIngestFileError>()
 
             if (!destinationDir.exists()) {
                 destinationDir.mkdirs()
@@ -120,19 +151,27 @@ class OtgIngestManager(
                         )
                     )
 
-                    val stagedFile = withContext(ioDispatcher) {
+                    val stageResult = withContext(ioDispatcher) {
                         copyCandidateToStage(candidate, destinationDir)
                     }
 
-                    bytesProcessed += candidate.sizeBytes
-                    importedCount++
-                    onFileStaged(stagedFile, candidate)
+                    when (stageResult) {
+                        is StageResult.Success -> {
+                            bytesProcessed += candidate.sizeBytes
+                            importedCount++
+                            onFileStaged(stageResult.stagedFile, candidate)
+                        }
+                        is StageResult.Failure -> {
+                            fileErrors += OtgIngestFileError(candidate, stageResult.message)
+                        }
+                    }
                 }
 
                 if (isActive) {
                     _state.value = OtgState.Completed(
                         importedCount = importedCount,
-                        totalBytes = bytesProcessed
+                        totalBytes = bytesProcessed,
+                        fileErrors = fileErrors,
                     )
                 }
             } catch (ce: CancellationException) {
@@ -162,29 +201,124 @@ class OtgIngestManager(
         _state.value = OtgState.Idle
     }
 
-    private fun copyCandidateToStage(candidate: OtgMediaCandidate, stageDir: File): File {
-        // Preserve relative path to avoid same-named collisions across camera folders (e.g. 100EOSR5 vs 101EOSR5)
+    /**
+     * Internal sealed result of [copyCandidateToStage]. Surfaces the
+     * per-file error strings (size cap exceeded, mid-stream copy failure)
+     * to [confirmImport] without throwing — a failure on one file must
+     * not abort the rest of the scan.
+     */
+    private sealed class StageResult {
+        data class Success(val stagedFile: File) : StageResult()
+        data class Failure(val message: String) : StageResult()
+    }
+
+    /**
+     * Copies a candidate media file from the SD card (or SAF DocumentTree)
+     * into [stageDir]. Verifies the copy produced exactly the bytes the
+     * candidate's filesystem metadata claimed, then computes a fresh
+     * BLAKE3-256 over the staged file via the Go engine. Returns a
+     * [StageResult.Success] when all three checks pass; otherwise a
+     * [StageResult.Failure] carrying a user-facing reason. The staged
+     * file is deleted on any failure so a subsequent ingest pass doesn't
+     * try to upload a corrupt partial.
+     */
+    private fun copyCandidateToStage(candidate: OtgMediaCandidate, stageDir: File): StageResult {
+        if (candidate.sizeBytes > MAX_OTG_STAGE_BYTES) {
+            return StageResult.Failure(
+                "File too large to ingest (${OtgMediaCandidate.formatBytes(candidate.sizeBytes)} > ${OtgMediaCandidate.formatBytes(MAX_OTG_STAGE_BYTES)} cap)"
+            )
+        }
+        if (candidate.sizeBytes < 0) {
+            return StageResult.Failure("Skipped file with invalid size metadata")
+        }
+
         val targetFile = File(stageDir, candidate.relativePath)
         targetFile.parentFile?.mkdirs()
 
-        if (candidate.uri.startsWith("content://") && context != null) {
-            val uri = Uri.parse(candidate.uri)
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(targetFile).use { output ->
-                    input.copyTo(output)
+        try {
+            val copiedBytes = when {
+                candidate.uri.startsWith("content://") && context != null -> {
+                    val uri = Uri.parse(candidate.uri)
+                    val input = context.contentResolver.openInputStream(uri)
+                        ?: return StageResult.Failure("Could not open stream for content URI: ${candidate.uri}")
+                    input.use { stream ->
+                        FileOutputStream(targetFile).use { output ->
+                            stream.copyTo(output)
+                        }
+                    }
                 }
-            } ?: throw IllegalStateException("Could not open stream for content URI: ${candidate.uri}")
-        } else if (candidate.uri.startsWith("file:/")) {
-            val sourceFile = File(java.net.URI(candidate.uri))
-            sourceFile.copyTo(targetFile, overwrite = true)
-        } else {
-            val sourceFile = File(candidate.uri)
-            sourceFile.copyTo(targetFile, overwrite = true)
+                candidate.uri.startsWith("file:/") -> {
+                    val sourceFile = File(java.net.URI(candidate.uri))
+                    sourceFile.inputStream().use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                else -> {
+                    val sourceFile = File(candidate.uri)
+                    sourceFile.inputStream().use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            }
+
+            if (copiedBytes != candidate.sizeBytes) {
+                targetFile.delete()
+                return StageResult.Failure(
+                    "Copy failed mid-stream; SD card may be failing (got ${OtgMediaCandidate.formatBytes(copiedBytes)}, expected ${OtgMediaCandidate.formatBytes(candidate.sizeBytes)})"
+                )
+            }
+            if (targetFile.length() != candidate.sizeBytes) {
+                targetFile.delete()
+                return StageResult.Failure(
+                    "Staged file size mismatch (got ${OtgMediaCandidate.formatBytes(targetFile.length())}, expected ${OtgMediaCandidate.formatBytes(candidate.sizeBytes)})"
+                )
+            }
+
+            val priorHash = EngineHolder.lookupBlake3ForLocalID(candidate.uri)
+            val freshHash = EngineHolder.computeBlake3Hex(targetFile.absolutePath)
+            if (freshHash == null) {
+                // Engine unavailable / hash skipped — fall through; the
+                // upload side will compute the canonical hash later.
+                Log.w(TAG, "BLAKE3 verify skipped for ${candidate.fileName}: engine unavailable")
+            } else {
+                hashObserver?.invoke(candidate, freshHash, priorHash)
+                if (priorHash.isNotEmpty() && priorHash != freshHash) {
+                    Log.w(
+                        TAG,
+                        "BLAKE3 mismatch for ${candidate.fileName} (localID=${candidate.uri}): " +
+                            "prior=$priorHash fresh=$freshHash — SD card may be returning inconsistent bytes"
+                    )
+                }
+            }
+
+            return StageResult.Success(targetFile)
+        } catch (ce: CancellationException) {
+            targetFile.delete()
+            throw ce
+        } catch (e: Exception) {
+            targetFile.delete()
+            return StageResult.Failure(
+                "Copy failed: ${e.message ?: e.javaClass.simpleName}"
+            )
         }
-        return targetFile
     }
 
     companion object {
+        private const val TAG = "OtgIngestManager"
+
+        /**
+         * Per-file size cap for staged copies. Chosen to comfortably
+         * exceed the largest plausible single capture (a 4K ProRes RAW
+         * clip tops out around 30 GB/hour) while still refusing obviously
+         * bogus values from a corrupt SD card metadata read. Surfaced as
+         * "File too large to ingest" in the post-pass summary when hit.
+         */
+        const val MAX_OTG_STAGE_BYTES: Long = 50L * 1024L * 1024L * 1024L
+
         @Volatile
         private var instance: OtgIngestManager? = null
 
