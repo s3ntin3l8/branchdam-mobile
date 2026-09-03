@@ -35,9 +35,12 @@ class SyncWorker(
             } else {
                 Result.failure()
             }
-        } finally {
-            SyncNotificationHelper.cancel(applicationContext)
         }
+        // No notification cancellation here: WorkManager owns the
+        // foreground-service notification and calls stopForeground() when
+        // doWork returns. Cancelling here would race stopForeground and
+        // could leave the FGS momentarily running without its required
+        // visible notification (FGS contract violation on newer Android).
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
