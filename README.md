@@ -139,7 +139,7 @@ To pair the mobile app with your branchDAM server:
   - `X-Blake3-Hash`: BLAKE3 checksum for integrity and archive verification.
   - `X-Fast-Hash`: Streaming fast hash (xxHash) for duplicate detection.
   - `X-Capture-Timestamp`: Capture time in Unix epoch seconds.
-  - `X-API-Key` / `Authorization`: Companion authentication credential.
+  - `X-API-Key`: Companion authentication credential (single header; `Authorization` is reserved for future short-lived bearer tokens and is not sent today — T2-6).
 - **Safe Space Deletion Model**:
   Assets are only marked eligible for local deletion after the server responds with HTTP `200 OK` / `201 Created` and the BLAKE3 checksum is verified on the master storage tier.
 
