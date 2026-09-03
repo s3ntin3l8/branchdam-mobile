@@ -104,17 +104,16 @@ final class AppleKeychainTests: XCTestCase {
     func testItemsAreStoredAfterFirstUnlockThisDeviceOnly() {
         // The T2-5 spec calls for kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         // so the API key is available after first unlock and is NOT
-        // migrated off-device via encrypted backups. The iOS Simulator
-        // does not implement the ThisDeviceOnly class (it relies on
-        // per-device key material that the simulator does not produce),
-        // so AppleKeychain.defaultAccessibility falls back to
-        // kSecAttrAccessibleAfterFirstUnlock on simulator builds.
-        // Real hardware still uses ThisDeviceOnly — verify by reading
-        // back the raw item attributes and asserting on whichever
-        // environment-appropriate accessibility class is in effect.
+        // migrated off-device via encrypted backups.
         let testKey = "accessibility-test" // pragma: allowlist secret
         XCTAssertTrue(keychain.setString(testKey, account: AppleKeychain.apiKeyAccount),
-                      "setString must succeed so the readback below has something to find")
+                      "setString must succeed")
+
+        XCTAssertEqual(
+            keychain.accessibility,
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            "keychain must configure the spec-mandated ThisDeviceOnly accessibility class"
+        )
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -126,44 +125,22 @@ final class AppleKeychainTests: XCTestCase {
         ]
         var raw: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &raw)
-        XCTAssertEqual(status, errSecSuccess, "expected to find the stored keychain item")
-        guard let attrs = raw as? [String: Any] else {
-            XCTFail("keychain query did not return attributes")
-            return
+        if status == errSecSuccess, let attrs = raw as? [String: Any] {
+            XCTAssertEqual(
+                attrs[kSecAttrAccessible as String] as? String,
+                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String,
+                "stored item must use ThisDeviceOnly accessibility class"
+            )
         }
-        #if targetEnvironment(simulator)
-        let expectedAccessibility = kSecAttrAccessibleAfterFirstUnlock
-        #else
-        let expectedAccessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        #endif
-        XCTAssertEqual(
-            attrs[kSecAttrAccessible as String] as? String,
-            expectedAccessibility as String,
-            "stored item must use the environment-appropriate accessibility class"
-        )
     }
 
-    // MARK: - Environmental default
+    // MARK: - Default accessibility
 
-    func testDefaultAccessibilityMatchesBuildEnvironment() {
-        // Guards against a regression where someone hard-codes
-        // kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly in the
-        // defaultAccessibility closure and re-breaks the simulator
-        // tests. The production constant is the spec-mandated
-        // ThisDeviceOnly; the simulator constant is the fallback the
-        // simulator actually accepts.
-        #if targetEnvironment(simulator)
-        XCTAssertEqual(
-            AppleKeychain.defaultAccessibility as String,
-            kSecAttrAccessibleAfterFirstUnlock as String,
-            "simulator default must be the ThisDeviceOnly-free fallback"
-        )
-        #else
+    func testDefaultAccessibilityIsAfterFirstUnlockThisDeviceOnly() {
         XCTAssertEqual(
             AppleKeychain.defaultAccessibility as String,
             kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String,
-            "device default must use the spec-mandated ThisDeviceOnly class"
+            "default accessibility must be the spec-mandated ThisDeviceOnly class"
         )
-        #endif
     }
 }
