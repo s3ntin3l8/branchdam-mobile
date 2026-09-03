@@ -1,8 +1,16 @@
 package com.branchdam.mobile
 
 import com.branchdam.mobile.observer.Debouncer
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -338,5 +346,134 @@ class DebouncerTest {
         assertEquals("follow-up fires at the new rescheduled time", 2, callCount[0])
 
         debouncer.close()
+    }
+
+    /**
+     * Hermes PR-84 round-2 warning: the single-in-flight invariant
+     * was relying on captured `var` flags that are written by the
+     * inner launch on one IO worker thread and read by the
+     * dispatcher loop on another, with no synchronization. A stale
+     * read of `fireInProgress=false` would let a trigger arriving
+     * while onFire is still running spawn a parallel onFire on
+     * Dispatchers.IO.
+     *
+     * The unit tests above all run on a single-threaded virtual-clock
+     * `TestScope`, so they never exercise this cross-thread path --
+     * Hermes called this out explicitly. This test does, by driving
+     * the Debouncer from a real `Dispatchers.IO` scope and firing
+     * `trigger()` from many threads at once, then asserting that
+     * `onFire` is never entered concurrently and that the number of
+     * fires matches the trailing-edge-debounce expectation.
+     *
+     * The Debouncer is fixed with a `Mutex` that guards every read
+     * and write of `fireInProgress` / `pending`, so the dispatcher's
+     * "fireInProgress seen as true -> pending = true" is ordered
+     * before the inner launch's "fireInProgress = false -> read
+     * pending -> possibly trySend". Without the mutex, `maxActive`
+     * regularly reports 2 or 3 on this workload.
+     */
+    @Test(timeout = 30000)
+    fun testNoParallelScansFromMultipleTriggerThreads() = runBlocking {
+        val activeRuns = AtomicInteger(0)
+        val maxActive = AtomicInteger(0)
+        val callCount = AtomicInteger(0)
+        val triggerCount = 200
+        val triggerThreads = 8
+        val windowMs = 50L
+
+        val debouncerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val debouncer = Debouncer(
+            scope = debouncerScope,
+            windowMs = windowMs,
+            onFire = {
+                val now = activeRuns.incrementAndGet()
+                // Atomic CAS loop to track the high-water mark across
+                // concurrent onFire entries without a synchronized block.
+                var observed = maxActive.get()
+                while (now > observed && !maxActive.compareAndSet(observed, now)) {
+                    observed = maxActive.get()
+                }
+                try {
+                    callCount.incrementAndGet()
+                    // Slow scan -- intentionally longer than windowMs so a
+                    // new trigger arriving while we are inside onFire has a
+                    // chance to observe a stale `fireInProgress=false` if
+                    // the flag is unsynchronised.
+                    delay(150L)
+                } finally {
+                    activeRuns.decrementAndGet()
+                }
+            }
+        )
+
+        try {
+            val startGate = CountDownLatch(1)
+            val readyLatch = CountDownLatch(triggerThreads)
+            val doneLatch = CountDownLatch(triggerThreads)
+
+            // Each thread fires `triggerCount / triggerThreads` triggers,
+            // waiting on startGate so all threads release triggers as
+            // close to simultaneously as possible -- maximising the
+            // chance that a trigger arrives while onFire is mid-flight.
+            val threads = (1..triggerThreads).map { _ ->
+                Thread {
+                    readyLatch.countDown()
+                    startGate.await()
+                    val perThread = triggerCount / triggerThreads
+                    repeat(perThread) {
+                        debouncer.trigger()
+                        // Tiny pause so trySend/launch interleaving is
+                        // realistic rather than a tight spin loop.
+                        Thread.sleep(0, 500_000)
+                    }
+                    doneLatch.countDown()
+                }.apply { start() }
+            }
+
+            // Wait for every thread to be at the gate, then release.
+            assertTrue(
+                "trigger threads did not all reach the start gate",
+                readyLatch.await(10, TimeUnit.SECONDS)
+            )
+            startGate.countDown()
+
+            // Wait for every thread to finish firing.
+            assertTrue(
+                "trigger threads did not finish in time",
+                doneLatch.await(10, TimeUnit.SECONDS)
+            )
+
+            // Give the debouncer time to drain the trailing debounce
+            // window plus one more 150ms scan so the final fire
+            // completes.
+            delay((windowMs + 200L) * 5)
+
+            // The Hermes invariant: never more than one onFire is
+            // running -- regardless of how many threads are firing
+            // triggers concurrently.
+            assertEquals(
+                "Hermes single-in-flight invariant: max one concurrent scan across threads",
+                1,
+                maxActive.get()
+            )
+
+            // Sanity: at least one fire happened, and we did not see
+            // an unbounded number (the trailing-edge debounce should
+            // collapse a 200-trigger storm to well under 200 fires).
+            assertTrue(
+                "expected at least one onFire, got ${callCount.get()}",
+                callCount.get() >= 1
+            )
+            assertTrue(
+                "trailing-edge debounce should hold fires well below trigger count (got ${callCount.get()} for $triggerCount triggers)",
+                callCount.get() < triggerCount
+            )
+
+            // All scans finished.
+            assertEquals(0, activeRuns.get())
+        } finally {
+            debouncer.close()
+            debouncerScope.cancel()
+        }
     }
 }

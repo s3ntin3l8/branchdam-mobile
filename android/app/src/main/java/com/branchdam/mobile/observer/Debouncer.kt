@@ -5,6 +5,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Coalesces a burst of [trigger] calls into at most one [onFire] per
@@ -28,6 +30,22 @@ import kotlinx.coroutines.launch
  * prevents the overlap-on-IO problem Hermes called out in PR 84:
  * the next [onFire] never starts until the current one completes.
  *
+ * Concurrency: the consumer-supplied [scope] is typically
+ * `Dispatchers.IO + SupervisorJob` (a multi-threaded dispatcher),
+ * which means the dispatcher loop and the inner [delay]-then-[onFire]
+ * launch can run on different worker threads. All reads and writes
+ * of the [fireInProgress] and [pending] flags are therefore guarded
+ * by [mutex] so a stale read of [fireInProgress] cannot spawn a
+ * parallel [onFire]. `@Volatile`-only would fix visibility of each
+ * individual flag but not the compound check-then-act (`if
+ * (fireInProgress) { pending = true }`) where the inner launch's
+ * `finally` could clear [pending] before the dispatcher's write of
+ * `true` becomes visible, dropping the trigger. The mutex
+ * establishes a happens-before edge between the dispatcher's
+ * "fireInProgress seen as true → pending = true" and the inner
+ * launch's "fireInProgress = false → read pending → possibly
+ * trySend", so no trigger can be lost.
+ *
  * The CONFLATED channel ensures [trigger] never blocks and is safe
  * to call from any thread, including the main thread.
  */
@@ -37,41 +55,51 @@ class Debouncer(
     private val onFire: suspend () -> Unit,
 ) {
     private val channel = Channel<Unit>(Channel.CONFLATED)
+    private val mutex = Mutex()
+    private var delayJob: Job? = null
+    private var fireInProgress = false
+    private var pending = false
 
     init {
         scope.launch {
-            var delayJob: Job? = null
-            var fireInProgress = false
-            var pending = false
             for (signal in channel) {
-                if (fireInProgress) {
-                    // A scan is currently running on Dispatchers.IO and
-                    // cannot be aborted mid-execution. Remember we still
-                    // need to re-fire once the current scan returns so
-                    // the events that arrived during the scan are not
-                    // lost. The CONFLATED channel coalesces any further
-                    // signals that arrive during the run into this one
-                    // pending marker.
-                    pending = true
-                    continue
-                }
-                // Trailing-edge debounce: cancel any pending delay and
-                // schedule a fresh one windowMs in the future.
-                delayJob?.cancel()
-                delayJob = scope.launch {
-                    delay(windowMs)
-                    try {
-                        fireInProgress = true
-                        onFire()
-                    } finally {
-                        fireInProgress = false
-                        if (pending) {
-                            // Triggers arrived during onFire. Re-debounce
-                            // from the moment the scan returned so the
-                            // new events are captured by a follow-up
-                            // scan.
-                            pending = false
-                            channel.trySend(Unit)
+                mutex.withLock {
+                    if (fireInProgress) {
+                        // A scan is currently running on a different IO
+                        // worker thread and cannot be aborted mid-execution.
+                        // Remember we still need to re-fire once the current
+                        // scan returns so the events that arrived during the
+                        // scan are not lost. The CONFLATED channel coalesces
+                        // any further signals that arrive during the run into
+                        // this one pending marker.
+                        pending = true
+                    } else {
+                        // Trailing-edge debounce: cancel any pending delay
+                        // and schedule a fresh one windowMs in the future.
+                        delayJob?.cancel()
+                        delayJob = scope.launch {
+                            delay(windowMs)
+                            // Acquiring the mutex here serialises the
+                            // "fireInProgress = true" write with the
+                            // dispatcher's read of fireInProgress below, so
+                            // a trigger that races us cannot read a stale
+                            // `false` and spawn a parallel scan.
+                            mutex.withLock { fireInProgress = true }
+                            try {
+                                onFire()
+                            } finally {
+                                mutex.withLock {
+                                    fireInProgress = false
+                                    if (pending) {
+                                        // Triggers arrived during onFire.
+                                        // Re-debounce from the moment the
+                                        // scan returned so the new events
+                                        // are captured by a follow-up scan.
+                                        pending = false
+                                        channel.trySend(Unit)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
