@@ -1,6 +1,11 @@
 # AGENTS.md — branchdam-mobile
 
-<!-- mullion:briefing:start -->
+This file is the single source of truth for this repo's workflow rules and
+load-bearing invariants — the ones every agent needs before touching
+anything, regardless of which CLI you are. `CLAUDE.md` is a one-line
+`@AGENTS.md` import, so every CLI (Claude Code, Codex, opencode, agy) reads
+this file, natively or via that import. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the contributor workflow.
 
 Mobile companion app for branchDAM. Shared Go core (BLAKE3/FastHash, SQLite
 queue, chunked uploader) with Kotlin (Android, Jetpack Compose) and Swift (iOS,
@@ -11,9 +16,9 @@ storage reclaim.
 
 ```sh
 # Pre-PR Gates & Testing
-make check           # Run lint + core unit tests + android checks
+make check           # lint + core tests (no Android build)
 make test            # Run go core unit tests
-make lint            # pre-commit check + golangci-lint
+make lint            # pre-commit check + go vet
 make android         # Assemble Android debug build
 ```
 
@@ -43,5 +48,3 @@ gh api repos/s3ntin3l8/branchdam-mobile/pulls/<PR>/comments/<comment_id>/replies
 # 2. Resolve thread (GraphQL)
 gh api graphql -f query="mutation { resolveReviewThread(input: {threadId: \"<thread_id>\"}) { thread { isResolved } } }"
 ```
-
-<!-- mullion:briefing:end -->
