@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
                             OtgIngestCompletedDialog(
                                 importedCount = state.importedCount,
                                 totalBytes = state.totalBytes,
+                                fileErrors = state.fileErrors,
                                 onDismiss = { otgManager.reset() }
                             )
                         }

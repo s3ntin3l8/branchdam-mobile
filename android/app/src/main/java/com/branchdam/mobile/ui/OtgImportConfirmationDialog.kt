@@ -1,12 +1,15 @@
 package com.branchdam.mobile.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.branchdam.mobile.otg.OtgIngestFileError
 import com.branchdam.mobile.otg.OtgIngestProgress
 import com.branchdam.mobile.otg.OtgScanResult
 
@@ -141,6 +144,7 @@ fun OtgIngestCompletedDialog(
     importedCount: Int,
     totalBytes: Long,
     onDismiss: () -> Unit,
+    fileErrors: List<OtgIngestFileError> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     AlertDialog(
@@ -148,16 +152,50 @@ fun OtgIngestCompletedDialog(
         modifier = modifier,
         title = {
             Text(
-                text = "Import Complete",
+                text = if (fileErrors.isEmpty()) "Import Complete" else "Import Finished With Errors",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = if (fileErrors.isEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
             )
         },
         text = {
-            Text(
-                text = "Successfully staged $importedCount items (${com.branchdam.mobile.otg.OtgMediaCandidate.formatBytes(totalBytes)}) to branchDAM queue.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "Successfully staged $importedCount items (${com.branchdam.mobile.otg.OtgMediaCandidate.formatBytes(totalBytes)}) to branchDAM queue.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (fileErrors.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "${fileErrors.size} item(s) skipped:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            fileErrors.forEach { err ->
+                                Text(
+                                    text = "• ${err.candidate.fileName}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = err.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Spacer(Modifier.height(6.dp))
+                            }
+                        }
+                    }
+                }
+            }
         },
         confirmButton = {
             Button(onClick = onDismiss) {

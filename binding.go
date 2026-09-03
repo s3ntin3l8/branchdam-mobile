@@ -218,3 +218,52 @@ func splitIDs(s string) []string {
 	}
 	return out
 }
+
+// BindingComputeHashes streams localPath and returns its 64-hex-char BLAKE3-256
+// digest. Used by the OTG ingest post-copy verification (T2-7) so the shell can
+// detect a corrupt SD card mid-copy without keeping a second BLAKE3
+// implementation in sync with the upload-side hash. Returns "" on error;
+// callers should treat that as "hash unavailable, defer to upload-side".
+func BindingComputeHashes(localPath string) (string, error) {
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if bindingEngine == nil {
+		return "", fmt.Errorf("engine not open")
+	}
+	if localPath == "" {
+		return "", fmt.Errorf("local path is required")
+	}
+	hashes, err := bindingEngine.ComputeHashes(localPath, nil)
+	if err != nil {
+		return "", err
+	}
+	return hashes.Blake3, nil
+}
+
+// BindingLookupBlake3ForLocalID returns the BLAKE3-256 hash most recently
+// recorded against localID in the local_media_state table, or "" if the
+// localID is unknown. Used by the OTG ingest pipeline to detect the case
+// where the same localID has been ingested before and produced a different
+// hash — typically a sign that the source SD card is failing and the bytes
+// have changed since the previous scan. The shell logs a warning when this
+// happens but continues with the new hash (the source-of-truth is the file
+// on disk, not the prior queue entry).
+func BindingLookupBlake3ForLocalID(localID string) (string, error) {
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if bindingEngine == nil {
+		return "", fmt.Errorf("engine not open")
+	}
+	if localID == "" {
+		return "", nil
+	}
+	state, err := bindingEngine.queue.GetMediaByLocalID(localID)
+	if err != nil {
+		// sql.ErrNoRows is the "no prior ingest" case; not an error.
+		if strings.Contains(err.Error(), "sql: no rows in result set") {
+			return "", nil
+		}
+		return "", err
+	}
+	return state.Blake3Hash, nil
+}
