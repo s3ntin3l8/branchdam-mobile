@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import Synchronization
+import os
 
 public struct AppleOtgIngestProgress: Equatable {
     public let currentFileIndex: Int
@@ -54,29 +54,32 @@ public enum AppleOtgState: Equatable {
 ///   `var Bool`: written from `cancelImport()`/`reset()` on the
 ///   main thread and from `onCardDetected`/`confirmImport` on the
 ///   main thread, but read from `confirmImport`'s OTG-queue block
-///   on a background thread. It is now an `Atomic<Bool>` from the
-///   Swift 5.9 `Synchronization` framework, which provides lock-free
-///   atomic load/store and is itself `Sendable`. The deployment
-///   target is iOS 17, the floor at which `Synchronization` ships.
+///   on a background thread. It is now backed by
+///   `OSAllocatedUnfairLock<Bool>` from the `os` framework
+///   (iOS 16.0+, the deployment target is iOS 17). The lock itself
+///   is `Sendable`, and every access goes through `withLock { ... }`
+///   so the cross-thread load/store is atomic. The deployment
+///   target predates `Synchronization.Atomic` (iOS 18.0+), so
+///   `OSAllocatedUnfairLock` is the lowest-friction replacement.
 public class AppleOtgIngestManager: ObservableObject {
     public static let shared = AppleOtgIngestManager()
 
     @Published public var state: AppleOtgState = .idle
 
-    private let isCancelledFlag = Atomic<Bool>(false)
+    private let isCancelledFlag = OSAllocatedUnfairLock<Bool>(initialState: false)
     private let queue = DispatchQueue(label: "com.branchdam.mobile.otg", qos: .userInitiated)
 
     public init() {}
 
     public func onCardDetected(deviceLabel: String, directory: URL) {
-        isCancelledFlag.store(false, ordering: .relaxed)
+        isCancelledFlag.withLock { $0 = false }
         state = .scanning(label: deviceLabel)
 
         queue.async { [weak self] in
             guard let self = self else { return }
             let result = AppleOtgCardScanner.scanDirectory(at: directory, deviceLabel: deviceLabel)
             DispatchQueue.main.async {
-                if !self.isCancelledFlag.load(ordering: .relaxed) {
+                if !self.isCancelledFlag.withLock({ $0 }) {
                     if !result.candidates.isEmpty {
                         self.state = .awaitingConfirmation(scanResult: result)
                     } else {
@@ -92,7 +95,7 @@ public class AppleOtgIngestManager: ObservableObject {
         stageDirectory: URL? = nil,
         onFileStaged: ((URL, AppleOtgCandidate) -> Void)? = nil
     ) {
-        isCancelledFlag.store(false, ordering: .relaxed)
+        isCancelledFlag.withLock { $0 = false }
         let destinationDir = stageDirectory ?? FileManager.default.temporaryDirectory.appendingPathComponent("otg_stage", isDirectory: true)
 
         let candidates = scanResult.candidates
@@ -106,7 +109,7 @@ public class AppleOtgIngestManager: ObservableObject {
             var importedCount = 0
 
             for (index, candidate) in candidates.enumerated() {
-                if self.isCancelledFlag.load(ordering: .relaxed) { break }
+                if self.isCancelledFlag.withLock({ $0 }) { break }
 
                 DispatchQueue.main.async {
                     self.state = .ingesting(
@@ -149,7 +152,7 @@ public class AppleOtgIngestManager: ObservableObject {
             }
 
             DispatchQueue.main.async {
-                if !self.isCancelledFlag.load(ordering: .relaxed) {
+                if !self.isCancelledFlag.withLock({ $0 }) {
                     self.state = .completed(importedCount: importedCount, totalBytes: bytesProcessed)
                 } else {
                     self.state = .idle
@@ -159,12 +162,12 @@ public class AppleOtgIngestManager: ObservableObject {
     }
 
     public func cancelImport() {
-        isCancelledFlag.store(true, ordering: .relaxed)
+        isCancelledFlag.withLock { $0 = true }
         state = .idle
     }
 
     public func reset() {
-        isCancelledFlag.store(true, ordering: .relaxed)
+        isCancelledFlag.withLock { $0 = true }
         state = .idle
     }
 }

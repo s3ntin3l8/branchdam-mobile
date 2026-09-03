@@ -113,11 +113,13 @@ final class AppleOtgIngestManagerTests: XCTestCase {
 
     /// T2-9: cancelling from the main thread while a background
     /// `confirmImport` is mid-copy must actually halt the copy loop.
-    /// Before the `isCancelled` flag was wrapped in `Atomic<Bool>`,
-    /// the Swift 6 strict concurrency checker flagged the cross-thread
-    /// read/write as a data race, and on platforms where Bool is not
-    /// naturally atomic the cancel could silently fail to land before
-    /// the next loop iteration.
+    /// Before the `isCancelled` flag was wrapped in
+    /// `OSAllocatedUnfairLock<Bool>` (deployment target is iOS 17,
+    /// below the `Synchronization` floor of iOS 18), the Swift 6
+    /// strict concurrency checker flagged the cross-thread read/write
+    /// as a data race, and on platforms where Bool is not naturally
+    /// atomic the cancel could silently fail to land before the next
+    /// loop iteration.
     func testCancelImportHonoredByBackgroundCopy() {
         let folder = tempDir.appendingPathComponent("DCIM/100EOSR5", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -202,9 +204,9 @@ final class AppleOtgIngestManagerTests: XCTestCase {
     /// T2-9: hammer the manager with 1000 concurrent cancel calls
     /// interleaved with state reads on a background queue. The Swift 6
     /// strict concurrency checker flagged the unguarded `isCancelled`
-    /// `var` as a data race; wrapping it in `Atomic<Bool>` removes the
-    /// race and the runtime stress test asserts no iteration crashes,
-    /// deadlocks, or produces a torn state read.
+    /// `var` as a data race; wrapping it in `OSAllocatedUnfairLock<Bool>`
+    /// removes the race and the runtime stress test asserts no
+    /// iteration crashes, deadlocks, or produces a torn state read.
     func testConcurrentCancelAndStateUpdateStress() {
         let manager = AppleOtgIngestManager()
         let iterations = 1000
