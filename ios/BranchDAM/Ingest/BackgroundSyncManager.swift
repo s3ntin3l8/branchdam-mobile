@@ -4,14 +4,19 @@ import BackgroundTasks
 public class BackgroundSyncManager {
     public static let shared = BackgroundSyncManager()
     public static let syncTaskId = "com.branchdam.mobile.sync"
-    public static let keySyncOnMobileData = "branchdam_sync_on_mobile_data"
+    /// Backwards-compatible alias of
+    /// [BranchDamKeys.syncOnMobileData.rawValue] retained for any
+    /// external callers that depended on the previous static-let
+    /// shape. New code should reference `BranchDamKeys.syncOnMobileData`
+    /// directly.
+    public static var keySyncOnMobileData: String { BranchDamKeys.syncOnMobileData.rawValue }
 
     public var syncOnMobileData: Bool {
         get {
-            return UserDefaults.standard.bool(forKey: Self.keySyncOnMobileData)
+            return UserDefaults.standard.bool(forKey: BranchDamKeys.syncOnMobileData.rawValue)
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: Self.keySyncOnMobileData)
+            UserDefaults.standard.set(newValue, forKey: BranchDamKeys.syncOnMobileData.rawValue)
             setupUrlSession()
         }
     }

@@ -11,6 +11,8 @@
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* BranchDamCoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* BranchDamCoreBridge.swift */; };
 		A1000019 /* AppleKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000019 /* AppleKeychain.swift */; };
+		A1000022 /* BranchDamKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* BranchDamKeys.swift */; };
+		A1000113 /* BranchDamKeysTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000113 /* BranchDamKeysTests.swift */; };
 		A1000004 /* PhotoKitObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* PhotoKitObserver.swift */; };
 		A1000005 /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* BackgroundSyncManager.swift */; };
 		A1000006 /* ApplePairDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* ApplePairDetector.swift */; };
@@ -103,6 +105,8 @@
 		A2000017 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A2000018 /* PhotoAuthorizationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAuthorizationBanner.swift; sourceTree = "<group>"; };
 		A2000019 /* AppleKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleKeychain.swift; sourceTree = "<group>"; };
+		A2000022 /* BranchDamKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDamKeys.swift; sourceTree = "<group>"; };
+		A2000113 /* BranchDamKeysTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDamKeysTests.swift; sourceTree = "<group>"; };
 		A2000020 /* branchdam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = branchdam.xcframework; path = branchdam.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
@@ -177,6 +181,7 @@
 			children = (
 				A2000003 /* BranchDamCoreBridge.swift */,
 				A2000019 /* AppleKeychain.swift */,
+				A2000022 /* BranchDamKeys.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -264,6 +269,7 @@
 				A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */,
 				A2000111 /* PhotoKitObserverSerialTests.swift */,
 				A2000112 /* AppleKeychainTests.swift */,
+				A2000113 /* BranchDamKeysTests.swift */,
 			);
 			path = BranchDAMTests;
 			sourceTree = "<group>";
@@ -368,6 +374,7 @@
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* BranchDamCoreBridge.swift in Sources */,
 				A1000019 /* AppleKeychain.swift in Sources */,
+				A1000022 /* BranchDamKeys.swift in Sources */,
 				A1000004 /* PhotoKitObserver.swift in Sources */,
 				A1000005 /* BackgroundSyncManager.swift in Sources */,
 				A1000006 /* ApplePairDetector.swift in Sources */,
@@ -407,6 +414,7 @@
 				A100010D /* PhotoAuthorizationBannerTests.swift in Sources */,
 				A100010E /* QrPairingViewTests.swift in Sources */,
 				A1000112 /* AppleKeychainTests.swift in Sources */,
+				A1000113 /* BranchDamKeysTests.swift in Sources */,
 				A100010F /* BackgroundSyncManagerCancelTests.swift in Sources */,
 				A1000110 /* AppleSafeSpaceManagerEligibleTests.swift in Sources */,
 				A1000111 /* PhotoKitObserverSerialTests.swift in Sources */,

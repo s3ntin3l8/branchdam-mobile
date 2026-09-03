@@ -4,7 +4,12 @@ import UserNotifications
 public class AppleCameraRollImportNotifier {
     public static let shared = AppleCameraRollImportNotifier()
 
-    public static let keyAutoImportEnabled = "branchdam_auto_import_camera_roll"
+    /// Backwards-compatible alias of
+    /// [BranchDamKeys.autoImportCameraRoll.rawValue] retained for
+    /// any external callers (and tests) that depended on the
+    /// previous static-let shape. New code should reference
+    /// `BranchDamKeys.autoImportCameraRoll` directly.
+    public static var keyAutoImportEnabled: String { BranchDamKeys.autoImportCameraRoll.rawValue }
     public static let categoryIdentifier = "com.branchdam.category.cameraRollImport"
 
     public static let actionImportNow = "com.branchdam.action.importNow"
@@ -13,10 +18,10 @@ public class AppleCameraRollImportNotifier {
 
     public var autoImportEnabled: Bool {
         get {
-            return UserDefaults.standard.bool(forKey: Self.keyAutoImportEnabled)
+            return UserDefaults.standard.bool(forKey: BranchDamKeys.autoImportCameraRoll.rawValue)
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: Self.keyAutoImportEnabled)
+            UserDefaults.standard.set(newValue, forKey: BranchDamKeys.autoImportCameraRoll.rawValue)
         }
     }
 
