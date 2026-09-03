@@ -41,7 +41,7 @@ object EncryptedPrefs {
      * The encrypted prefs file that holds apiKey, serverUrl, and
      * agentId. Non-sensitive fields (sync_on_mobile_data,
      * auto_import_camera_roll) live in a separate plain
-     * SharedPreferences file via SyncScheduler.PREFS_NAME.
+     * SharedPreferences file via [com.branchdam.mobile.BranchDamKeys.PREFS_NAME].
      */
     const val SECURE_PREFS_NAME = "branchdam_secure_prefs"
 

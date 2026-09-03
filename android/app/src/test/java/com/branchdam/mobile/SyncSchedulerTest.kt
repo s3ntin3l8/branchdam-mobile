@@ -12,7 +12,7 @@ class SyncSchedulerTest {
         assertEquals("branchdam_periodic_sync", SyncScheduler.PERIODIC_WORK_TAG)
         assertEquals("branchdam_immediate_sync", SyncScheduler.IMMEDIATE_WORK_TAG)
         assertEquals("branchdam_prefs", SyncScheduler.PREFS_NAME)
-        assertEquals("sync_on_mobile_data", SyncScheduler.KEY_SYNC_ON_MOBILE_DATA)
+        assertEquals("branchdam_sync_on_mobile_data", SyncScheduler.KEY_SYNC_ON_MOBILE_DATA)
     }
 
     @Test

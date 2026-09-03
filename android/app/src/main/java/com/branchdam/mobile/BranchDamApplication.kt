@@ -16,6 +16,13 @@ class BranchDamApplication : Application() {
         super.onCreate()
         instance = this
 
+        // T2-10: copy any pre-T2-10 preference keys (sync_on_mobile_data,
+        // auto_import_camera_roll) into the canonical branchdam_-prefixed
+        // keys before any other component reads them. The migration is
+        // silent and idempotent — see PrefKeyMigration.
+        val nonSecretPrefs = getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+        PrefKeyMigration.migrate(nonSecretPrefs)
+
         // Initialize the gomobile-bound Go engine. The holder falls back
         // to mock values when the AAR is not on the classpath, so
         // unit tests that run without the native binary still work.
