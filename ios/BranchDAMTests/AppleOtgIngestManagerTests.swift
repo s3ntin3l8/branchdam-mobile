@@ -110,4 +110,122 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         manager.cancelImport()
         XCTAssertEqual(manager.state, .idle)
     }
+
+    /// T2-9: cancelling from the main thread while a background
+    /// `confirmImport` is mid-copy must actually halt the copy loop.
+    /// Before the `isCancelled` flag was wrapped in `Atomic<Bool>`,
+    /// the Swift 6 strict concurrency checker flagged the cross-thread
+    /// read/write as a data race, and on platforms where Bool is not
+    /// naturally atomic the cancel could silently fail to land before
+    /// the next loop iteration.
+    func testCancelImportHonoredByBackgroundCopy() {
+        let folder = tempDir.appendingPathComponent("DCIM/100EOSR5", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        var candidates: [AppleOtgCandidate] = []
+        for index in 0..<120 {
+            let fileName = "IMG_\(String(format: "%04d", index)).CR3"
+            let file = folder.appendingPathComponent(fileName)
+            try Data(repeating: 0x42, count: 8192).write(to: file)
+            candidates.append(
+                AppleOtgCandidate(
+                    url: file,
+                    relativePath: "DCIM/100EOSR5/\(fileName)",
+                    fileName: fileName,
+                    sizeBytes: 8192,
+                    lastModifiedUnix: 1700000000,
+                    isRaw: true,
+                    isVideo: false
+                )
+            )
+        }
+
+        let scanResult = AppleOtgScanResult(deviceLabel: "CANON R5", rootUrl: tempDir, candidates: candidates)
+        let manager = AppleOtgIngestManager()
+
+        let observedLock = NSLock()
+        var observedStates: [AppleOtgState] = []
+        var didCancel = false
+
+        // Cancel the moment the loop publishes its first `.ingesting`
+        // state — that lands squarely mid-flight regardless of how
+        // fast the host disk is.
+        let cancellable = manager.$state.sink { state in
+            observedLock.lock()
+            observedStates.append(state)
+            let sawIngesting = !didCancel && {
+                if case .ingesting = state { return true }
+                return false
+            }()
+            observedLock.unlock()
+            if sawIngesting {
+                observedLock.lock()
+                didCancel = true
+                observedLock.unlock()
+                DispatchQueue.main.async { manager.cancelImport() }
+            }
+        }
+
+        manager.confirmImport(scanResult: scanResult, stageDirectory: stageDir)
+
+        let idleExpectation = expectation(description: "Manager reaches idle after cancel")
+        let poller = DispatchQueue(label: "test.otg.cancel.poller")
+        poller.async {
+            let deadline = Date().addingTimeInterval(5.0)
+            while Date() < deadline {
+                observedLock.lock()
+                let snapshot = observedStates
+                observedLock.unlock()
+                if snapshot.contains(where: { if case .idle = $0 { return true } else { return false } }) {
+                    idleExpectation.fulfill()
+                    return
+                }
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+        }
+        wait(for: [idleExpectation], timeout: 5.0)
+        cancellable.cancel()
+
+        observedLock.lock()
+        let snapshot = observedStates
+        let didCancelFlag = didCancel
+        observedLock.unlock()
+
+        XCTAssertTrue(didCancelFlag, "Test should have observed .ingesting and issued cancel mid-flight")
+        XCTAssertFalse(
+            snapshot.contains(where: { if case .completed = $0 { return true } else { return false } }),
+            "Cancel should have prevented .completed state, but .completed was observed"
+        )
+        XCTAssertEqual(manager.state, .idle, "Final state should be .idle after cancel")
+    }
+
+    /// T2-9: hammer the manager with 1000 concurrent cancel calls
+    /// interleaved with state reads on a background queue. The Swift 6
+    /// strict concurrency checker flagged the unguarded `isCancelled`
+    /// `var` as a data race; wrapping it in `Atomic<Bool>` removes the
+    /// race and the runtime stress test asserts no iteration crashes,
+    /// deadlocks, or produces a torn state read.
+    func testConcurrentCancelAndStateUpdateStress() {
+        let manager = AppleOtgIngestManager()
+        let iterations = 1000
+        let bgQueue = DispatchQueue(label: "test.otg.stress.bg", attributes: .concurrent)
+        let group = DispatchGroup()
+
+        for _ in 0..<iterations {
+            group.enter()
+            bgQueue.async {
+                _ = manager.state
+                group.leave()
+            }
+            group.enter()
+            DispatchQueue.main.async {
+                manager.cancelImport()
+                group.leave()
+            }
+        }
+
+        let waitResult = group.wait(timeout: .now() + 30.0)
+        XCTAssertEqual(waitResult, .success, "Stress test timed out — possible deadlock or starvation")
+        XCTAssertEqual(manager.state, .idle, "Final state should be .idle after 1000 cancel iterations")
+    }
 }
