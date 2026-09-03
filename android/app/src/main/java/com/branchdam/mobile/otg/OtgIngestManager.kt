@@ -65,11 +65,38 @@ sealed class OtgState {
  */
 typealias OtgHashObserver = (candidate: OtgMediaCandidate, freshHashHex: String, priorHashHex: String) -> Unit
 
+/**
+ * Hash-source abstraction used by [OtgIngestManager] for the post-copy
+ * BLAKE3 verify step. The first return value is the freshly-computed
+ * BLAKE3-256 hex of the staged file, the second is the prior hash for
+ * the same `localID` already recorded in the queue (empty string if
+ * this is the first time we've seen the file). Returning `null` for the
+ * fresh hash means "engine unavailable" — the verifier falls through
+ * to the success path and the upload side will recompute the canonical
+ * hash later.
+ *
+ * Production wiring is [DefaultOtgHashProvider], which delegates to
+ * the gomobile-bound `EngineHolder`. Tests inject a custom provider to
+ * exercise the prior/fresh mismatch case without loading the AAR.
+ */
+fun interface OtgHashProvider {
+    fun lookup(localID: String, stagedFile: File): Pair<String?, String>
+}
+
+class DefaultOtgHashProvider : OtgHashProvider {
+    override fun lookup(localID: String, stagedFile: File): Pair<String?, String> {
+        val fresh = EngineHolder.computeBlake3Hex(stagedFile.absolutePath)
+        val prior = EngineHolder.lookupBlake3ForLocalID(localID)
+        return Pair(fresh, prior)
+    }
+}
+
 class OtgIngestManager(
     private val context: Context? = null,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val hashObserver: OtgHashObserver? = null,
+    private val hashProvider: OtgHashProvider = DefaultOtgHashProvider(),
 ) {
     private val _state = MutableStateFlow<OtgState>(OtgState.Idle)
     val state: StateFlow<OtgState> = _state.asStateFlow()
@@ -278,21 +305,35 @@ class OtgIngestManager(
                 )
             }
 
-            val priorHash = EngineHolder.lookupBlake3ForLocalID(candidate.uri)
-            val freshHash = EngineHolder.computeBlake3Hex(targetFile.absolutePath)
+            val (freshHash, priorHash) = hashProvider.lookup(candidate.uri, targetFile)
             if (freshHash == null) {
                 // Engine unavailable / hash skipped — fall through; the
                 // upload side will compute the canonical hash later.
                 Log.w(TAG, "BLAKE3 verify skipped for ${candidate.fileName}: engine unavailable")
-            } else {
-                hashObserver?.invoke(candidate, freshHash, priorHash)
-                if (priorHash.isNotEmpty() && priorHash != freshHash) {
-                    Log.w(
-                        TAG,
-                        "BLAKE3 mismatch for ${candidate.fileName} (localID=${candidate.uri}): " +
-                            "prior=$priorHash fresh=$freshHash — SD card may be returning inconsistent bytes"
-                    )
-                }
+                return StageResult.Success(targetFile)
+            }
+
+            hashObserver?.invoke(candidate, freshHash, priorHash)
+
+            if (priorHash.isNotEmpty() && priorHash != freshHash) {
+                Log.w(
+                    TAG,
+                    "BLAKE3 mismatch for ${candidate.fileName} (localID=${candidate.uri}): " +
+                        "prior=$priorHash fresh=$freshHash — SD card may be returning inconsistent bytes"
+                )
+                // T2-7b: the audit's whole point was that a corrupt SD
+                // card returning inconsistent bytes for the same file
+                // must not silently proceed to the uploader. Delete the
+                // staged copy and surface a per-file error so the
+                // confirmation dialog can show the user which file was
+                // skipped and why. (PR #91 only logged the mismatch —
+                // the staged file was still handed to the uploader.)
+                targetFile.delete()
+                return StageResult.Failure(
+                    "BLAKE3 mismatch: $candidate.fileName re-hashed to $freshHash " +
+                        "but the queue has $priorHash for the same localID — " +
+                        "SD card may be returning inconsistent bytes"
+                )
             }
 
             return StageResult.Success(targetFile)
