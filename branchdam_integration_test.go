@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
@@ -327,6 +328,69 @@ func TestEnqueueDeleteEvent_HappyPath(t *testing.T) {
 	eventUUID, err := e.EnqueueDeleteEvent("ph://asset-deleted")
 	if err != nil {
 		t.Fatalf("EnqueueDeleteEvent: %v", err)
+	}
+	if eventUUID == "" {
+		t.Fatalf("expected non-empty event UUID")
+	}
+}
+
+// TestEnqueueDeleteEvent_PayloadTooLarge: a localID that produces a
+// payload > queue.MaxEventPayloadBytes must be rejected with
+// INVALID_INPUT (NOT DB_ERROR — the queue never saw the row, so the
+// shell should fix the input, not retry on a transient DB failure).
+func TestEnqueueDeleteEvent_PayloadTooLarge(t *testing.T) {
+	e, _ := newTestEngineWithServer(t)
+	// `{"localId":<id>}` is 13 bytes of overhead + len(id). Need
+	// >65536 to exceed the cap; 70000 leaves comfortable margin.
+	bigLocalID := strings.Repeat("a", 70000)
+	_, err := e.EnqueueDeleteEvent(bigLocalID)
+	if err == nil {
+		t.Fatalf("expected error for oversized delete event payload")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("error type = %T, want *Error", err)
+	}
+	if be.Code != "INVALID_INPUT" {
+		t.Fatalf("Code = %q, want INVALID_INPUT", be.Code)
+	}
+}
+
+// TestEnqueueLineageEvent_PayloadTooLarge: input strings whose
+// combined serialised payload exceeds queue.MaxEventPayloadBytes
+// must be rejected with INVALID_INPUT (NOT DB_ERROR).
+func TestEnqueueLineageEvent_PayloadTooLarge(t *testing.T) {
+	e, _ := newTestEngineWithServer(t)
+	// Lineage payload template is ~100 bytes of overhead; 70000 in
+	// one field alone blows past the 64 KiB cap.
+	bigParent := strings.Repeat("a", 70000)
+	_, err := e.EnqueueLineageEvent(
+		bigParent, "ph://child", "DERIVED_FROM", "android_camera_pair", ConfidenceExact,
+	)
+	if err == nil {
+		t.Fatalf("expected error for oversized lineage event payload")
+	}
+	be, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("error type = %T, want *Error", err)
+	}
+	if be.Code != "INVALID_INPUT" {
+		t.Fatalf("Code = %q, want INVALID_INPUT", be.Code)
+	}
+}
+
+// TestEnqueueLineageEvent_NormalPayload: a normal-sized (~1 KB)
+// lineage event writes successfully. Pins the acceptance criterion
+// that real callers can still enqueue events at this layer.
+func TestEnqueueLineageEvent_NormalPayload(t *testing.T) {
+	e, _ := newTestEngineWithServer(t)
+	// 1 KiB parent ID — well under the 64 KiB cap.
+	parentID := strings.Repeat("a", 1024)
+	eventUUID, err := e.EnqueueLineageEvent(
+		parentID, "ph://child", "DERIVED_FROM", "android_camera_pair", ConfidenceExact,
+	)
+	if err != nil {
+		t.Fatalf("EnqueueLineageEvent with 1 KiB parent: %v", err)
 	}
 	if eventUUID == "" {
 		t.Fatalf("expected non-empty event UUID")

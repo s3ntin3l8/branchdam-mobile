@@ -321,6 +321,12 @@ const (
 
 // EnqueueLineageEvent enqueues an EVENT_EDGE_ATTACHED with the given
 // relationship. Returns the assigned event UUID.
+//
+// The serialised payload is capped at queue.MaxEventPayloadBytes
+// (64 KiB); oversized input is rejected with INVALID_INPUT rather
+// than DB_ERROR — the queue never saw the row, so the shell must fix
+// the input, not retry on a transient DB failure. See the package
+// doc on Engine for the rationale.
 func (e *Engine) EnqueueLineageEvent(
 	parentLocalID, childLocalID, relationshipType, resolver string, confidence Confidence,
 ) (string, error) {
@@ -355,12 +361,20 @@ func (e *Engine) EnqueueLineageEvent(
 
 	eventUUID, err := e.queue.EnqueueEvent("EVENT_EDGE_ATTACHED", payload)
 	if err != nil {
+		if errors.Is(err, queue.ErrPayloadTooLarge) {
+			return "", newError(CodeInvalidInput, "enqueue lineage event: %v", err)
+		}
 		return "", newError(CodeDBError, "enqueue lineage event: %v", err)
 	}
 	return eventUUID, nil
 }
 
 // EnqueueDeleteEvent enqueues an EVENT_NODE_DELETED for the given LocalID.
+//
+// The serialised payload is capped at queue.MaxEventPayloadBytes
+// (64 KiB); an oversized localID is rejected with INVALID_INPUT
+// rather than DB_ERROR. See the package doc on Engine for the
+// rationale.
 func (e *Engine) EnqueueDeleteEvent(localID string) (string, error) {
 	if err := e.requireOpen(); err != nil {
 		return "", err
@@ -371,6 +385,9 @@ func (e *Engine) EnqueueDeleteEvent(localID string) (string, error) {
 	payload := fmt.Sprintf(`{"localId":%q}`, localID)
 	eventUUID, err := e.queue.EnqueueEvent("EVENT_NODE_DELETED", payload)
 	if err != nil {
+		if errors.Is(err, queue.ErrPayloadTooLarge) {
+			return "", newError(CodeInvalidInput, "enqueue delete event: %v", err)
+		}
 		return "", newError(CodeDBError, "enqueue delete event: %v", err)
 	}
 	return eventUUID, nil
@@ -642,6 +659,15 @@ func (e *Engine) Options() EngineOptions {
 // SQLite queue, the HTTP client, and the underlying core engine. All
 // exported methods are safe to call from multiple goroutines; the
 // underlying queue is serialized through its own mutex.
+//
+// Event payload size cap: events enqueued through this Engine
+// (EnqueueLineageEvent, EnqueueDeleteEvent) are bounded at
+// queue.MaxEventPayloadBytes (64 KiB). The cap prevents a single
+// misbehaving caller from writing a multi-MB payload to the event
+// queue, which would otherwise lock the queue's single SQLite
+// connection and stall every other writer. Oversized input is
+// rejected with INVALID_INPUT before any row is inserted; do NOT
+// raise the cap or add a code path that bypasses it.
 type Engine struct {
 	opts   EngineOptions
 	queue  *queue.Queue
