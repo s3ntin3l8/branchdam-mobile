@@ -30,8 +30,17 @@ import Security
 /// framework calls are cheap (microseconds for the simulator, a few
 /// hundred microseconds on hardware) so no queue dispatch is needed.
 public final class AppleKeychain {
-    public static let productionService = "com.branchdam.mobile"
-    public static let apiKeyAccount = "branchdam_api_key" // pragma: allowlist secret
+    /// Production keychain service identifier. Aliased to the
+    /// canonical value in [BranchDamKeys.keychainService] so the iOS
+    /// shell and the Android `BranchDamKeys.keychainService` constant
+    /// share a single source of truth.
+    public static var productionService: String { BranchDamKeys.keychainService.rawValue }
+
+    /// Account identifier under which the branchDAM API key is stored
+    /// in the keychain. Aliased to [BranchDamKeys.apiKeyAccount] so
+    /// the iOS shell and the Android `BranchDamKeys.apiKeyAccount`
+    /// constant share a single source of truth.
+    public static var apiKeyAccount: String { BranchDamKeys.apiKeyAccount.rawValue }
 
     /// Default accessibility class: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     /// on physical devices so secrets are available after the first device unlock
@@ -42,7 +51,7 @@ public final class AppleKeychain {
     /// BranchDamCoreBridge. Tests construct their own instances with
     /// a unique service name so parallel / repeated runs don't
     /// collide.
-    public static let shared = AppleKeychain(service: AppleKeychain.productionService)
+    public static let shared = AppleKeychain(service: BranchDamKeys.keychainService.rawValue)
 
     public let service: String
     public let accessibility: CFString
