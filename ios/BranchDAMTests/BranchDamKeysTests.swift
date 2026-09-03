@@ -32,10 +32,15 @@ final class BranchDamKeysTests: XCTestCase {
         )
     }
 
-    func testRawValuesMatchAndroidConstants() {
-        // Cross-platform parity guard. If either side renames a key
-        // without the other, this fails and the migration story falls
-        // apart silently.
+    func testIosRawValuesMatchAndroidMirror() {
+        // Internal-parity guard. The iOS `BranchDamKeys` rawValues and
+        // the `BranchDamKeys.Android` mirror constants are both defined
+        // in the same Swift file, so this test only catches a divergence
+        // *between the two sides of this file* — not a divergence with
+        // the actual Android source tree. The real cross-platform
+        // guarantee is a CI-level check that diffs this file against
+        // android/app/src/main/java/com/branchdam/mobile/BranchDamKeys.kt;
+        // a future PR could add that as a pre-commit hook.
         XCTAssertEqual(
             BranchDamKeys.syncOnMobileData.rawValue,
             BranchDamKeys.Android.SYNC_ON_MOBILE_DATA
@@ -44,6 +49,17 @@ final class BranchDamKeysTests: XCTestCase {
             BranchDamKeys.autoImportCameraRoll.rawValue,
             BranchDamKeys.Android.AUTO_IMPORT_CAMERA_ROLL
         )
+    }
+
+    override func tearDown() {
+        // Reset the BackgroundSyncManager singleton state this suite
+        // mutates, so subsequent tests / repeated runs see the same
+        // `syncOnMobileData == false` they started with. Also wipes the
+        // canonical UserDefaults key the round-trip test writes through
+        // so it doesn't leak between tests.
+        BackgroundSyncManager.shared.syncOnMobileData = false
+        UserDefaults.standard.removeObject(forKey: BranchDamKeys.syncOnMobileData.rawValue)
+        super.tearDown()
     }
 
     func testUserDefaultsRoundTripsThroughCanonicalKey() {
