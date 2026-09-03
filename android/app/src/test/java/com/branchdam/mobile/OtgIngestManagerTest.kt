@@ -510,9 +510,12 @@ class OtgIngestManagerTest {
             // 64-hex BLAKE3-shaped placeholders — not real hashes, just
             // distinct 64-character strings so the prior/fresh comparison
             // fails deterministically. Real BLAKE3-256 hex is 64 chars.
+            // Pair's constructor takes positional `first` and `second`
+            // (the `fresh` / `prior` names live at the call site for
+            // readability, not in stdlib Pair itself).
             Pair(
-                fresh = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                prior = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                first = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                second = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             ) // pragma: allowlist secret
         }
 
@@ -590,10 +593,11 @@ class OtgIngestManagerTest {
         val firstTimeProvider = OtgHashProvider { _, _ ->
             // 64-hex BLAKE3-shaped placeholder — not a real hash, just a
             // non-empty fresh value with an empty prior so the first-time
-            // localID path takes the success branch.
+            // localID path takes the success branch. Pair's constructor
+            // takes positional `first` / `second`.
             Pair(
-                fresh = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                prior = "",
+                first = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                second = "",
             ) // pragma: allowlist secret
         }
 
