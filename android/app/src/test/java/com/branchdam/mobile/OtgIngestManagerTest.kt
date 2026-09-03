@@ -507,9 +507,13 @@ class OtgIngestManagerTest {
         val stageDir = tempFolder.newFolder("otg_stage_mismatch")
 
         val mismatchingProvider = OtgHashProvider { _, _ ->
-            // 64-hex BLAKE3 placeholders — not real hashes, just
-            // distinct strings so the prior/fresh comparison fails.
-            Pair(fresh = "b3_fresh_hash_64_chars_aabbccddeeff00112233445566778899aabbccddeeff00112233", prior = "b3_prior_hash_64_chars_different_00112233445566778899aabbccddeeff00112233445566778899") // pragma: allowlist secret
+            // 64-hex BLAKE3-shaped placeholders — not real hashes, just
+            // distinct 64-character strings so the prior/fresh comparison
+            // fails deterministically. Real BLAKE3-256 hex is 64 chars.
+            Pair(
+                fresh = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                prior = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            ) // pragma: allowlist secret
         }
 
         var hashObserverCalls = 0
@@ -584,8 +588,13 @@ class OtgIngestManagerTest {
         val stageDir = tempFolder.newFolder("otg_stage_first_time")
 
         val firstTimeProvider = OtgHashProvider { _, _ ->
-            // 64-hex BLAKE3 placeholder — not a real hash.
-            Pair(fresh = "any_fresh_hash_64_chars_long_enough_to_be_a_real_blake3_hex_value_padding", prior = "") // pragma: allowlist secret
+            // 64-hex BLAKE3-shaped placeholder — not a real hash, just a
+            // non-empty fresh value with an empty prior so the first-time
+            // localID path takes the success branch.
+            Pair(
+                fresh = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                prior = "",
+            ) // pragma: allowlist secret
         }
 
         val manager = OtgIngestManager(
