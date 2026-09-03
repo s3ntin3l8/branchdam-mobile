@@ -229,8 +229,12 @@ final class AppleOtgIngestManagerTests: XCTestCase {
             }
         }
 
-        let waitResult = group.wait(timeout: .now() + 30.0)
-        XCTAssertEqual(waitResult, .success, "Stress test timed out — possible deadlock or starvation")
+        let exp = expectation(description: "Stress test completes")
+        group.notify(queue: .main) {
+            exp.fulfill()
+        }
+
+        wait(for: [exp], timeout: 10.0)
         XCTAssertEqual(manager.state, .idle, "Final state should be .idle after 1000 cancel iterations")
     }
 }
