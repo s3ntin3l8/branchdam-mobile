@@ -120,7 +120,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
     /// as a data race, and on platforms where Bool is not naturally
     /// atomic the cancel could silently fail to land before the next
     /// loop iteration.
-    func testCancelImportHonoredByBackgroundCopy() {
+    func testCancelImportHonoredByBackgroundCopy() throws {
         let folder = tempDir.appendingPathComponent("DCIM/100EOSR5", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
