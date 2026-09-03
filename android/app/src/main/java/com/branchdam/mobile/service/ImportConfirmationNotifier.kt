@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.receiver.ImportConfirmationReceiver
@@ -17,7 +18,7 @@ object ImportConfirmationNotifier {
 
     const val CHANNEL_ID = "branchdam_import_channel"
     const val NOTIFICATION_ID = 4101
-    const val KEY_AUTO_IMPORT = "auto_import_camera_roll"
+    const val KEY_AUTO_IMPORT = BranchDamKeys.AUTO_IMPORT_CAMERA_ROLL
 
     const val ACTION_IMPORT_NOW = "com.branchdam.mobile.action.IMPORT_NOW"
     const val ACTION_LATER = "com.branchdam.mobile.action.LATER"
