@@ -1,6 +1,6 @@
 package com.branchdam.mobile.lineage
 
-import com.branchdam.mobile.NativeBridge
+import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
 import kotlin.math.abs
 
@@ -60,9 +60,9 @@ object PairDetector {
     fun registerPairLineage(pairs: List<LineagePair>): Int {
         var count = 0
         for (pair in pairs) {
-            NativeBridge.enqueueLineageEvent(
-                parentUuid = pair.masterRaw.contentUri,
-                childUuid = pair.derivativeJpeg.contentUri,
+            EngineHolder.enqueueLineageEvent(
+                parentLocalID = pair.masterRaw.contentUri,
+                childLocalID = pair.derivativeJpeg.contentUri,
                 relationshipType = "DERIVED_FROM",
                 resolver = pair.resolver,
                 confidence = pair.confidence

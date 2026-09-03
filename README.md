@@ -47,20 +47,43 @@ Prerequisites: JDK 21, Android SDK Platform 35, Android NDK (for native Go JNI l
 git clone https://github.com/s3ntin3l8/branchdam-mobile.git
 cd branchdam-mobile
 
-# Cross-compile Go core C-shared library for Android arm64
-cd core
-CGO_ENABLED=1 GOOS=android GOARCH=arm64 \
-  CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang \
-  go build -buildmode=c-shared -o ../android/app/src/main/jniLibs/arm64-v8a/libbranchdamcore.so ./bindings
-cd ..
+# 1. Build the gomobile-bound Go engine as an Android AAR
+./scripts/build-mobile.sh --android-only
+# Produces: android/app/libs/branchdam.aar (ABIs: armeabi-v7a, arm64-v8a, x86, x86_64)
 
-# Assemble release APK and App Bundle (AAB)
+# 2. Assemble release APK and App Bundle (AAB)
 cd android
 ./gradlew assembleRelease bundleRelease
 
-# Install directly to connected device via adb (local builds output app-release.apk)
+# 3. Install directly to connected device via adb
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
+
+The legacy CGO recipe (cross-compile `core/bindings` to `libbranchdamcore.so`) is no longer the supported build path. Use the gomobile flow above. The AAR is automatically wired into `android/app/build.gradle.kts` via a file-tree dependency, conditional on the file's presence so the project still builds before the AAR is produced (e.g. for unit-test runs on CI without NDK).
+
+---
+
+### Mobile Library Build (gomobile)
+
+The branchdam engine ships as a single gomobile-bound Go package at the repository root (`branchdam.go`, package name `branchdam`). gomobile produces two artifacts from it:
+
+| Target | Output | Consumer |
+|---|---|---|
+| Android | `android/app/libs/branchdam.aar` | Kotlin: `io.branchdam.core.Engine` |
+| iOS | `ios/Frameworks/branchdam.xcframework` | Swift: `import branchdam` |
+
+To build both at once:
+
+```bash
+make mobile-build
+# or, individually:
+make mobile-build-android   # AAR (requires ANDROID_HOME + ANDROID_NDK_HOME + javac)
+make mobile-build-ios       # xcframework (requires macOS + Xcode)
+```
+
+`scripts/build-mobile.sh` is the single source of truth. It auto-installs `gomobile` + `gobind` into `$GOPATH/bin` on first run, asserts the required toolchain is available for the target you ask for, and prints the output path on success.
+
+CI runs `make mobile-build` for the target platform as part of `ci.yml` (the `test-android` and `test-ios` jobs build the artifact before running the shell's unit tests). An optional `.github/workflows/mobile-bind.yml` workflow builds both targets and uploads the artifacts; opt in by adding the `mobile-bind` label to a PR.
 
 ---
 
@@ -116,7 +139,7 @@ To pair the mobile app with your branchDAM server:
   - `X-Blake3-Hash`: BLAKE3 checksum for integrity and archive verification.
   - `X-Fast-Hash`: Streaming fast hash (xxHash) for duplicate detection.
   - `X-Capture-Timestamp`: Capture time in Unix epoch seconds.
-  - `X-API-Key` / `Authorization`: Companion authentication credential.
+  - `X-API-Key`: Companion authentication credential (single header; `Authorization` is reserved for future short-lived bearer tokens and is not sent today — T2-6).
 - **Safe Space Deletion Model**:
   Assets are only marked eligible for local deletion after the server responds with HTTP `200 OK` / `201 Created` and the BLAKE3 checksum is verified on the master storage tier.
 

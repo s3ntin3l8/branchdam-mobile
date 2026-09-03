@@ -12,6 +12,7 @@ local.properties
 *.ap_
 *.dex
 *.class
+*.jar
 *.keystore
 *.jks
 *.key
@@ -79,3 +80,13 @@ tmp/
 !.env.example
 *.pem
 *.key
+
+# Mobile library build artifacts (gomobile output)
+*.aar
+*.xcframework/
+
+# Superpowers working notes (audits, specs, plans)
+docs/superpowers/
+
+# Agent worktrees
+.worktrees/

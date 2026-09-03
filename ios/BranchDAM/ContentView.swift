@@ -1,7 +1,9 @@
 import SwiftUI
+import Photos
 
 public struct ContentView: View {
     @ObservedObject private var otgManager = AppleOtgIngestManager.shared
+    @State private var authorizationStatus: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
 
     public init() {}
 
@@ -22,6 +24,16 @@ public struct ContentView: View {
                     .tabItem {
                         Label("Settings", systemImage: "gearshape")
                     }
+            }
+
+            // E.5: Photo authorization banner when access is not yet granted.
+            // Shows for .notDetermined (Set Up Later path), .denied, and
+            // .restricted so users always have an in-app path to enable access.
+            if authorizationStatus == .notDetermined || authorizationStatus == .denied || authorizationStatus == .restricted {
+                VStack {
+                    PhotoAuthorizationBanner(status: authorizationStatus)
+                    Spacer()
+                }
             }
 
             if case .awaitingConfirmation(let scanResult) = otgManager.state {
@@ -62,6 +74,14 @@ public struct ContentView: View {
                     errorMessage: message,
                     onDismiss: { otgManager.reset() }
                 )
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            // If the user granted access in Settings while the app was
+            // backgrounded, start the engine + observer now.
+            if authorizationStatus == .authorized || authorizationStatus == .limited {
+                BranchDamCoreBridge.shared.startEngineIfNeeded()
             }
         }
     }

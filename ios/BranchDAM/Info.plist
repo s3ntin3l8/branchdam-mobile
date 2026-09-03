@@ -23,5 +23,11 @@
         <string>fetch</string>
         <string>processing</string>
     </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.branchdam.mobile.sync</string>
+    </array>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>branchDAM connects to your self-hosted server to upload lossless photo masters and sync the archive queue.</string>
 </dict>
 </plist>

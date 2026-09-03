@@ -8,12 +8,13 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.branchdam.mobile.BranchDamKeys
 import java.util.concurrent.TimeUnit
 
 object SyncScheduler {
 
-    const val PREFS_NAME = "branchdam_prefs"
-    const val KEY_SYNC_ON_MOBILE_DATA = "sync_on_mobile_data"
+    const val PREFS_NAME = BranchDamKeys.PREFS_NAME
+    const val KEY_SYNC_ON_MOBILE_DATA = BranchDamKeys.SYNC_ON_MOBILE_DATA
     const val PERIODIC_WORK_TAG = "branchdam_periodic_sync"
     const val IMMEDIATE_WORK_TAG = "branchdam_immediate_sync"
 

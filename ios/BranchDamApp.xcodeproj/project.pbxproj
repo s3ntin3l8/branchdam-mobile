@@ -10,6 +10,7 @@
 		A1000001 /* BranchDAMApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* BranchDAMApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* BranchDamCoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* BranchDamCoreBridge.swift */; };
+		A1000019 /* AppleKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000019 /* AppleKeychain.swift */; };
 		A1000004 /* PhotoKitObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* PhotoKitObserver.swift */; };
 		A1000005 /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* BackgroundSyncManager.swift */; };
 		A1000006 /* ApplePairDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* ApplePairDetector.swift */; };
@@ -26,8 +27,8 @@
 		A1000013 /* AppleOtgIngestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* AppleOtgIngestManager.swift */; };
 		A1000014 /* AppleOtgImportConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* AppleOtgImportConfirmationView.swift */; };
 		A1000015 /* AppleCameraRollImportNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* AppleCameraRollImportNotifier.swift */; };
-		A1000020 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
-		A1000021 /* BranchDamCore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1000020 /* branchdam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; };
+		A1000021 /* branchdam.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A1000101 /* ApplePairDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000101 /* ApplePairDetectorTests.swift */; };
 		A1000102 /* AppleSafeSpaceManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000102 /* AppleSafeSpaceManagerTests.swift */; };
 		A1000103 /* AppleTrashSyncObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000103 /* AppleTrashSyncObserverTests.swift */; };
@@ -40,7 +41,16 @@
 		A100010A /* AppleOtgIngestManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010A /* AppleOtgIngestManagerTests.swift */; };
 		A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010B /* AppleCameraRollImportNotifierTests.swift */; };
 		A100010C /* AppleEditCorrelatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010C /* AppleEditCorrelatorTests.swift */; };
-		A1000120 /* BranchDamCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* BranchDamCore.xcframework */; };
+		A100010D /* PhotoAuthorizationBannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010D /* PhotoAuthorizationBannerTests.swift */; };
+		A100010E /* QrPairingViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010E /* QrPairingViewTests.swift */; };
+		A1000112 /* AppleKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000112 /* AppleKeychainTests.swift */; };
+		A100010F /* BackgroundSyncManagerCancelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010F /* BackgroundSyncManagerCancelTests.swift */; };
+		A1000110 /* AppleSafeSpaceManagerEligibleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */; };
+		A1000111 /* PhotoKitObserverSerialTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000111 /* PhotoKitObserverSerialTests.swift */; };
+		A1000016 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000016 /* WelcomeView.swift */; };
+		A1000017 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2000017 /* PrivacyInfo.xcprivacy */; };
+		A1000018 /* PhotoAuthorizationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000018 /* PhotoAuthorizationBanner.swift */; };
+		A1000120 /* branchdam.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000020 /* branchdam.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,7 +70,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				A1000021 /* BranchDamCore.xcframework in Embed Frameworks */,
+				A1000021 /* branchdam.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -85,12 +95,15 @@
 		A200000E /* SafeSpaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeSpaceView.swift; sourceTree = "<group>"; };
 		A200000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A2000011 /* BranchDamCoreHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BranchDamCoreHeader.h; sourceTree = "<group>"; };
 		A2000012 /* AppleOtgCardScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgCardScanner.swift; sourceTree = "<group>"; };
 		A2000013 /* AppleOtgIngestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManager.swift; sourceTree = "<group>"; };
 		A2000014 /* AppleOtgImportConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgImportConfirmationView.swift; sourceTree = "<group>"; };
 		A2000015 /* AppleCameraRollImportNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifier.swift; sourceTree = "<group>"; };
-		A2000020 /* BranchDamCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = BranchDamCore.xcframework; path = BranchDamCore.xcframework; sourceTree = "<group>"; };
+		A2000016 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		A2000017 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A2000018 /* PhotoAuthorizationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAuthorizationBanner.swift; sourceTree = "<group>"; };
+		A2000019 /* AppleKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleKeychain.swift; sourceTree = "<group>"; };
+		A2000020 /* branchdam.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = branchdam.xcframework; path = branchdam.xcframework; sourceTree = "<group>"; };
 		A2000100 /* BranchDAMTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BranchDAMTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000101 /* ApplePairDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePairDetectorTests.swift; sourceTree = "<group>"; };
 		A2000102 /* AppleSafeSpaceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerTests.swift; sourceTree = "<group>"; };
@@ -104,6 +117,12 @@
 		A200010A /* AppleOtgIngestManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManagerTests.swift; sourceTree = "<group>"; };
 		A200010B /* AppleCameraRollImportNotifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCameraRollImportNotifierTests.swift; sourceTree = "<group>"; };
 		A200010C /* AppleEditCorrelatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleEditCorrelatorTests.swift; sourceTree = "<group>"; };
+		A200010D /* PhotoAuthorizationBannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAuthorizationBannerTests.swift; sourceTree = "<group>"; };
+		A200010E /* QrPairingViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrPairingViewTests.swift; sourceTree = "<group>"; };
+		A200010F /* BackgroundSyncManagerCancelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManagerCancelTests.swift; sourceTree = "<group>"; };
+		A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerEligibleTests.swift; sourceTree = "<group>"; };
+		A2000111 /* PhotoKitObserverSerialTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitObserverSerialTests.swift; sourceTree = "<group>"; };
+		A2000112 /* AppleKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleKeychainTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,7 +130,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000020 /* BranchDamCore.xcframework in Frameworks */,
+				A1000020 /* branchdam.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,7 +138,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000120 /* BranchDamCore.xcframework in Frameworks */,
+				A1000120 /* branchdam.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,6 +167,7 @@
 				A4000008 /* UI */,
 				A200000F /* Assets.xcassets */,
 				A2000010 /* Info.plist */,
+				A2000017 /* PrivacyInfo.xcprivacy */,
 			);
 			path = BranchDAM;
 			sourceTree = "<group>";
@@ -155,8 +175,8 @@
 		A4000003 /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				A2000011 /* BranchDamCoreHeader.h */,
 				A2000003 /* BranchDamCoreBridge.swift */,
+				A2000019 /* AppleKeychain.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -209,6 +229,8 @@
 				A200000D /* QrPairingView.swift */,
 				A200000E /* SafeSpaceView.swift */,
 				A2000014 /* AppleOtgImportConfirmationView.swift */,
+				A2000016 /* WelcomeView.swift */,
+				A2000018 /* PhotoAuthorizationBanner.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -216,9 +238,9 @@
 		A4000020 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				A2000020 /* BranchDamCore.xcframework */,
+				A2000020 /* branchdam.xcframework */,
 			);
-			name = Frameworks;
+			path = Frameworks;
 			sourceTree = "<group>";
 		};
 		A4000100 /* BranchDAMTests */ = {
@@ -236,6 +258,12 @@
 				A200010A /* AppleOtgIngestManagerTests.swift */,
 				A200010B /* AppleCameraRollImportNotifierTests.swift */,
 				A200010C /* AppleEditCorrelatorTests.swift */,
+				A200010D /* PhotoAuthorizationBannerTests.swift */,
+				A200010E /* QrPairingViewTests.swift */,
+				A200010F /* BackgroundSyncManagerCancelTests.swift */,
+				A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */,
+				A2000111 /* PhotoKitObserverSerialTests.swift */,
+				A2000112 /* AppleKeychainTests.swift */,
 			);
 			path = BranchDAMTests;
 			sourceTree = "<group>";
@@ -325,6 +353,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A100000F /* Assets.xcassets in Resources */,
+				A1000017 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,6 +367,7 @@
 				A1000001 /* BranchDAMApp.swift in Sources */,
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* BranchDamCoreBridge.swift in Sources */,
+				A1000019 /* AppleKeychain.swift in Sources */,
 				A1000004 /* PhotoKitObserver.swift in Sources */,
 				A1000005 /* BackgroundSyncManager.swift in Sources */,
 				A1000006 /* ApplePairDetector.swift in Sources */,
@@ -353,6 +383,8 @@
 				A1000013 /* AppleOtgIngestManager.swift in Sources */,
 				A1000014 /* AppleOtgImportConfirmationView.swift in Sources */,
 				A1000015 /* AppleCameraRollImportNotifier.swift in Sources */,
+				A1000016 /* WelcomeView.swift in Sources */,
+				A1000018 /* PhotoAuthorizationBanner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -372,6 +404,12 @@
 				A100010A /* AppleOtgIngestManagerTests.swift in Sources */,
 				A100010B /* AppleCameraRollImportNotifierTests.swift in Sources */,
 				A100010C /* AppleEditCorrelatorTests.swift in Sources */,
+				A100010D /* PhotoAuthorizationBannerTests.swift in Sources */,
+				A100010E /* QrPairingViewTests.swift in Sources */,
+				A1000112 /* AppleKeychainTests.swift in Sources */,
+				A100010F /* BackgroundSyncManagerCancelTests.swift in Sources */,
+				A1000110 /* AppleSafeSpaceManagerEligibleTests.swift in Sources */,
+				A1000111 /* PhotoKitObserverSerialTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -452,11 +490,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
@@ -474,7 +512,7 @@
 				PRODUCT_NAME = BranchDAM;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -491,11 +529,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				INFOPLIST_FILE = BranchDAM/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = branchDAM;
@@ -513,7 +551,7 @@
 				PRODUCT_NAME = BranchDAM;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -531,11 +569,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -547,7 +585,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BranchDAM.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BranchDAM";
@@ -566,11 +604,11 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/Frameworks",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/BranchDAM/Core",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -582,7 +620,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.branchdam.mobile.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = BranchDAM/Core/BranchDamCoreHeader.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BranchDAM.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BranchDAM";

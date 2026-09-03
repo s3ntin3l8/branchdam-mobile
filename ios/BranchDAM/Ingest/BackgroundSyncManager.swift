@@ -45,7 +45,7 @@ public class BackgroundSyncManager {
 
         DispatchQueue.global(qos: .userInitiated).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 60, batchSize: 10)
-            completion?(result.uploaded >= 0)
+            completion?(result.uploaded > 0 || result.eventsSent > 0)
         }
     }
 
@@ -70,13 +70,27 @@ public class BackgroundSyncManager {
     }
 
     private func handleBackgroundSync(task: BGProcessingTask) {
+        // E.4: Set the Go engine's cancel flag so in-flight HTTP transfers
+        // stop promptly when iOS reclaims the background time.
+        var completed = false
+        let completionLock = NSLock()
+
         task.expirationHandler = {
-            // Cancel long transfers gracefully on task expiry
+            BranchDamCoreBridge.shared.setCancelFlag()
+            completionLock.lock()
+            defer { completionLock.unlock() }
+            guard !completed else { return }
+            completed = true
+            task.setTaskCompleted(success: false)
         }
 
         DispatchQueue.global(qos: .background).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 120, batchSize: 10)
-            task.setTaskCompleted(success: result.uploaded >= 0)
+            completionLock.lock()
+            defer { completionLock.unlock() }
+            guard !completed else { return }
+            completed = true
+            task.setTaskCompleted(success: true)
             self.scheduleBackgroundSync()
         }
     }

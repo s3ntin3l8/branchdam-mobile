@@ -8,50 +8,84 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun DualPaneScreen(
-    isFolded: Boolean,
+    posture: DevicePosture,
     modifier: Modifier = Modifier
 ) {
-    if (isFolded) {
-        // Cover screen (narrow view): Quick status + Audit queue
-        AuditQueueScreen(
-            candidates = listOf(
-                AuditCandidate("1", "PXL_20260829_001.dng", "PXL_20260829_001.jpg", 1.00, "android_camera_pair")
-            ),
-            onConfirm = {},
-            onReject = {},
-            modifier = modifier
-        )
-    } else {
-        // Unfolded 8" Inner screen: Dual Pane (Left: Library/Reclaim, Right: Lineage Viewer)
-        Row(modifier = modifier.fillMaxSize().padding(16.dp)) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(end = 8.dp)
-            ) {
-                Text("Master Library & Ingest", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = {}) {
-                    Text("Free Up Space (Verified Masters)")
+    when (posture) {
+        is DevicePosture.Flat -> {
+            AuditQueueScreen(
+                candidates = listOf(
+                    AuditCandidate("1", "PXL_20260829_001.dng", "PXL_20260829_001.jpg", 1.00, "android_camera_pair")
+                ),
+                onConfirm = {},
+                onReject = {},
+                modifier = modifier
+            )
+        }
+        is DevicePosture.Tabletop -> {
+            Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                ) {
+                    Text("Lineage Canvas", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {}) {
+                        Text("Free Up Space (Verified Masters)")
+                    }
+                }
+
+                Divider(modifier = Modifier.fillMaxWidth().height(1.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    AuditQueueScreen(
+                        candidates = listOf(
+                            AuditCandidate("1", "PXL_20260829_001.dng", "PXL_20260829_001.jpg", 1.00, "android_camera_pair")
+                        ),
+                        onConfirm = {},
+                        onReject = {}
+                    )
                 }
             }
+        }
+        is DevicePosture.Book -> {
+            Row(modifier = modifier.fillMaxSize().padding(16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(end = 8.dp)
+                ) {
+                    Text("Master Library & Ingest", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {}) {
+                        Text("Free Up Space (Verified Masters)")
+                    }
+                }
 
-            Divider(modifier = Modifier.fillMaxHeight().width(1.dp))
+                Divider(modifier = Modifier.fillMaxHeight().width(1.dp))
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(start = 8.dp)
-            ) {
-                AuditQueueScreen(
-                    candidates = listOf(
-                        AuditCandidate("1", "PXL_20260829_001.dng", "PXL_20260829_001.jpg", 1.00, "android_camera_pair")
-                    ),
-                    onConfirm = {},
-                    onReject = {}
-                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(start = 8.dp)
+                ) {
+                    AuditQueueScreen(
+                        candidates = listOf(
+                            AuditCandidate("1", "PXL_20260829_001.dng", "PXL_20260829_001.jpg", 1.00, "android_camera_pair")
+                        ),
+                        onConfirm = {},
+                        onReject = {}
+                    )
+                }
             }
         }
     }

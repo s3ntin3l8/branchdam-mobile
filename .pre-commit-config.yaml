@@ -19,16 +19,30 @@ repos:
 
   - repo: local
     hooks:
-      - id: gofmt
+      - id: gofmt-core
         name: gofmt (core)
         entry: bash -c 'cd core && test -z "$(gofmt -l $(git ls-files "*.go"))"'
         language: system
         types: [go]
         pass_filenames: false
 
-      - id: go-vet
+      - id: gofmt-root
+        name: "gofmt (root: branchdam package)"
+        entry: bash -c 'test -z "$(gofmt -l branchdam.go branchdam_test.go)"'
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: go-vet-core
         name: go vet (core)
         entry: bash -c 'cd core && go vet ./...'
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: go-vet-root
+        name: "go vet (branchdam package)"
+        entry: bash -c 'go vet ./.'
         language: system
         types: [go]
         pass_filenames: false

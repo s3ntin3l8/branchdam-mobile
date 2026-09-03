@@ -35,7 +35,7 @@ public class AppleQrParser {
 }
 
 public struct QrPairingView: View {
-    @State private var serverUrl: String = "http://192.168.1.100:8080"
+    @State private var serverUrl: String = ""
     @State private var apiKey: String = ""
     @State private var namingTemplate: String = "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
     @State private var syncOnMobileData: Bool = BackgroundSyncManager.shared.syncOnMobileData
@@ -87,17 +87,37 @@ public struct QrPairingView: View {
 
                 Section {
                     Button("Connect to Server") {
+                        guard !serverUrl.isEmpty else { return }
+                        // T2-5: persist the API key into the iOS keychain
+                        // before the bridge reads it. An empty field
+                        // clears any previously-stored key so the user
+                        // can rotate without re-pairing. The cleartext
+                        // string then sits only in this @State field for
+                        // the duration of the form.
+                        if apiKey.isEmpty {
+                            AppleKeychain.shared.apiKey = nil
+                        } else {
+                            AppleKeychain.shared.apiKey = apiKey
+                        }
                         _ = BranchDamCoreBridge.shared.initialize(
-                            dbPath: "/tmp/branchdam.db",
+                            dbPath: defaultDBPath(),
                             baseURL: serverUrl,
-                            apiKey: apiKey,
                             agentID: "iphone-pro"
                         )
                         namingTemplate = BranchDamCoreBridge.shared.fetchNamingTemplate()
                     }
+                    .disabled(serverUrl.isEmpty)
                 }
             }
             .navigationTitle("Server Settings")
         }
+    }
+
+    /// E.9: Documents-directory DB path. Never /tmp.
+    /// Exposed as `internal` so the unit test target can verify
+    /// the path is under the documents directory, not /tmp.
+    func defaultDBPath() -> String {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("branchdam_queue.db").path
     }
 }

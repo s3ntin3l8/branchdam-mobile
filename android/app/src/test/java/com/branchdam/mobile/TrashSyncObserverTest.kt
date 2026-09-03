@@ -25,9 +25,10 @@ class TrashSyncObserverTest {
     @Test
     fun testOffloadSuppressionLogic() {
         val offloadedUri = "content://media/external/images/media/offloaded_1"
-        NativeBridge.setMediaOffloaded(offloadedUri, true)
+        EngineHolder.setMediaOffloaded(offloadedUri, true)
 
-        // NativeBridge stub returns false by default for unknown IDs
-        assertFalse(NativeBridge.isMediaOffloaded("content://media/external/images/media/unknown"))
+        // EngineHolder (without a real engine) returns false by default
+        // for unknown IDs — the mock fallback path.
+        assertFalse(EngineHolder.isMediaOffloaded("content://media/external/images/media/unknown"))
     }
 }

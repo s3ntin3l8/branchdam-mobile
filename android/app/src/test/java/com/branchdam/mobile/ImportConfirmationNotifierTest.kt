@@ -20,7 +20,7 @@ class ImportConfirmationNotifierTest {
     fun testConstants() {
         assertEquals("branchdam_import_channel", ImportConfirmationNotifier.CHANNEL_ID)
         assertEquals(4101, ImportConfirmationNotifier.NOTIFICATION_ID)
-        assertEquals("auto_import_camera_roll", ImportConfirmationNotifier.KEY_AUTO_IMPORT)
+        assertEquals("branchdam_auto_import_camera_roll", ImportConfirmationNotifier.KEY_AUTO_IMPORT)
         assertEquals("com.branchdam.mobile.action.IMPORT_NOW", ImportConfirmationNotifier.ACTION_IMPORT_NOW)
         assertEquals("com.branchdam.mobile.action.LATER", ImportConfirmationNotifier.ACTION_LATER)
         assertEquals("com.branchdam.mobile.action.SKIP", ImportConfirmationNotifier.ACTION_SKIP)
