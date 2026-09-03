@@ -46,26 +46,20 @@ public final class AppleKeychain {
             kSecAttrAccount as String: account,
         ]
 
-        // Try update first; if no item exists yet, fall back to add.
-        // SecItemUpdate returns errSecItemNotFound when the slot is
-        // empty, which is the normal "first write" case.
-        let updateAttributes: [String: Any] = [
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        let updateStatus = SecItemUpdate(query as CFDictionary, updateAttributes as CFDictionary)
-        switch updateStatus {
-        case errSecSuccess:
-            return true
-        case errSecItemNotFound:
-            var addAttributes = query
-            addAttributes[kSecValueData as String] = data
-            addAttributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            let addStatus = SecItemAdd(addAttributes as CFDictionary, nil)
-            return addStatus == errSecSuccess
-        default:
-            return false
-        }
+        // Delete any pre-existing item first. kSecAttrAccessible is
+        // only settable on insert — SecItemUpdate rejects it with
+        // errSecParam (-50) — so the "update-then-add" pattern would
+        // break the very first write because the initial update attempt
+        // would fail before we could fall through to the add branch.
+        // errSecItemNotFound here just means the slot is already empty,
+        // which is the common first-launch case and harmless.
+        _ = SecItemDelete(query as CFDictionary)
+
+        var addAttributes = query
+        addAttributes[kSecValueData as String] = data
+        addAttributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(addAttributes as CFDictionary, nil)
+        return addStatus == errSecSuccess
     }
 
     public func getString(account: String) -> String? {

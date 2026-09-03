@@ -111,7 +111,7 @@ final class AppleKeychainTests: XCTestCase {
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: testService,
+            kSecAttrService as String: testService as String,
             kSecAttrAccount as String: AppleKeychain.apiKeyAccount,
             kSecReturnAttributes as String: true,
             kSecReturnData as String: false,

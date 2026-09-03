@@ -141,9 +141,27 @@ final class BranchDamCoreBridgeTests: XCTestCase {
     /// T2-5: omitting the apiKey argument falls back to the
     /// keychain, then to an empty string. This is the path the
     /// QrPairingView takes after it writes the key to the keychain.
+    ///
+    /// The keychain round-trip assertion catches the pre-fix bug
+    /// where `SecItemUpdate` rejected `kSecAttrAccessible` with
+    /// `errSecParam`, causing every initial keychain write to fail
+    /// silently. Without this assertion the test would still pass —
+    /// the bridge gracefully falls back to "" on a nil keychain read
+    /// — masking the real failure.
     func testInitializeReadsApiKeyFromKeychainWhenArgumentOmitted() {
         AppleKeychain.shared.apiKey = "from-keychain-only" // pragma: allowlist secret
         defer { AppleKeychain.shared.apiKey = nil }
+
+        // Verify the keychain write actually round-tripped before
+        // the bridge reads. If the setter failed silently, the getter
+        // would return nil and the bridge would silently fall back to
+        // an empty apiKey string — the exact regression this test
+        // guards against.
+        XCTAssertEqual(
+            AppleKeychain.shared.apiKey,
+            "from-keychain-only", // pragma: allowlist secret
+            "keychain must retain the set value so the bridge reads it"
+        )
 
         let bridge = BranchDamCoreBridge.shared
         let success = bridge.initialize(
