@@ -1,5 +1,6 @@
 package com.branchdam.mobile
 
+import com.branchdam.mobile.otg.OtgHashProvider
 import com.branchdam.mobile.otg.OtgIngestFileError
 import com.branchdam.mobile.otg.OtgIngestManager
 import com.branchdam.mobile.otg.OtgMediaCandidate
@@ -484,5 +485,132 @@ class OtgIngestManagerTest {
         assertNotNull(completed)
         assertEquals(1, completed.importedCount)
         assertEquals(0, completed.fileErrors.size)
+    }
+
+    /**
+     * T2-7b: when the post-copy BLAKE3 verifier reports a fresh hash
+     * that differs from the prior hash for the same localID, the
+     * staged file must be deleted and the failure surfaced as a
+     * per-file error. Previously (PR #91), the mismatch was only
+     * logged and the staged file proceeded to the uploader.
+     *
+     * The mismatch is forced by injecting an [OtgHashProvider] that
+     * returns a non-empty prior hash and a deliberately-different
+     * fresh hash for any localID.
+     */
+    @Test
+    fun testBlake3MismatchDeletesStagedFileAndSurfacesPerFileError() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_HASH_MISMATCH")
+        val dcim = File(root, "DCIM").apply { mkdirs() }
+        val sourceFile = File(dcim, "ROT.CR3").apply { writeBytes(ByteArray(1024)) }
+
+        val stageDir = tempFolder.newFolder("otg_stage_mismatch")
+
+        val mismatchingProvider = OtgHashProvider { _, _ ->
+            // 64-hex BLAKE3 placeholders — not real hashes, just
+            // distinct strings so the prior/fresh comparison fails.
+            Pair(fresh = "b3_fresh_hash_64_chars_aabbccddeeff00112233445566778899aabbccddeeff00112233", prior = "b3_prior_hash_64_chars_different_00112233445566778899aabbccddeeff00112233445566778899") // pragma: allowlist secret
+        }
+
+        var hashObserverCalls = 0
+        val manager = OtgIngestManager(
+            scope = this,
+            ioDispatcher = testDispatcher,
+            hashObserver = { _, _, _ -> hashObserverCalls++ },
+            hashProvider = mismatchingProvider,
+        )
+
+        val candidate = OtgMediaCandidate(
+            uri = sourceFile.absolutePath,
+            relativePath = "DCIM/ROT.CR3",
+            fileName = "ROT.CR3",
+            sizeBytes = sourceFile.length(),
+            lastModifiedUnix = 1700000000,
+            isRaw = true,
+            isVideo = false
+        )
+        val scanResult = OtgScanResult("SD_CARD", root.absolutePath, listOf(candidate))
+
+        var stagedCount = 0
+        manager.confirmImport(
+            scanResult = scanResult,
+            destinationDir = stageDir,
+            onFileStaged = { _, _ -> stagedCount++ },
+        )
+
+        val state = manager.state.value
+        assertTrue(state is OtgState.Completed)
+        val completed = state as OtgState.Completed
+        assertEquals(
+            "mismatched copy must not count as imported",
+            0,
+            completed.importedCount,
+        )
+        assertEquals("onFileStaged must not be called for a failed copy", 0, stagedCount)
+        assertEquals(1, completed.fileErrors.size)
+        assertEquals(
+            "hashObserver must still fire so future observers can react, but only once per failed file",
+            1,
+            hashObserverCalls,
+        )
+
+        val err = completed.fileErrors.first()
+        assertEquals(candidate, err.candidate)
+        assertTrue(
+            "error message must mention the BLAKE3 mismatch, got: ${err.message}",
+            err.message.contains("BLAKE3 mismatch", ignoreCase = true),
+        )
+
+        val staged = File(stageDir, "DCIM/ROT.CR3")
+        assertFalse(
+            "staged file must be deleted when BLAKE3 verify fails, found ${staged.length()} bytes",
+            staged.exists(),
+        )
+    }
+
+    /**
+     * T2-7b: when the prior hash is empty (first-time localID) the
+     * mismatch branch must not fire — the only legal signal of a
+     * bad SD card is a non-empty prior hash that differs from the
+     * fresh one. This test pins the contract so a future "always
+     * reject" patch can't break the first-ingest case.
+     */
+    @Test
+    fun testFirstTimeLocalIdWithEmptyPriorHashDoesNotTriggerMismatchFailure() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_FIRST_TIME")
+        val dcim = File(root, "DCIM").apply { mkdirs() }
+        val sourceFile = File(dcim, "FIRST.JPG").apply { writeBytes(ByteArray(2048)) }
+
+        val stageDir = tempFolder.newFolder("otg_stage_first_time")
+
+        val firstTimeProvider = OtgHashProvider { _, _ ->
+            // 64-hex BLAKE3 placeholder — not a real hash.
+            Pair(fresh = "any_fresh_hash_64_chars_long_enough_to_be_a_real_blake3_hex_value_padding", prior = "") // pragma: allowlist secret
+        }
+
+        val manager = OtgIngestManager(
+            scope = this,
+            ioDispatcher = testDispatcher,
+            hashProvider = firstTimeProvider,
+        )
+
+        val candidate = OtgMediaCandidate(
+            uri = sourceFile.absolutePath,
+            relativePath = "DCIM/FIRST.JPG",
+            fileName = "FIRST.JPG",
+            sizeBytes = sourceFile.length(),
+            lastModifiedUnix = 1700000000,
+            isRaw = false,
+            isVideo = false
+        )
+        val scanResult = OtgScanResult("SD_CARD", root.absolutePath, listOf(candidate))
+        manager.confirmImport(scanResult = scanResult, destinationDir = stageDir)
+
+        val state = manager.state.value
+        assertTrue(state is OtgState.Completed)
+        val completed = state as OtgState.Completed
+        assertEquals(1, completed.importedCount)
+        assertEquals(0, completed.fileErrors.size)
+        assertTrue(File(stageDir, "DCIM/FIRST.JPG").exists())
     }
 }
