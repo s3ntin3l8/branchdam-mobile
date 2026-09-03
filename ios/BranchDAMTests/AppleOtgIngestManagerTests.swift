@@ -176,11 +176,14 @@ final class AppleOtgIngestManagerTests: XCTestCase {
             let deadline = Date().addingTimeInterval(5.0)
             while Date() < deadline {
                 observedLock.lock()
+                let didCancelNow = didCancel
                 let snapshot = observedStates
                 observedLock.unlock()
-                if snapshot.contains(where: { if case .idle = $0 { return true } else { return false } }) {
-                    idleExpectation.fulfill()
-                    return
+                if didCancelNow, let ingestingIndex = snapshot.firstIndex(where: { if case .ingesting = $0 { return true } else { return false } }) {
+                    if snapshot[ingestingIndex...].contains(where: { if case .idle = $0 { return true } else { return false } }) {
+                        idleExpectation.fulfill()
+                        return
+                    }
                 }
                 Thread.sleep(forTimeInterval: 0.01)
             }
