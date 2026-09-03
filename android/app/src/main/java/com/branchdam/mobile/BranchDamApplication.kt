@@ -2,6 +2,7 @@ package com.branchdam.mobile
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import com.branchdam.mobile.observer.MediaStoreObserver
 import com.branchdam.mobile.service.SyncScheduler
 import java.io.File
@@ -28,7 +29,7 @@ class BranchDamApplication : Application() {
     }
 
     private fun initCoreEngine(dbPath: String) {
-        val config = readEngineConfig(this)
+        val config = readSecureEngineConfig(this)
         val cleartextHosts = if (BuildConfig.DEBUG) {
             UrlValidator.DEV_CLEARTEXT_HOSTS.joinToString(",")
         } else ""
@@ -55,17 +56,36 @@ class BranchDamApplication : Application() {
         const val DEFAULT_AGENT_ID_PREFIX = "pixel-fold-"
 
         /**
-         * Reads the engine configuration from SharedPreferences. The
-         * default server URL is the Android emulator's loopback
-         * (10.0.2.2 maps to the host machine's localhost). The
-         * default agent ID is "pixel-fold-" + Build.MODEL.
+         * Reads the engine configuration from the EncryptedSharedPreferences
+         * produced by [EncryptedPrefs]. Falls back to plain
+         * SharedPreferences if Keystore initialization fails (the
+         * EncryptedPrefs helper logs and returns null in that case) so
+         * the app can still start on a broken device. The default
+         * server URL is the Android emulator's loopback (10.0.2.2 maps
+         * to the host machine's localhost). The default agent ID is
+         * "pixel-fold-" + Build.MODEL.
          *
-         * Extracted from the Application's initCoreEngine so unit
-         * tests can verify the config-reading logic without an
-         * Application context.
+         * T2-5: secrets are stored in EncryptedSharedPreferences so
+         * an `adb backup` does not extract them. See
+         * AndroidManifest.xml's `allowBackup="false"` and
+         * EncryptedPrefs.kt for the encryption story.
          */
-        fun readEngineConfig(context: Context): EngineConfig {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        fun readSecureEngineConfig(context: Context): EngineConfig {
+            val encrypted = EncryptedPrefs.get(context)
+            val prefs = encrypted ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return readEngineConfig(prefs)
+        }
+
+        /**
+         * Pure function that builds an [EngineConfig] from any
+         * [SharedPreferences] instance. Extracted from the
+         * Application's initCoreEngine so unit tests can verify the
+         * config-reading logic without an Application context. T2-5
+         * tests pass a mocked EncryptedSharedPreferences to verify
+         * the secure-storage path; pre-T2-5 tests passed a plain
+         * SharedPreferences.
+         */
+        fun readEngineConfig(prefs: SharedPreferences): EngineConfig {
             val serverUrl = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
             val apiKey = prefs.getString(KEY_API_KEY, "") ?: ""
             val defaultAgentId = DEFAULT_AGENT_ID_PREFIX + android.os.Build.MODEL

@@ -53,18 +53,30 @@ public class BranchDamCoreBridge {
     /// Initialize the Go engine. Returns true on success; surfaces
     /// INVALID_INPUT / DB_ERROR via the returned branchdam.Error code
     /// (logged, not raised, to keep the existing Bool return contract).
+    ///
+    /// T2-5 hardening: the API key is read from the iOS keychain by
+    /// default. The QrPairingView writes the key into the keychain
+    /// before calling initialize, so the cleartext value never leaves
+    /// the user's typing buffer for the bridge. Callers (mostly tests)
+    /// that want to bypass the keychain can pass an explicit
+    /// `apiKey` argument, which takes precedence over the keychain
+    /// read.
     public func initialize(
         dbPath: String,
         baseURL: String,
-        apiKey: String = "",
+        apiKey: String? = nil,
         agentID: String = "iphone-companion",
         version: String = "0.1.0"
     ) -> Bool {
+        // T2-5: resolve the API key from the keychain unless the caller
+        // supplied one explicitly. The QR pairing flow stores into the
+        // keychain and passes nothing here; tests pass an explicit value.
+        let resolvedApiKey = apiKey ?? AppleKeychain.shared.apiKey ?? ""
         #if canImport(branchdam)
         var opts = branchdam.EngineOptions()
         opts.dbPath = dbPath
         opts.baseURL = baseURL
-        opts.apiKey = apiKey
+        opts.apiKey = resolvedApiKey
         opts.agentID = agentID
         opts.clientVersion = version
         opts.httpTimeoutSec = 0
