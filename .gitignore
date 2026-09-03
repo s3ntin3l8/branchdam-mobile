@@ -12,6 +12,7 @@ local.properties
 *.ap_
 *.dex
 *.class
+*.jar
 *.keystore
 *.jks
 *.key

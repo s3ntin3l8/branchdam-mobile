@@ -14,6 +14,11 @@ import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.triage.TrashSyncObserver
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 class MediaStoreObserver(
     private val context: Context,
@@ -29,6 +34,31 @@ class MediaStoreObserver(
      */
     private val processedTrashedUris = mutableSetOf<String>()
 
+    /**
+     * Bounded to [Dispatchers.IO] so the ContentProvider queries and
+     * file I/O in [scanAndEnqueueNewMedia] do not block the
+     * HandlerThread that [onChange] runs on, and never the main
+     * thread. T2-3 lifts the blocking calls out of the observer
+     * callback so the app stays responsive during burst photo
+     * capture and iCloud sync.
+     */
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineName("MediaStoreObserver")
+    )
+
+    /**
+     * Coalesces rapid-fire onChange callbacks into a single scan +
+     * lineage pipeline run after a 500ms quiet window. Burst capture
+     * that emits 50 events in 1 second collapses to one scan 500ms
+     * after the last event, satisfying the T2-3 acceptance criterion
+     * of at most 2 scans per burst.
+     */
+    private val debouncer = Debouncer(
+        scope = scope,
+        windowMs = DEBOUNCE_WINDOW_MS,
+        onFire = ::scanAndEnqueueNewMedia,
+    )
+
     fun register() {
         val resolver = context.contentResolver
         resolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, this)
@@ -37,11 +67,17 @@ class MediaStoreObserver(
 
     fun unregister() {
         context.contentResolver.unregisterContentObserver(this)
+        debouncer.close()
+        scope.cancel()
     }
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
-        scanAndEnqueueNewMedia()
+        // Schedule a debounced scan + lineage run. Non-blocking: the
+        // [debouncer] coalesces bursts of onChange into one scan after
+        // a quiet window so a 50-event burst does not produce 50
+        // ContentProvider rescans.
+        debouncer.trigger()
 
         // D.4: Trash sync — MATCH_ONLY returns all items in the 30-day
         // recycle bin. The in-memory processedTrashedUris set prevents
@@ -54,7 +90,12 @@ class MediaStoreObserver(
         }
     }
 
-    fun scanAndEnqueueNewMedia(): Int {
+    /**
+     * Queries MediaStore for recent images and videos, enqueues new
+     * items via [EngineHolder], and runs the lineage pipeline. Runs on
+     * [Dispatchers.IO] because the caller's [scope] is bounded there.
+     */
+    private suspend fun scanAndEnqueueNewMedia() {
         val minTimestamp = lastScannedTimestamp.get()
         val images = MediaScanner.queryRecentImages(context, minDateTakenUnix = minTimestamp * 1000L)
         val videos = MediaScanner.queryRecentVideos(context, minDateTakenUnix = minTimestamp * 1000L)
@@ -99,8 +140,6 @@ class MediaStoreObserver(
             // be recorded now (the engine deduplicates by local ID).
             runLineageDetection(newItems)
         }
-
-        return newItems.size
     }
 
     private fun runLineageDetection(newItems: List<MediaItem>) {
@@ -132,5 +171,9 @@ class MediaStoreObserver(
                 )
             }
         }
+    }
+
+    private companion object {
+        const val DEBOUNCE_WINDOW_MS = 500L
     }
 }
