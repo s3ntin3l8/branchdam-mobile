@@ -63,11 +63,6 @@ object SyncNotificationHelper {
             .build()
     }
 
-    fun cancel(context: Context) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-        manager?.cancel(NOTIFICATION_ID)
-    }
-
     fun foregroundServiceType(): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC

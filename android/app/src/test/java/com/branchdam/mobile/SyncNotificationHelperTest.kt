@@ -63,23 +63,4 @@ class SyncNotificationHelperTest {
         SyncNotificationHelper.ensureChannel(context)
         verify(manager, never()).createNotificationChannel(any<NotificationChannel>())
     }
-
-    @Test
-    fun testCancelDoesNotThrowWhenManagerIsNull() {
-        val context: Context = mock()
-        whenever(context.getSystemService(Context.NOTIFICATION_SERVICE)).thenReturn(null)
-        SyncNotificationHelper.cancel(context)
-        verify(context).getSystemService(Context.NOTIFICATION_SERVICE)
-    }
-
-    @Test
-    fun testCancelInvokesNotificationManager() {
-        val context: Context = mock()
-        val manager: NotificationManager = mock()
-        whenever(context.getSystemService(Context.NOTIFICATION_SERVICE))
-            .thenReturn(manager)
-
-        SyncNotificationHelper.cancel(context)
-        verify(manager).cancel(SyncNotificationHelper.NOTIFICATION_ID)
-    }
 }
