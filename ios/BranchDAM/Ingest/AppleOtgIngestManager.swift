@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 
 public struct AppleOtgIngestProgress: Equatable {
     public let currentFileIndex: Int
@@ -37,25 +38,48 @@ public enum AppleOtgState: Equatable {
     case error(message: String)
 }
 
+/// OTG card ingest orchestrator.
+///
+/// Thread-safety model (T2-9 hardening):
+/// - `state` is published via `@Published`. The Combine runtime
+///   internally synchronizes `_send` so concurrent mutations from
+///   the OTG queue and the main thread are observed atomically by
+///   subscribers; reads of `state` from any thread return the latest
+///   committed value. Swift 6 strict concurrency accepts this for
+///   the `AppleOtgState` payload because every associated value is
+///   `Sendable` (`URL`, `String`, `Int`, `Int64`, the nested
+///   `AppleOtgScanResult`/`AppleOtgIngestProgress` structs).
+/// - `isCancelled` is the cross-thread flag the Swift 6 strict
+///   concurrency checker flagged as a data race when it was a plain
+///   `var Bool`: written from `cancelImport()`/`reset()` on the
+///   main thread and from `onCardDetected`/`confirmImport` on the
+///   main thread, but read from `confirmImport`'s OTG-queue block
+///   on a background thread. It is now backed by
+///   `OSAllocatedUnfairLock<Bool>` from the `os` framework
+///   (iOS 16.0+, the deployment target is iOS 17). The lock itself
+///   is `Sendable`, and every access goes through `withLock { ... }`
+///   so the cross-thread load/store is atomic. The deployment
+///   target predates `Synchronization.Atomic` (iOS 18.0+), so
+///   `OSAllocatedUnfairLock` is the lowest-friction replacement.
 public class AppleOtgIngestManager: ObservableObject {
     public static let shared = AppleOtgIngestManager()
 
     @Published public var state: AppleOtgState = .idle
 
-    private var isCancelled = false
+    private let isCancelledFlag = OSAllocatedUnfairLock<Bool>(initialState: false)
     private let queue = DispatchQueue(label: "com.branchdam.mobile.otg", qos: .userInitiated)
 
     public init() {}
 
     public func onCardDetected(deviceLabel: String, directory: URL) {
-        isCancelled = false
+        isCancelledFlag.withLock { $0 = false }
         state = .scanning(label: deviceLabel)
 
         queue.async { [weak self] in
             guard let self = self else { return }
             let result = AppleOtgCardScanner.scanDirectory(at: directory, deviceLabel: deviceLabel)
             DispatchQueue.main.async {
-                if !self.isCancelled {
+                if !self.isCancelledFlag.withLock({ $0 }) {
                     if !result.candidates.isEmpty {
                         self.state = .awaitingConfirmation(scanResult: result)
                     } else {
@@ -71,7 +95,7 @@ public class AppleOtgIngestManager: ObservableObject {
         stageDirectory: URL? = nil,
         onFileStaged: ((URL, AppleOtgCandidate) -> Void)? = nil
     ) {
-        isCancelled = false
+        isCancelledFlag.withLock { $0 = false }
         let destinationDir = stageDirectory ?? FileManager.default.temporaryDirectory.appendingPathComponent("otg_stage", isDirectory: true)
 
         let candidates = scanResult.candidates
@@ -85,7 +109,7 @@ public class AppleOtgIngestManager: ObservableObject {
             var importedCount = 0
 
             for (index, candidate) in candidates.enumerated() {
-                if self.isCancelled { break }
+                if self.isCancelledFlag.withLock({ $0 }) { break }
 
                 DispatchQueue.main.async {
                     self.state = .ingesting(
@@ -128,7 +152,7 @@ public class AppleOtgIngestManager: ObservableObject {
             }
 
             DispatchQueue.main.async {
-                if !self.isCancelled {
+                if !self.isCancelledFlag.withLock({ $0 }) {
                     self.state = .completed(importedCount: importedCount, totalBytes: bytesProcessed)
                 } else {
                     self.state = .idle
@@ -138,12 +162,12 @@ public class AppleOtgIngestManager: ObservableObject {
     }
 
     public func cancelImport() {
-        isCancelled = true
+        isCancelledFlag.withLock { $0 = true }
         state = .idle
     }
 
     public func reset() {
-        isCancelled = true
+        isCancelledFlag.withLock { $0 = true }
         state = .idle
     }
 }
