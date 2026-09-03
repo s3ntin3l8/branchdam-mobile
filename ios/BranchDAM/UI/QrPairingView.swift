@@ -88,10 +88,20 @@ public struct QrPairingView: View {
                 Section {
                     Button("Connect to Server") {
                         guard !serverUrl.isEmpty else { return }
+                        // T2-5: persist the API key into the iOS keychain
+                        // before the bridge reads it. An empty field
+                        // clears any previously-stored key so the user
+                        // can rotate without re-pairing. The cleartext
+                        // string then sits only in this @State field for
+                        // the duration of the form.
+                        if apiKey.isEmpty {
+                            AppleKeychain.shared.apiKey = nil
+                        } else {
+                            AppleKeychain.shared.apiKey = apiKey
+                        }
                         _ = BranchDamCoreBridge.shared.initialize(
                             dbPath: defaultDBPath(),
                             baseURL: serverUrl,
-                            apiKey: apiKey,
                             agentID: "iphone-pro"
                         )
                         namingTemplate = BranchDamCoreBridge.shared.fetchNamingTemplate()

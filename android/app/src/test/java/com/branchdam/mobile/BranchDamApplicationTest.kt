@@ -1,6 +1,5 @@
 package com.branchdam.mobile
 
-import android.content.Context
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -13,8 +12,12 @@ import org.mockito.kotlin.whenever
  * Tests for [BranchDamApplication.readEngineConfig] — the config
  * reader extracted from the Application's initCoreEngine. Uses a
  * mocked SharedPreferences to verify default values, override values,
- * and the "apiKey from EncryptedSharedPreferences" path (same
- * SharedPreferences contract, different storage backend).
+ * and the apiKey path.
+ *
+ * T2-5: the production caller (readSecureEngineConfig) passes an
+ * EncryptedSharedPreferences. The read path is identical to regular
+ * SharedPreferences (both implement the same interface), so a mock
+ * verifies the contract is honored regardless of the storage backend.
  */
 class BranchDamApplicationTest {
 
@@ -28,8 +31,7 @@ class BranchDamApplicationTest {
         whenever(prefs.getString(eq(BranchDamApplication.KEY_AGENT_ID), any()))
             .thenReturn(null)
 
-        val context = mockContext(prefs)
-        val config = BranchDamApplication.readEngineConfig(context)
+        val config = BranchDamApplication.readEngineConfig(prefs)
 
         assertEquals(BranchDamApplication.DEFAULT_SERVER_URL, config.serverUrl)
         assertEquals("", config.apiKey)
@@ -45,15 +47,14 @@ class BranchDamApplicationTest {
         whenever(prefs.getString(BranchDamApplication.KEY_SERVER_URL, BranchDamApplication.DEFAULT_SERVER_URL))
             .thenReturn("https://nas.example.com:8443")
         whenever(prefs.getString(BranchDamApplication.KEY_API_KEY, ""))
-            .thenReturn("supersecret-key-123")
+            .thenReturn("supersecret-key-123") // pragma: allowlist secret
         whenever(prefs.getString(eq(BranchDamApplication.KEY_AGENT_ID), any()))
             .thenReturn("custom-agent-id")
 
-        val context = mockContext(prefs)
-        val config = BranchDamApplication.readEngineConfig(context)
+        val config = BranchDamApplication.readEngineConfig(prefs)
 
         assertEquals("https://nas.example.com:8443", config.serverUrl)
-        assertEquals("supersecret-key-123", config.apiKey)
+        assertEquals("supersecret-key-123", config.apiKey) // pragma: allowlist secret
         assertEquals("custom-agent-id", config.agentId)
     }
 
@@ -71,36 +72,28 @@ class BranchDamApplicationTest {
         whenever(prefs.getString(eq(BranchDamApplication.KEY_AGENT_ID), any()))
             .thenReturn(null)
 
-        val context = mockContext(prefs)
-        val config = BranchDamApplication.readEngineConfig(context)
+        val config = BranchDamApplication.readEngineConfig(prefs)
 
         assertEquals("not-a-url", config.serverUrl)
     }
 
     @Test
     fun testReadEngineConfig_ApiKeyFromEncryptedPrefs() {
-        // The F plan calls for the apiKey to be stored in
-        // EncryptedSharedPreferences. The read path is identical to
+        // T2-5: the production caller (readSecureEngineConfig) passes
+        // an EncryptedSharedPreferences. The read path is identical to
         // regular SharedPreferences (both implement the same
-        // interface); this test verifies the contract is honored.
+        // interface); this test verifies the contract is honored
+        // regardless of the storage backend.
         val prefs = mock<SharedPreferences>()
         whenever(prefs.getString(BranchDamApplication.KEY_SERVER_URL, BranchDamApplication.DEFAULT_SERVER_URL))
             .thenReturn(null)
         whenever(prefs.getString(BranchDamApplication.KEY_API_KEY, ""))
-            .thenReturn("encrypted-key-from-secure-storage")
+            .thenReturn("encrypted-key-from-secure-storage") // pragma: allowlist secret
         whenever(prefs.getString(eq(BranchDamApplication.KEY_AGENT_ID), any()))
             .thenReturn(null)
 
-        val context = mockContext(prefs)
-        val config = BranchDamApplication.readEngineConfig(context)
+        val config = BranchDamApplication.readEngineConfig(prefs)
 
-        assertEquals("encrypted-key-from-secure-storage", config.apiKey)
-    }
-
-    private fun mockContext(prefs: SharedPreferences): Context {
-        val context = mock<Context>()
-        whenever(context.getSharedPreferences(BranchDamApplication.PREFS_NAME, Context.MODE_PRIVATE))
-            .thenReturn(prefs)
-        return context
+        assertEquals("encrypted-key-from-secure-storage", config.apiKey) // pragma: allowlist secret
     }
 }
