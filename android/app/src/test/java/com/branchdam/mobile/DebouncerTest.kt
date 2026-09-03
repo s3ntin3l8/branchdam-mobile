@@ -2,6 +2,7 @@ package com.branchdam.mobile
 
 import com.branchdam.mobile.observer.Debouncer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -156,6 +157,185 @@ class DebouncerTest {
         advanceTimeBy(500L)
         runCurrent()
         assertEquals(2, callCount[0])
+
+        debouncer.close()
+    }
+
+    /**
+     * Hermes PR-84 warning #1: cancel-and-relaunch cannot abort a
+     * running scan (the scan has no suspension points past its
+     * initial delay), so the next trigger would spawn a second scan
+     * that overlaps the first on Dispatchers.IO. The fix is
+     * single-in-flight: a trigger arriving while onFire is running
+     * is coalesced via a `pending` flag; once the current onFire
+     * returns, a fresh debounce window starts so a follow-up scan
+     * captures the events that arrived during the run. This test
+     * pins that invariant: at no point are two onFire coroutines
+     * active concurrently, and a trigger arriving during onFire
+     * results in exactly one additional fire once the current one
+     * completes.
+     *
+     * Timing (all virtual):
+     *   t=0          trigger #1
+     *   t=500        first scan begins (delay 500ms)
+     *   t=500..700   first scan runs (delay 200ms inside onFire)
+     *   t=510..600   10 triggers during the scan -- pending set, no parallel scan
+     *   t=700        first scan done, follow-up scheduled at t=1200
+     *   t=1200       follow-up scan begins
+     *   t=1400       follow-up scan done
+     */
+    @Test
+    fun testTriggerDuringOnFireDoesNotStartParallelRun() = runTest {
+        val activeRuns = intArrayOf(0)
+        val maxActive = intArrayOf(0)
+        val callCount = intArrayOf(0)
+        val debouncer = Debouncer(
+            scope = this,
+            windowMs = 500L,
+            onFire = {
+                activeRuns[0]++
+                if (activeRuns[0] > maxActive[0]) maxActive[0] = activeRuns[0]
+                callCount[0]++
+                try {
+                    // Simulate a long-running scan (e.g. MediaStore
+                    // query + engine enqueue on Dispatchers.IO) so
+                    // that triggers arriving during this window have
+                    // to be coalesced rather than cancelled.
+                    delay(200L)
+                } finally {
+                    activeRuns[0]--
+                }
+            }
+        )
+
+        // First trigger at t=0; onFire will run from t=500 to t=700.
+        debouncer.trigger()
+        advanceTimeBy(500L)  // t=500
+        runCurrent()
+        assertEquals("first scan in flight", 1, activeRuns[0])
+        assertEquals(1, callCount[0])
+
+        // Burst of 10 triggers while the first scan is running
+        // (t=500 to t=700). These must NOT spawn a parallel scan.
+        repeat(10) {
+            debouncer.trigger()
+            advanceTimeBy(10L)
+        }
+        assertEquals(
+            "no parallel scan may start while onFire is running",
+            1,
+            maxActive[0]
+        )
+        assertEquals("still exactly one scan in flight", 1, activeRuns[0])
+        assertEquals("still exactly one fire so far", 1, callCount[0])
+
+        // Allow the first scan to complete (t=700) and the
+        // pending-trigger re-fire to schedule (delay 500ms -> fires
+        // at t=1200).
+        advanceTimeBy(100L)  // t=700
+        runCurrent()
+        assertEquals("first scan done, follow-up scheduled", 0, activeRuns[0])
+        assertEquals("follow-up has not yet fired", 1, callCount[0])
+
+        // Advance into the follow-up window: the re-fire should run
+        // a single scan.
+        advanceTimeBy(500L)  // t=1200, follow-up fires
+        runCurrent()
+        assertEquals("follow-up scan in flight", 1, activeRuns[0])
+        assertEquals("follow-up fired exactly once", 2, callCount[0])
+
+        // Wait for the follow-up scan to finish and confirm no
+        // further re-fires happen (no triggers after the burst).
+        advanceTimeBy(200L)  // t=1400
+        runCurrent()
+        assertEquals("follow-up scan done", 0, activeRuns[0])
+        assertEquals("no extra fires after the burst", 2, callCount[0])
+
+        // The original Hermes concern: a second scan running
+        // concurrently with the first. The max-active counter
+        // captures that, and must stay at 1 throughout.
+        assertEquals(
+            "Hermes single-in-flight invariant: max one concurrent scan",
+            1,
+            maxActive[0]
+        )
+
+        debouncer.close()
+    }
+
+    /**
+     * Companion to the single-in-flight test: when a trigger arrives
+     * during the follow-up debounce window (i.e. after onFire has
+     * returned and the follow-up is waiting), the follow-up must be
+     * cancelled and rescheduled to fire windowMs after the new
+     * trigger -- NOT at the original scheduled time. This pins the
+     * trailing-edge debounce semantics on the post-onFire re-fire:
+     * a fresh debounce window starts from the moment of re-trigger,
+     * so further events that arrive during the follow-up window can
+     * coalesce to it.
+     *
+     * Timing (all virtual):
+     *   t=0          trigger #1
+     *   t=100        first scan begins
+     *   t=100..300   first scan runs (delay 200ms inside onFire)
+     *   t=300        first scan done, follow-up scheduled at t=400
+     *   t=350        trigger #2 mid-window -> cancels follow-up, reschedules to t=450
+     *   t=400        original follow-up time -- must NOT fire
+     *   t=450        rescheduled follow-up fires
+     */
+    @Test
+    fun testReFireAfterOnFireRespectsDebounceWindow() = runTest {
+        val callCount = intArrayOf(0)
+        val debouncer = Debouncer(
+            scope = this,
+            windowMs = 100L,
+            onFire = {
+                callCount[0]++
+                delay(200L)
+            }
+        )
+
+        debouncer.trigger()
+        advanceTimeBy(100L)  // t=100, first scan starts
+        runCurrent()
+        assertEquals(1, callCount[0])
+
+        // Trigger mid-scan (t=100 to t=300); marks pending. The
+        // first scan completes at t=300 and schedules a follow-up
+        // fire at t=400.
+        debouncer.trigger()
+        advanceTimeBy(200L)  // t=300, first scan done, follow-up scheduled at t=400
+        runCurrent()
+        assertEquals("follow-up scheduled but not yet fired", 1, callCount[0])
+
+        // Advance into the follow-up window (between t=300 and
+        // t=400) and trigger. This cancels the follow-up scheduled
+        // for t=400 and reschedules it to fire 100ms after this
+        // trigger, i.e. at t=450.
+        advanceTimeBy(50L)  // t=350
+        runCurrent()
+        debouncer.trigger()  // trigger at t=350 -> reschedules follow-up to t=450
+        runCurrent()
+        assertEquals(
+            "rescheduled follow-up must not have fired yet",
+            1,
+            callCount[0]
+        )
+
+        // The original follow-up time (t=400) must NOT fire -- the
+        // new trigger pushed it out.
+        advanceTimeBy(50L)  // t=400
+        runCurrent()
+        assertEquals(
+            "trigger reset the window, original follow-up time is no longer a fire",
+            1,
+            callCount[0]
+        )
+
+        // The new follow-up time (t=450) fires.
+        advanceTimeBy(50L)  // t=450
+        runCurrent()
+        assertEquals("follow-up fires at the new rescheduled time", 2, callCount[0])
 
         debouncer.close()
     }

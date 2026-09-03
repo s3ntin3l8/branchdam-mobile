@@ -13,6 +13,7 @@ import com.branchdam.mobile.lineage.PairDetector
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.triage.TrashSyncObserver
 import java.io.File
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -31,8 +32,16 @@ class MediaStoreObserver(
      * Tracks content URIs of trashed items already processed. Prevents
      * re-enqueueing EVENT_NODE_DELETED for items lingering in the Android 11+
      * recycle bin (up to 30 days) across successive onChange callbacks.
+     *
+     * Wrapped in [Collections.synchronizedSet] because the set is now
+     * mutated on [Dispatchers.IO] (inside the debounced scan coroutine)
+     * rather than the HandlerThread; the wrapper publishes writes
+     * across worker-thread switches via its intrinsic lock so the
+     * single-in-flight Debouncer's serial access pattern remains
+     * race-free even when Dispatchers.IO re-pools the worker thread
+     * between runs.
      */
-    private val processedTrashedUris = mutableSetOf<String>()
+    private val processedTrashedUris = Collections.synchronizedSet(mutableSetOf<String>())
 
     /**
      * Bounded to [Dispatchers.IO] so the ContentProvider queries and
@@ -48,15 +57,19 @@ class MediaStoreObserver(
 
     /**
      * Coalesces rapid-fire onChange callbacks into a single scan +
-     * lineage pipeline run after a 500ms quiet window. Burst capture
-     * that emits 50 events in 1 second collapses to one scan 500ms
-     * after the last event, satisfying the T2-3 acceptance criterion
-     * of at most 2 scans per burst.
+     * trash-sync + lineage pipeline run after a 500ms quiet window.
+     * Burst capture that emits 50 events in 1 second collapses to one
+     * scan 500ms after the last event, satisfying the T2-3 acceptance
+     * criterion of at most 2 scans per burst. Folding
+     * [scanAndSyncTrash] (which runs the trash sync too) into the
+     * same debounced coroutine ensures the burst-coalescing goal
+     * holds end-to-end: a 50-event burst produces one recycle-bin
+     * query and one MediaStore rescan, not 50 of each.
      */
     private val debouncer = Debouncer(
         scope = scope,
         windowMs = DEBOUNCE_WINDOW_MS,
-        onFire = ::scanAndEnqueueNewMedia,
+        onFire = ::scanAndSyncTrash,
     )
 
     fun register() {
@@ -73,13 +86,31 @@ class MediaStoreObserver(
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
-        // Schedule a debounced scan + lineage run. Non-blocking: the
-        // [debouncer] coalesces bursts of onChange into one scan after
-        // a quiet window so a 50-event burst does not produce 50
-        // ContentProvider rescans.
+        // Schedule a debounced scan + trash sync + lineage run.
+        // Non-blocking: the [debouncer] coalesces bursts of onChange
+        // into one scan after a quiet window so a 50-event burst
+        // produces at most one ContentProvider rescan and one
+        // recycle-bin query, not 50 of each. The trash sync was
+        // previously run inline here and bypassed the debouncer, so
+        // a 50-event burst still triggered 50 recycle-bin queries --
+        // see Hermes PR-84 review thread on
+        // MediaStoreObserver.kt:80.
         debouncer.trigger()
+    }
 
-        // D.4: Trash sync — MATCH_ONLY returns all items in the 30-day
+    /**
+     * Runs the new-media scan and the trash sync on [Dispatchers.IO].
+     * Both are folded into a single debounced coroutine so a burst of
+     * onChange callbacks collapses to one ContentProvider rescan plus
+     * one recycle-bin query (Hermes PR-84 warning #2: only the main
+     * scan was debounced). [scanAndEnqueueNewMedia] runs first so
+     * newly-enqueued items get a fresh `lastScannedTimestamp` before
+     * the trash sync reads it; the order is otherwise immaterial.
+     */
+    private suspend fun scanAndSyncTrash() {
+        scanAndEnqueueNewMedia()
+
+        // D.4: Trash sync -- MATCH_ONLY returns all items in the 30-day
         // recycle bin. The in-memory processedTrashedUris set prevents
         // re-enqueueing delete events across successive onChange calls.
         val deletedCount = TrashSyncObserver.processTrashedItems(context, processedTrashedUris) { contentUri ->
