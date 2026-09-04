@@ -3,9 +3,10 @@ package com.branchdam.mobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Scaffold
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -50,58 +51,60 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Scaffold(
-                        bottomBar = {
-                            if (showBottomBar) {
-                                BottomNavBar(
-                                    currentRoute = currentRoute,
-                                    onNavigate = { route ->
-                                        navController.navigate(route) {
-                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Scaffold(
+                            bottomBar = {
+                                if (showBottomBar) {
+                                    BottomNavBar(
+                                        currentRoute = currentRoute,
+                                        onNavigate = { route: String ->
+                                            navController.navigate(route) {
+                                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                    )
+                                }
+                            },
+                        ) { padding ->
+                            AppNavGraph(
+                                navController = navController,
+                                modifier = Modifier.padding(padding),
+                            )
+                        }
+
+                        val otgState by otgManager.state.collectAsState()
+                        when (val state = otgState) {
+                            is OtgState.AwaitingConfirmation -> {
+                                OtgImportConfirmationDialog(
+                                    scanResult = state.scanResult,
+                                    onConfirm = { otgManager.confirmImport(state.scanResult) },
+                                    onDismiss = { otgManager.cancelImport() },
                                 )
                             }
-                        },
-                    ) { padding ->
-                        AppNavGraph(
-                            navController = navController,
-                            modifier = Modifier.padding(padding),
-                        )
-                    }
-
-                    val otgState by otgManager.state.collectAsState()
-                    when (val state = otgState) {
-                        is OtgState.AwaitingConfirmation -> {
-                            OtgImportConfirmationDialog(
-                                scanResult = state.scanResult,
-                                onConfirm = { otgManager.confirmImport(state.scanResult) },
-                                onDismiss = { otgManager.cancelImport() },
-                            )
+                            is OtgState.Ingesting -> {
+                                OtgIngestProgressDialog(
+                                    progress = state.progress,
+                                    onCancel = { otgManager.cancelImport() },
+                                )
+                            }
+                            is OtgState.Completed -> {
+                                OtgIngestCompletedDialog(
+                                    importedCount = state.importedCount,
+                                    totalBytes = state.totalBytes,
+                                    fileErrors = state.fileErrors,
+                                    onDismiss = { otgManager.reset() },
+                                )
+                            }
+                            is OtgState.Error -> {
+                                OtgIngestErrorDialog(
+                                    errorMessage = state.message,
+                                    onDismiss = { otgManager.reset() },
+                                )
+                            }
+                            else -> Unit
                         }
-                        is OtgState.Ingesting -> {
-                            OtgIngestProgressDialog(
-                                progress = state.progress,
-                                onCancel = { otgManager.cancelImport() },
-                            )
-                        }
-                        is OtgState.Completed -> {
-                            OtgIngestCompletedDialog(
-                                importedCount = state.importedCount,
-                                totalBytes = state.totalBytes,
-                                fileErrors = state.fileErrors,
-                                onDismiss = { otgManager.reset() },
-                            )
-                        }
-                        is OtgState.Error -> {
-                            OtgIngestErrorDialog(
-                                errorMessage = state.message,
-                                onDismiss = { otgManager.reset() },
-                            )
-                        }
-                        else -> Unit
                     }
                 }
             }
