@@ -78,7 +78,8 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          ./gradlew assembleRelease bundleRelease --no-daemon
+          ./gradlew assembleRelease
+          ./gradlew bundleRelease
 
       - name: Collect and Package Artifacts
         run: |
