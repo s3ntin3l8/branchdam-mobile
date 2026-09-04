@@ -130,7 +130,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
          * without instantiating a real engine.
          */
         @androidx.annotation.VisibleForTesting
-        var engineInit: EngineInit = ::EngineHolder.initialize
+        var engineInit: EngineInit = { dbPath, baseURL, apiKey, agentID, version, devCleartextHosts ->
+            EngineHolder.initialize(
+                dbPath = dbPath,
+                baseURL = baseURL,
+                apiKey = apiKey,
+                agentID = agentID,
+                version = version,
+                devCleartextHosts = devCleartextHosts,
+            )
+        }
 
         /**
          * Pure URL validation. Extracted so unit tests can exercise

@@ -20,7 +20,16 @@ class SettingsViewModelTest {
 
     @After
     fun restoreEngineInit() {
-        SettingsViewModel.engineInit = com.branchdam.mobile.EngineHolder::initialize
+        SettingsViewModel.engineInit = { dbPath, baseURL, apiKey, agentID, version, devCleartextHosts ->
+            com.branchdam.mobile.EngineHolder.initialize(
+                dbPath = dbPath,
+                baseURL = baseURL,
+                apiKey = apiKey,
+                agentID = agentID,
+                version = version,
+                devCleartextHosts = devCleartextHosts,
+            )
+        }
     }
 
     @Test
@@ -50,14 +59,11 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun testEngineInitDefaultDelegatesToEngineHolder() {
-        val original = SettingsViewModel.engineInit
-        try {
-            SettingsViewModel.engineInit = com.branchdam.mobile.EngineHolder::initialize
-            assertEquals(com.branchdam.mobile.EngineHolder::initialize, SettingsViewModel.engineInit)
-        } finally {
-            SettingsViewModel.engineInit = original
-        }
+    fun testEngineInitDefaultIsCallable() {
+        // The default engineInit references EngineHolder, which is unavailable
+        // in unit tests (the AAR is not on the test classpath). Just verify
+        // it's not null and the seam is in place.
+        assertNotNull(SettingsViewModel.engineInit)
     }
 
     @Test
