@@ -2,6 +2,40 @@
 
 ## [0.5.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.4.0...branchdam-mobile-v0.5.0) (2026-09-04)
 
+> This release was cut manually via a `Release-As` trailer
+> ([#97](https://github.com/s3ntin3l8/branchdam-mobile/pull/97)): the commits
+> below carry bracket task-ID prefixes (`[T2-*]`, `[A]`–`[E]`) that
+> release-please's conventional-commit parser rejects, so the generated
+> changelog for this version would otherwise have been empty. This section
+> was written by hand from the actual diffs.
+
+### Features
+
+* **build:** gomobile bind pipeline + CI workflow ([#63](https://github.com/s3ntin3l8/branchdam-mobile/issues/63)) ([6531fa7](https://github.com/s3ntin3l8/branchdam-mobile/commit/6531fa7879fddd7cd1cb624db4431aeecbbb9b78))
+* **core:** FFI surface redesign into the branchdam package ([#75](https://github.com/s3ntin3l8/branchdam-mobile/issues/75)) ([7e7a021](https://github.com/s3ntin3l8/branchdam-mobile/commit/7e7a021d5bf42733f73552e48e0eed02a8a85dfd))
+* **android:** shell wiring for lineage pipeline, HandlerThread, and trash sync ([#76](https://github.com/s3ntin3l8/branchdam-mobile/issues/76)) ([33da84c](https://github.com/s3ntin3l8/branchdam-mobile/commit/33da84c72706e7e241378f1bcca5f86f23515efc))
+* **ios:** shell wiring for WelcomeView, cancel flag, lineage, and PrivacyInfo ([#77](https://github.com/s3ntin3l8/branchdam-mobile/issues/77)) ([2e2182b](https://github.com/s3ntin3l8/branchdam-mobile/commit/2e2182b56d464cc12b798ff92b2b5930aa6fa48c))
+* **android:** foldable-aware UI via Jetpack WindowManager ([#81](https://github.com/s3ntin3l8/branchdam-mobile/issues/81)) ([3fd8a25](https://github.com/s3ntin3l8/branchdam-mobile/commit/3fd8a2592e721e0d57e3ef4f26c455322e8231c9))
+* **android:** SyncWorker foreground service on Android 14+ ([#83](https://github.com/s3ntin3l8/branchdam-mobile/issues/83)) ([a9bcd74](https://github.com/s3ntin3l8/branchdam-mobile/commit/a9bcd74dc1d1989170f81e8f11b41b4f2cd2c4e3))
+* **android:** debounce MediaStore observer callbacks onto a background Handler ([#84](https://github.com/s3ntin3l8/branchdam-mobile/issues/84)) ([39fcab2](https://github.com/s3ntin3l8/branchdam-mobile/commit/39fcab2cd0e9117337a7f9dd19248aca3a0d7bf6))
+* **security:** EncryptedSharedPreferences for non-apiKey secrets, iOS Keychain parity ([#86](https://github.com/s3ntin3l8/branchdam-mobile/issues/86)) ([8a7d9c0](https://github.com/s3ntin3l8/branchdam-mobile/commit/8a7d9c05aacadec12d414f336a58d27f125251d7))
+* **android:** OTG staging size cap with post-copy BLAKE3 verify ([#91](https://github.com/s3ntin3l8/branchdam-mobile/issues/91)) ([77308eb](https://github.com/s3ntin3l8/branchdam-mobile/commit/77308ebe7f1a87aa05b0bbde230d936b9e8012c0))
+
+### Bug Fixes
+
+* **android:** enforce HTTPS-only baseURL with a network security config ([#82](https://github.com/s3ntin3l8/branchdam-mobile/issues/82)) ([a478040](https://github.com/s3ntin3l8/branchdam-mobile/commit/a47804079c7532361ef1b0a279ca75464ffaaa91))
+* **core:** cap payloadJSON size in the events queue ([#87](https://github.com/s3ntin3l8/branchdam-mobile/issues/87)) ([ddfe3d0](https://github.com/s3ntin3l8/branchdam-mobile/commit/ddfe3d0377c8aa16f8fec1d155d53f01e1207aef))
+* **cross-platform:** unify pref-key strings between Android and iOS to prevent drift ([#89](https://github.com/s3ntin3l8/branchdam-mobile/issues/89)) ([4a1ece5](https://github.com/s3ntin3l8/branchdam-mobile/commit/4a1ece5fa7b9d7886c0a34204650dbd261b132c4)), ([#95](https://github.com/s3ntin3l8/branchdam-mobile/issues/95)) ([ab1874a](https://github.com/s3ntin3l8/branchdam-mobile/commit/ab1874ac2db2ce18a1a0ae1fa40adde3cbc164f0))
+* **ios:** synchronize isCancelled flag under Swift 6 strict concurrency ([#90](https://github.com/s3ntin3l8/branchdam-mobile/issues/90)) ([27ecc91](https://github.com/s3ntin3l8/branchdam-mobile/commit/27ecc91fd649d8b2d1549496937aa6bda88fd17e))
+* **android:** fail OTG staging on a post-copy BLAKE3 mismatch instead of ingesting ([#96](https://github.com/s3ntin3l8/branchdam-mobile/issues/96)) ([3e52efd](https://github.com/s3ntin3l8/branchdam-mobile/commit/3e52efdae6c128f2d1beb52d52232e263fca0078))
+
+### Tests
+
+* **f-plan:** fill Go core, Android, and iOS test gaps from the F test plan ([#78](https://github.com/s3ntin3l8/branchdam-mobile/issues/78)) ([327bd36](https://github.com/s3ntin3l8/branchdam-mobile/commit/327bd36747bdc0b5afdb29a2f986a9e1d46d6769)), ([#79](https://github.com/s3ntin3l8/branchdam-mobile/issues/79)) ([714736f](https://github.com/s3ntin3l8/branchdam-mobile/commit/714736fa1b8b3e7d0f2ce14ad5f5f1613837d06d)), ([#80](https://github.com/s3ntin3l8/branchdam-mobile/issues/80)) ([12ec7a7](https://github.com/s3ntin3l8/branchdam-mobile/commit/12ec7a71ccb6eb46ad62bf3d0f39cfde267b7dbc))
+
+### Documentation
+
+* **core:** clarify single-header policy for the API key ([#85](https://github.com/s3ntin3l8/branchdam-mobile/issues/85)) ([6f21b3e](https://github.com/s3ntin3l8/branchdam-mobile/commit/6f21b3e8498720ab35ca0b8cf0c017f1e4df4e53))
 
 ### Miscellaneous Chores
 
