@@ -28,6 +28,14 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          # Falls back to the default GITHUB_TOKEN (today's behavior) until
+          # RELEASE_PLEASE_TOKEN is added as a repo secret. PRs opened with
+          # GITHUB_TOKEN don't trigger pull_request-triggered workflows, so
+          # the release PR's required status checks (Core, Pre-commit & Lint,
+          # CodeQL, dependency-review) never report — see issue #100. Set
+          # RELEASE_PLEASE_TOKEN to a PAT or GitHub App installation token
+          # scoped to contents:write + pull-requests:write to fix that.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
   build-release-apk-aab:
     name: Build Release APK & AAB

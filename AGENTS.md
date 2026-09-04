@@ -37,6 +37,19 @@ make android         # Assemble Android debug build
 3. **Safe Storage Reclaim:** Local media files are NEVER deleted for storage reclaim unless `POST /api/v1/agent/node-status` reports `verified: true`.
 4. **Lineage Precision:** DNG RAW + Ultra HDR JPEG pairs and Motion Photos emit `EVENT_EDGE_ATTACHED` with `confidence: 1.00`.
 
+## PR titles must be Conventional Commits
+
+This repo squash-merges PRs (`squash_merge_commit_title: COMMIT_OR_PR_TITLE`),
+and [release-please](release-please-config.json) parses the resulting `main`
+commit subject to decide whether to cut a release — an unprefixed subject
+(including a bracketed task-ID prefix like `[T2-7]`) is silently skipped, with
+no error. Use a [Conventional Commits](https://www.conventionalcommits.org/)
+prefix (`feat:`, `fix:`, `chore:`, `docs:`, ...) on the **PR title**. If a PR
+has more than one commit, GitHub uses the PR title for the squash subject; if
+it has exactly one commit, GitHub uses that commit's own subject instead — so
+give a single-commit PR's commit message the same prefix, not just the PR
+title. See `CHANGELOG.md`'s `## [0.5.0]` entry for the incident this caused.
+
 ## Review thread resolution
 
 Every review thread (Hermes or human) must be replied to and resolved before

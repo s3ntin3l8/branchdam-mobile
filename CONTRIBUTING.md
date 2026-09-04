@@ -8,6 +8,12 @@
   ```
 - **No direct commits to `main`:** All changes must go through pull requests.
 - **One Issue = One PR:** Keep PR scopes aligned strictly with the issue blueprint.
+- **PR title needs a Conventional Commits prefix** (`feat:`, `fix:`, `chore:`,
+  `docs:`, ...). This repo squash-merges, and release-please parses the
+  resulting commit subject on `main` to decide whether to cut a release — an
+  unprefixed title (including a bracketed task-ID prefix) is silently
+  skipped. See `AGENTS.md`'s "PR titles must be Conventional Commits" for the
+  single-commit-PR nuance.
 
 ## Automated Reviews with Hermes
 
