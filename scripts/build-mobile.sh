@@ -71,12 +71,14 @@ if [[ "${BUILD_ANDROID}" -eq 1 ]]; then
 
     echo "=== Building Android AAR (arm64, amd64) ==="
     mkdir -p android/app/libs
-    # 16 KB page-size alignment: newer Android devices (Pixel 8+, Android 15
-    # emulators) use 16KB kernel pages. All PT_LOAD segments in .so files
-    # must have p_align >= 0x4000. CGO_LDFLAGS is the only way to pass
-    # linker flags through gomobile (which does not expose -ldflags).
+    # 16 KB page-size alignment: Android 15+ devices (Pixel 8+, Android 15
+    # emulators) use 16 KB kernel pages. Every PT_LOAD segment in the
+    # bundled .so files must have p_align >= 0x4000. -ldflags is threaded
+    # to `go build` (cmd/gomobile/build.go:323); since -buildmode=c-shared
+    # forces the external linker (clang), the flag must be wrapped in
+    # -extldflags so it reaches the system linker.
     # See: https://github.com/golang/go/issues/68754
-    export CGO_LDFLAGS="-Wl,-z,max-page-size=16384"
+    #
     # -androidapi 21: matches the project's minSdk = 28 floor and is within
     # the r25/r26 NDK's supported range (r25: 19..33, r26: 21..35).
     # Without -androidapi, gomobile defaults to API 16, which is below
@@ -85,6 +87,7 @@ if [[ "${BUILD_ANDROID}" -eq 1 ]]; then
         -target android \
         -androidapi 21 \
         -javapkg io.branchdam.core \
+        -ldflags="-extldflags=-Wl,-z,max-page-size=16384" \
         -o android/app/libs/branchdam.aar \
         "${PUBLIC_PKG}"
     echo "AAR: $(ls -la android/app/libs/branchdam.aar)"
