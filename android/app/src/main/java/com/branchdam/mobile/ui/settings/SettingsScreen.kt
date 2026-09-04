@@ -99,6 +99,7 @@ fun SettingsScreen(
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Naming Template") },
+                supportingText = { Text("Synchronized via server handshake (POST /api/v1/agent/upload)") },
                 modifier = Modifier.fillMaxWidth(),
             )
 
