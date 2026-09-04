@@ -54,9 +54,26 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: core/go.sum
+          cache-dependency-path: go.sum
+
+      - name: Set up Android SDK & NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;25.1.8937393'
+
+      - name: Build branchdam.aar
+        # EngineHolder.kt and friends bind against the gomobile-generated
+        # Branchdam class in this AAR; without it, compileReleaseKotlin fails
+        # with "Unresolved reference 'Branchdam'". This job never built it —
+        # see #104. Uses the same script as mobile-bind.yml's Android job so
+        # the gomobile invocation isn't duplicated; built here rather than
+        # downloaded from that workflow's artifact because both trigger off
+        # the same push and there's no ordering guarantee between them.
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
+        run: ./scripts/build-mobile.sh --android-only
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
