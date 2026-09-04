@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.5.0...branchdam-mobile-v0.5.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **ci:** build branchdam.aar before compiling the release APK/AAB ([#107](https://github.com/s3ntin3l8/branchdam-mobile/issues/107)) ([8f54ca5](https://github.com/s3ntin3l8/branchdam-mobile/commit/8f54ca594472c41d45f21085cb86ebe82d31a3ec))
+* **ci:** stop joining gradlew CLI args into one string ([#105](https://github.com/s3ntin3l8/branchdam-mobile/issues/105)) ([e9c519e](https://github.com/s3ntin3l8/branchdam-mobile/commit/e9c519e8246f4b95e3cbbe8c406d91f1e13edfa8))
+
 ## [0.5.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.4.0...branchdam-mobile-v0.5.0) (2026-09-04)
 
 > This release was cut manually via a `Release-As` trailer
