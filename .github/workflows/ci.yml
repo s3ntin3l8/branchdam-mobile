@@ -125,7 +125,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
         run: |
           set -euo pipefail
-          AAR=android/app/libs/branchdam.aar
+          AAR="${{ github.workspace }}/android/app/libs/branchdam.aar"
           if [[ ! -f "$AAR" ]]; then
             echo "::error::AAR not found at $AAR — did the gomobile build step run?"
             exit 1
@@ -146,13 +146,14 @@ jobs:
             # column in hex (e.g. "0x4000"). 16KB = 0x4000.
             mapfile -t lines < <("$READELF" -lW "$so" | awk '/^[[:space:]]*LOAD/')
             for line in "${lines[@]}"; do
-              align=$(echo "$line" | grep -oE 'Align[[:space:]]+0x[0-9a-fA-F]+' | awk '{print $2}')
-              if [[ -z "$align" ]]; then
+              align=$(echo "$line" | awk '{print $NF}')
+              if [[ ! "$align" =~ ^0x[0-9a-fA-F]+$ ]]; then
                 echo "::error file=$so::could not parse Align from: $line"
                 fail=1
                 continue
               fi
-              if [[ "$align" != "0x4000" && "$align" != "0x8000" && "$align" != "0x10000" && "$align" != "0x20000" && "$align" != "0x40000" && "$align" != "0x80000" && "$align" != "0x100000" ]]; then
+              align_dec=$((align))
+              if (( align_dec < 0x4000 )); then
                 echo "::error file=$so::LOAD segment not 16KB-aligned (align=$align): $line"
                 fail=1
               fi
