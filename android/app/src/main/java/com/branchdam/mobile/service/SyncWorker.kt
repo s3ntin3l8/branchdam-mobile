@@ -30,7 +30,7 @@ class SyncWorker(
 
             Result.success()
         } catch (_: Exception) {
-            if (runAttemptCount < 3) {
+            if (runAttemptCount < MAX_ATTEMPTS) {
                 Result.retry()
             } else {
                 Result.failure()
@@ -54,5 +54,6 @@ class SyncWorker(
 
     companion object {
         private const val TAG = "SyncWorker"
+        const val MAX_ATTEMPTS = 3
     }
 }

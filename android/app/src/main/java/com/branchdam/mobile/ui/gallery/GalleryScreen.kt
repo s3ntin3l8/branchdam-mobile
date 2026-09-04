@@ -38,6 +38,7 @@ fun GalleryScreen(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadError by viewModel.loadError.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Gallery") }) },
@@ -50,6 +51,18 @@ fun GalleryScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
+                }
+            }
+            loadError != null -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        loadError!!,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
             items.isEmpty() -> {
@@ -77,7 +90,7 @@ fun GalleryScreen(
                                 AsyncImage(
                                     model = ImageRequest.Builder(LocalContext.current)
                                         .data(Uri.parse(galleryItem.mediaItem.contentUri))
-                                        .crossfade(true)
+                                        .crossfade(300)
                                         .build(),
                                     contentDescription = galleryItem.mediaItem.displayName,
                                     contentScale = ContentScale.Crop,

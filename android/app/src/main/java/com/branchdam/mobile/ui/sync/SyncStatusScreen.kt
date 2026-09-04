@@ -1,5 +1,6 @@
 package com.branchdam.mobile.ui.sync
 
+import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -34,6 +36,7 @@ fun SyncStatusScreen(
     viewModel: SyncStatusViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Sync Status") }) },
@@ -73,7 +76,11 @@ fun SyncStatusScreen(
                     Text("Last Sync", style = MaterialTheme.typography.labelMedium)
                     Text(
                         if (uiState.lastSyncTime > 0) {
-                            "Synced at ${uiState.lastSyncTime}"
+                            DateUtils.getRelativeTimeSpanString(
+                                uiState.lastSyncTime,
+                                System.currentTimeMillis(),
+                                DateUtils.MINUTE_IN_MILLIS,
+                            ).toString()
                         } else {
                             "Never synced"
                         },
