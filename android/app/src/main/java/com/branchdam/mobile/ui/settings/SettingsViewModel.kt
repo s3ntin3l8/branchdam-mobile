@@ -96,12 +96,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val dbPath = defaultEngineDbPath(context.filesDir)
             val devHosts = UrlValidator.cleartextHostsCsv(BuildConfig.DEBUG)
             val success = engineInit(
-                dbPath = dbPath,
-                baseURL = _serverUrl.value,
-                apiKey = _apiKey.value,
-                agentID = _agentId.value,
-                version = "0.1.0",
-                devCleartextHosts = devHosts,
+                dbPath,
+                _serverUrl.value,
+                _apiKey.value,
+                _agentId.value,
+                "0.1.0",
+                devHosts,
             )
             _isConnected.value = success
             _isConnecting.value = false
