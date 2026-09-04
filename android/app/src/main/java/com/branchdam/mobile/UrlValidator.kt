@@ -16,6 +16,15 @@ object UrlValidator {
     )
 
     /**
+     * Comma-separated form of [DEV_CLEARTEXT_HOSTS] suitable for
+     * the `devCleartextHosts` argument of [com.branchdam.mobile.EngineHolder.initialize].
+     * Returns an empty string when [isDebug] is false so the engine
+     * rejects cleartext traffic in release.
+     */
+    fun cleartextHostsCsv(isDebug: Boolean): String =
+        if (isDebug) DEV_CLEARTEXT_HOSTS.joinToString(",") else ""
+
+    /**
      * Returns true if [url] is a valid HTTP(S) URL whose host is
      * permitted for the given build type. In debug builds the
      * [DEV_CLEARTEXT_HOSTS] allowlist is checked for HTTP URLs.

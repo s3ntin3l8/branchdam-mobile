@@ -10,6 +10,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.branchdam.mobile.ui.lineage.LineageScreen
+import com.branchdam.mobile.ui.safespace.SafeSpaceScreen
+import com.branchdam.mobile.ui.settings.SettingsScreen
 
 @Composable
 fun AppNavGraph(
@@ -41,14 +43,10 @@ fun AppNavGraph(
             }
         }
         composable(Screen.Settings.route) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Settings \u2014 coming soon")
-            }
+            SettingsScreen()
         }
         composable(Screen.SafeSpace.route) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Safe Space \u2014 coming soon")
-            }
+            SafeSpaceScreen()
         }
     }
 }
