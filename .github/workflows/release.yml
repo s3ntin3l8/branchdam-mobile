@@ -86,7 +86,12 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          ./gradlew assembleRelease bundleRelease --no-daemon
+          # This pinned Gradle version joins any 2+ trailing CLI arguments
+          # into one string before task resolution (verified empirically,
+          # independent of the checked-in gradlew/gradle-wrapper.jar, which
+          # pass args through unmodified) — invoke one task per call. See #99.
+          ./gradlew assembleRelease
+          ./gradlew bundleRelease
 
       - name: Collect and Package Artifacts
         run: |
