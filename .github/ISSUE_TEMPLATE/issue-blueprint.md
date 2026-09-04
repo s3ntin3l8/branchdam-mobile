@@ -21,7 +21,7 @@ assignees: ""
 ## Acceptance criteria
 
 - [ ] <!-- Requirement 1 -->
-- [ ] Docs updated (`CLAUDE.md`) if behaviour or invariants changed
+- [ ] Docs updated (`AGENTS.md`) if behaviour or invariants changed
 - [ ] Test coverage added/modified
 - [ ] `make check` passes
 
