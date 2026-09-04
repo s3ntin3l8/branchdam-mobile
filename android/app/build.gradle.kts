@@ -35,12 +35,13 @@ android {
         versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // ABIs packed into the gomobile-built branchdam.aar. gomobile defaults
-        // to all four; we make this explicit so dropping a target later is
-        // intentional. Sub-issue A wires the AAR; sub-issue D removes the
-        // NativeBridge.kt loadLibrary stub.
+        // 64-bit ABIs only: arm64-v8a and x86_64. Required for 16KB page-size
+        // compliance on Android 15+ (PT_LOAD p_align >= 0x4000 in the bundled
+        // .so). 32-bit ABIs are exempt from the 16KB rule but are dropped
+        // because Google Play requires 64-bit, and dropping them cuts APK
+        // size and gomobile build time.
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
