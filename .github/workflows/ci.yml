@@ -119,3 +119,48 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew test
+
+      - name: Verify 16KB ELF alignment of bundled .so files
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
+        run: |
+          set -euo pipefail
+          AAR="${{ github.workspace }}/android/app/libs/branchdam.aar"
+          if [[ ! -f "$AAR" ]]; then
+            echo "::error::AAR not found at $AAR — did the gomobile build step run?"
+            exit 1
+          fi
+          rm -rf aar-extract
+          mkdir aar-extract
+          unzip -o -q "$AAR" -d aar-extract
+          READELF="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          if [[ ! -x "$READELF" ]]; then
+            echo "::error::llvm-readelf not found at $READELF"
+            exit 1
+          fi
+          fail=0
+          for so in aar-extract/jni/*/*.so; do
+            [[ -f "$so" ]] || continue
+            echo "Checking $so ..."
+            # -lW = program headers, wide output. LOAD lines have an "Align"
+            # column in hex (e.g. "0x4000"). 16KB = 0x4000.
+            mapfile -t lines < <("$READELF" -lW "$so" | awk '/^[[:space:]]*LOAD/')
+            for line in "${lines[@]}"; do
+              align=$(echo "$line" | awk '{print $NF}')
+              if [[ ! "$align" =~ ^0x[0-9a-fA-F]+$ ]]; then
+                echo "::error file=$so::could not parse Align from: $line"
+                fail=1
+                continue
+              fi
+              align_dec=$((align))
+              if (( align_dec < 0x4000 )); then
+                echo "::error file=$so::LOAD segment not 16KB-aligned (align=$align): $line"
+                fail=1
+              fi
+            done
+          done
+          if [[ "$fail" -ne 0 ]]; then
+            echo "::error::One or more .so files have non-16KB-aligned PT_LOAD segments."
+            exit 1
+          fi
+          echo "All .so files have 16KB-aligned PT_LOAD segments."

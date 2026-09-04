@@ -49,7 +49,7 @@ cd branchdam-mobile
 
 # 1. Build the gomobile-bound Go engine as an Android AAR
 ./scripts/build-mobile.sh --android-only
-# Produces: android/app/libs/branchdam.aar (ABIs: armeabi-v7a, arm64-v8a, x86, x86_64)
+# Produces: android/app/libs/branchdam.aar (ABIs: arm64-v8a, x86_64)
 
 # 2. Assemble release APK and App Bundle (AAB)
 cd android

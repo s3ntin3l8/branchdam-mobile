@@ -69,16 +69,31 @@ if [[ "${BUILD_ANDROID}" -eq 1 ]]; then
         exit 1
     fi
 
-    echo "=== Building Android AAR (arm, arm64, 386, amd64) ==="
+    echo "=== Building Android AAR (arm64, amd64) ==="
     mkdir -p android/app/libs
+    # 16 KB page-size alignment: Android 15+ ships with some 16 KB-page
+    # devices. Every PT_LOAD segment in the bundled .so files must
+    # therefore have p_align >= 0x4000. -ldflags is threaded to
+    # `go build` (cmd/gomobile/build.go:323); since -buildmode=c-shared
+    # forces the external linker (clang), the flag must be wrapped in
+    # -extldflags so it reaches the system linker.
+    # See: https://github.com/golang/go/issues/68754
+    #
+    # -target android defaults to all 4 ABIs (arm, arm64, 386, amd64 —
+    # see cmd/gomobile/env.go:624). We restrict to 64-bit only to
+    # match the Gradle abiFilters and avoid building 32-bit .so files
+    # that would be discarded by AGP anyway. Google Play has required
+    # 64-bit since 2019.
+    #
     # -androidapi 21: matches the project's minSdk = 28 floor and is within
     # the r25/r26 NDK's supported range (r25: 19..33, r26: 21..35).
     # Without -androidapi, gomobile defaults to API 16, which is below
     # every recent NDK's min API and fails the env check.
     gomobile bind \
-        -target android \
+        -target android/arm64,android/amd64 \
         -androidapi 21 \
         -javapkg io.branchdam.core \
+        -ldflags="-extldflags=-Wl,-z,max-page-size=16384" \
         -o android/app/libs/branchdam.aar \
         "${PUBLIC_PKG}"
     echo "AAR: $(ls -la android/app/libs/branchdam.aar)"
