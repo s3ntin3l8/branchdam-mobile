@@ -21,6 +21,7 @@ import com.branchdam.mobile.ui.OtgIngestProgressDialog
 import com.branchdam.mobile.ui.navigation.AppNavGraph
 import com.branchdam.mobile.ui.navigation.BottomNavBar
 import com.branchdam.mobile.ui.navigation.Screen
+import com.branchdam.mobile.ui.navigation.bottomNavRoutes
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 class MainActivity : ComponentActivity() {
