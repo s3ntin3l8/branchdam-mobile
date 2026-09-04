@@ -140,8 +140,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.3")
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("androidx.window:window:1.3.0")
 
     // branchdam Go engine, gomobile-bound. The .aar is produced by
     // `make mobile-build-android` (scripts/build-mobile.sh) and dropped into

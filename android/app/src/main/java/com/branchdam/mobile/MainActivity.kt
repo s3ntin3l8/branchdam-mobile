@@ -3,7 +3,6 @@ package com.branchdam.mobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -35,6 +34,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val mediaPerms = mutableListOf<String>()
+            if (checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                mediaPerms.add(android.Manifest.permission.READ_MEDIA_IMAGES)
+            }
+            if (checkSelfPermission(android.Manifest.permission.READ_MEDIA_VIDEO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                mediaPerms.add(android.Manifest.permission.READ_MEDIA_VIDEO)
+            }
+            if (mediaPerms.isNotEmpty()) {
+                requestPermissions(mediaPerms.toTypedArray(), 1002)
+            }
+        }
+
         val otgManager = OtgIngestManager.getInstance(this)
 
         setContent {
@@ -43,68 +55,61 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
-                val showBottomBar = currentRoute in listOf(
-                    Screen.Lineage.route,
-                    Screen.Gallery.route,
-                    Screen.Sync.route,
-                    Screen.Settings.route,
-                )
+                val showBottomBar = currentRoute in bottomNavRoutes
 
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        Scaffold(
-                            bottomBar = {
-                                if (showBottomBar) {
-                                    BottomNavBar(
-                                        currentRoute = currentRoute,
-                                        onNavigate = { route: String ->
-                                            navController.navigate(route) {
-                                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        },
-                                    )
-                                }
-                            },
-                        ) { padding ->
-                            AppNavGraph(
-                                navController = navController,
-                                modifier = Modifier.padding(padding),
+                    Scaffold(
+                        bottomBar = {
+                            if (showBottomBar) {
+                                BottomNavBar(
+                                    currentRoute = currentRoute,
+                                    onNavigate = { route: String ->
+                                        navController.navigate(route) {
+                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                )
+                            }
+                        },
+                    ) { padding ->
+                        AppNavGraph(
+                            navController = navController,
+                            modifier = Modifier.padding(padding),
+                        )
+                    }
+
+                    val otgState by otgManager.state.collectAsState()
+                    when (val state = otgState) {
+                        is OtgState.AwaitingConfirmation -> {
+                            OtgImportConfirmationDialog(
+                                scanResult = state.scanResult,
+                                onConfirm = { otgManager.confirmImport(state.scanResult) },
+                                onDismiss = { otgManager.cancelImport() },
                             )
                         }
-
-                        val otgState by otgManager.state.collectAsState()
-                        when (val state = otgState) {
-                            is OtgState.AwaitingConfirmation -> {
-                                OtgImportConfirmationDialog(
-                                    scanResult = state.scanResult,
-                                    onConfirm = { otgManager.confirmImport(state.scanResult) },
-                                    onDismiss = { otgManager.cancelImport() },
-                                )
-                            }
-                            is OtgState.Ingesting -> {
-                                OtgIngestProgressDialog(
-                                    progress = state.progress,
-                                    onCancel = { otgManager.cancelImport() },
-                                )
-                            }
-                            is OtgState.Completed -> {
-                                OtgIngestCompletedDialog(
-                                    importedCount = state.importedCount,
-                                    totalBytes = state.totalBytes,
-                                    fileErrors = state.fileErrors,
-                                    onDismiss = { otgManager.reset() },
-                                )
-                            }
-                            is OtgState.Error -> {
-                                OtgIngestErrorDialog(
-                                    errorMessage = state.message,
-                                    onDismiss = { otgManager.reset() },
-                                )
-                            }
-                            else -> Unit
+                        is OtgState.Ingesting -> {
+                            OtgIngestProgressDialog(
+                                progress = state.progress,
+                                onCancel = { otgManager.cancelImport() },
+                            )
                         }
+                        is OtgState.Completed -> {
+                            OtgIngestCompletedDialog(
+                                importedCount = state.importedCount,
+                                totalBytes = state.totalBytes,
+                                fileErrors = state.fileErrors,
+                                onDismiss = { otgManager.reset() },
+                            )
+                        }
+                        is OtgState.Error -> {
+                            OtgIngestErrorDialog(
+                                errorMessage = state.message,
+                                onDismiss = { otgManager.reset() },
+                            )
+                        }
+                        else -> Unit
                     }
                 }
             }

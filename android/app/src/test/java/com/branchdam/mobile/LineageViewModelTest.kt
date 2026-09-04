@@ -70,4 +70,10 @@ class LineageViewModelTest {
         assertEquals(0.95, candidate.confidence, 0.001)
         assertTrue(candidate.resolver.contains("google_photos"))
     }
+
+    @Test
+    fun testInPhoneEditResolverFormat() {
+        assertEquals("in_phone_google_photos_editor", com.branchdam.mobile.ui.lineage.InPhoneEditResolver.format("Google Photos Editor"))
+        assertEquals("in_phone_luminar_neo_mobile", com.branchdam.mobile.ui.lineage.InPhoneEditResolver.format("Luminar Neo Mobile"))
+    }
 }

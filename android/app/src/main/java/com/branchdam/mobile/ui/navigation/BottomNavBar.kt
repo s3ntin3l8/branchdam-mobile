@@ -19,12 +19,14 @@ data class BottomNavItem(
     val route: String,
 )
 
-val bottomNavItems = listOf(
+private val bottomNavItems = listOf(
     BottomNavItem("Lineage", Icons.Filled.AccountTree, Screen.Lineage.route),
     BottomNavItem("Gallery", Icons.Filled.PhotoLibrary, Screen.Gallery.route),
     BottomNavItem("Sync", Icons.Filled.Sync, Screen.Sync.route),
     BottomNavItem("Settings", Icons.Filled.Settings, Screen.Settings.route),
 )
+
+internal val bottomNavRoutes: Set<String> = bottomNavItems.map { it.route }.toSet()
 
 @Composable
 fun BottomNavBar(

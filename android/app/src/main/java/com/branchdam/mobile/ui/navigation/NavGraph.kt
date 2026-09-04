@@ -24,7 +24,9 @@ fun AppNavGraph(
         composable(Screen.Lineage.route) {
             LineageScreen(
                 onNavigateToSafeSpace = {
-                    navController.navigate(Screen.SafeSpace.route)
+                    navController.navigate(Screen.SafeSpace.route) {
+                        launchSingleTop = true
+                    }
                 },
             )
         }

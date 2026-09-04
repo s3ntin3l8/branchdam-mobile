@@ -2,6 +2,7 @@ package com.branchdam.mobile.lineage
 
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
+import com.branchdam.mobile.ui.lineage.InPhoneEditResolver
 
 data class InPhoneEdit(
     val originalMaster: MediaItem,
@@ -58,7 +59,7 @@ object EditCorrelator {
                 parentLocalID = edit.originalMaster.contentUri,
                 childLocalID = edit.editedDerivative.contentUri,
                 relationshipType = "DERIVED_FROM",
-                resolver = "in_phone_${edit.editorApp.lowercase().replace(" ", "_")}",
+                resolver = InPhoneEditResolver.format(edit.editorApp),
                 confidence = edit.confidence
             )
             count++
