@@ -1,17 +1,15 @@
 package com.branchdam.mobile.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.branchdam.mobile.ui.gallery.GalleryScreen
 import com.branchdam.mobile.ui.lineage.LineageScreen
 import com.branchdam.mobile.ui.safespace.SafeSpaceScreen
 import com.branchdam.mobile.ui.settings.SettingsScreen
+import com.branchdam.mobile.ui.sync.SyncStatusScreen
 
 @Composable
 fun AppNavGraph(
@@ -33,14 +31,10 @@ fun AppNavGraph(
             )
         }
         composable(Screen.Gallery.route) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Gallery \u2014 coming soon")
-            }
+            GalleryScreen()
         }
         composable(Screen.Sync.route) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Sync Status \u2014 coming soon")
-            }
+            SyncStatusScreen()
         }
         composable(Screen.Settings.route) {
             SettingsScreen()

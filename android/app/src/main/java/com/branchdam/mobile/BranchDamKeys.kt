@@ -42,4 +42,11 @@ object BranchDamKeys {
      * deciding whether to show a confirmation notification.
      */
     const val AUTO_IMPORT_CAMERA_ROLL = "branchdam_auto_import_camera_roll"
+
+    /**
+     * Sync status: timestamp (ms since epoch) of the last completed
+     * sync cycle. Written by [com.branchdam.mobile.ui.sync.SyncStatusViewModel]
+     * after observing a successful [androidx.work.WorkInfo.State.SUCCEEDED].
+     */
+    const val LAST_SYNC_TIME = "branchdam_last_sync_time"
 }
