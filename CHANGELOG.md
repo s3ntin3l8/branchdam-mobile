@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.4.0...branchdam-mobile-v0.5.0) (2026-09-04)
+
+
+### Miscellaneous Chores
+
+* force release-please to cut 0.5.0 ([#97](https://github.com/s3ntin3l8/branchdam-mobile/issues/97)) ([b510a1f](https://github.com/s3ntin3l8/branchdam-mobile/commit/b510a1f8313b45b446fc90eeb1f95c2ffd72bfbe))
+
 ## [0.4.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.3.0...branchdam-mobile-v0.4.0) (2026-08-30)
 
 
