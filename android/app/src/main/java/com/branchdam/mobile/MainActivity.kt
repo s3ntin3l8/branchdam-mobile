@@ -3,32 +3,27 @@ package com.branchdam.mobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Scaffold
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.window.layout.WindowInfoTracker
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.branchdam.mobile.otg.OtgIngestManager
 import com.branchdam.mobile.otg.OtgState
-import com.branchdam.mobile.ui.DevicePosture
-import com.branchdam.mobile.ui.DualPaneScreen
 import com.branchdam.mobile.ui.OtgImportConfirmationDialog
 import com.branchdam.mobile.ui.OtgIngestCompletedDialog
+import com.branchdam.mobile.ui.OtgIngestErrorDialog
 import com.branchdam.mobile.ui.OtgIngestProgressDialog
+import com.branchdam.mobile.ui.navigation.AppNavGraph
+import com.branchdam.mobile.ui.navigation.BottomNavBar
+import com.branchdam.mobile.ui.navigation.Screen
 import com.branchdam.mobile.ui.theme.BranchDamTheme
-import com.branchdam.mobile.ui.toDevicePosture
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-
-    private var devicePosture by mutableStateOf<DevicePosture>(DevicePosture.Flat)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,27 +36,41 @@ class MainActivity : ComponentActivity() {
 
         val otgManager = OtgIngestManager.getInstance(this)
 
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                WindowInfoTracker.getOrCreate(this@MainActivity)
-                    .windowLayoutInfo(this@MainActivity)
-                    .map { it.toDevicePosture() }
-                    .collect { devicePosture = it }
-            }
-        }
-
         setContent {
             BranchDamTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    val configuration = resources.configuration
-                    val posture = if (devicePosture != DevicePosture.Flat) {
-                        devicePosture
-                    } else {
-                        val screenWidthDp = configuration.screenWidthDp
-                        if (screenWidthDp < 600) DevicePosture.Flat else DevicePosture.Book
-                    }
+                val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
 
-                    DualPaneScreen(posture = posture)
+                val showBottomBar = currentRoute in listOf(
+                    Screen.Lineage.route,
+                    Screen.Gallery.route,
+                    Screen.Sync.route,
+                    Screen.Settings.route,
+                )
+
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    Scaffold(
+                        bottomBar = {
+                            if (showBottomBar) {
+                                BottomNavBar(
+                                    currentRoute = currentRoute,
+                                    onNavigate = { route ->
+                                        navController.navigate(route) {
+                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                )
+                            }
+                        },
+                    ) { padding ->
+                        AppNavGraph(
+                            navController = navController,
+                            modifier = Modifier.padding(padding),
+                        )
+                    }
 
                     val otgState by otgManager.state.collectAsState()
                     when (val state = otgState) {
@@ -69,13 +78,13 @@ class MainActivity : ComponentActivity() {
                             OtgImportConfirmationDialog(
                                 scanResult = state.scanResult,
                                 onConfirm = { otgManager.confirmImport(state.scanResult) },
-                                onDismiss = { otgManager.cancelImport() }
+                                onDismiss = { otgManager.cancelImport() },
                             )
                         }
                         is OtgState.Ingesting -> {
                             OtgIngestProgressDialog(
                                 progress = state.progress,
-                                onCancel = { otgManager.cancelImport() }
+                                onCancel = { otgManager.cancelImport() },
                             )
                         }
                         is OtgState.Completed -> {
@@ -83,13 +92,13 @@ class MainActivity : ComponentActivity() {
                                 importedCount = state.importedCount,
                                 totalBytes = state.totalBytes,
                                 fileErrors = state.fileErrors,
-                                onDismiss = { otgManager.reset() }
+                                onDismiss = { otgManager.reset() },
                             )
                         }
                         is OtgState.Error -> {
-                            com.branchdam.mobile.ui.OtgIngestErrorDialog(
+                            OtgIngestErrorDialog(
                                 errorMessage = state.message,
-                                onDismiss = { otgManager.reset() }
+                                onDismiss = { otgManager.reset() },
                             )
                         }
                         else -> Unit
