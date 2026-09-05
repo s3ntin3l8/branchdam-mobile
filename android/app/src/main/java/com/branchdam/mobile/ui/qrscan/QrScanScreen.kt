@@ -1,7 +1,10 @@
 package com.branchdam.mobile.ui.qrscan
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,7 +21,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -120,6 +123,7 @@ fun QrScanScreen(
             ) {
                 CameraPreviewWithAnalysis(
                     onBarcodeScanned = { viewModel.onQrCodeScanned(it) },
+                    isScanGated = { viewModel.tryConsumeScanGate() },
                     modifier = Modifier.fillMaxSize(),
                 )
 
@@ -146,25 +150,13 @@ fun QrScanScreen(
                 }
             }
         } else {
-            Column(
+            PermissionDeniedPanel(
+                onRequest = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
                     .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    "Camera permission is required to scan QR codes.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(bottom = 16.dp),
-                )
-                OutlinedButton(
-                    onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                ) {
-                    Text("Grant Permission")
-                }
-            }
+            )
         }
     }
 
@@ -175,6 +167,58 @@ fun QrScanScreen(
             onDismiss = { viewModel.onDismiss() },
         )
     }
+}
+
+@Composable
+private fun PermissionDeniedPanel(
+    onRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val activity = context.findActivity()
+    val permanentlyDenied = activity != null &&
+        !activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            if (permanentlyDenied) {
+                "Camera permission was permanently denied. Open Settings to grant it."
+            } else {
+                "Camera permission is required to scan QR codes."
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = 16.dp),
+        )
+        if (permanentlyDenied) {
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                },
+            ) {
+                Text("Open Settings")
+            }
+        } else {
+            OutlinedButton(onClick = onRequest) {
+                Text("Grant Permission")
+            }
+        }
+    }
+}
+
+private fun android.content.Context.findActivity(): android.app.Activity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
 
 @Composable
@@ -189,7 +233,10 @@ private fun PairingConfirmDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DetailRow("Server URL", config.serverUrl)
-                DetailRow("API Key", config.apiKey.ifBlank { "(none)" })
+                DetailRow(
+                    "API Key",
+                    config.apiKey.ifBlank { "(none)" }.let { maskApiKey(it) },
+                )
                 DetailRow("Agent ID", config.agentId)
             }
         },
@@ -204,6 +251,20 @@ private fun PairingConfirmDialog(
             }
         },
     )
+}
+
+/**
+ * Mask an API key for display: keep the first 4 and last 2
+ * characters visible if long enough, otherwise show all bullets.
+ * Empty input is returned unchanged so callers can substitute
+ * `(none)` before masking.
+ */
+private fun maskApiKey(value: String): String {
+    if (value.isBlank() || value == "(none)") return value
+    if (value.length <= 6) return "•".repeat(value.length)
+    val head = value.take(4)
+    val tail = value.takeLast(2)
+    return "$head${"•".repeat((value.length - 6).coerceAtLeast(4))}$tail"
 }
 
 @Composable
@@ -224,16 +285,20 @@ private fun DetailRow(label: String, value: String) {
 @Composable
 private fun CameraPreviewWithAnalysis(
     onBarcodeScanned: (String) -> Unit,
+    isScanGated: () -> Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val scanner = remember { BarcodeScanning.getClient() }
-    var hasScanned by remember { mutableStateOf(false) }
+    // Captured so onDispose can unbindAll() — without this the
+    // camera stays bound to the lifecycle after navigation,
+    // which leaks the PreviewView and blocks subsequent binds.
+    val cameraProviderRef = remember { mutableStateOf<ProcessCameraProvider?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
+            cameraProviderRef.value?.unbindAll()
             cameraExecutor.shutdown()
             scanner.close()
         }
@@ -241,11 +306,20 @@ private fun CameraPreviewWithAnalysis(
 
     AndroidView(
         factory = { ctx ->
-            val previewView = PreviewView(ctx)
+            val previewView = PreviewView(ctx).apply {
+                scaleType = PreviewView.ScaleType.FIT_CENTER
+            }
             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
             cameraProviderFuture.addListener({
                 val cameraProvider = cameraProviderFuture.get()
+                cameraProviderRef.value = cameraProvider
+
+                // Defer the bind until the lifecycle is at least STARTED
+                // — bindToLifecycle requires it and would throw otherwise.
+                if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    return@addListener
+                }
 
                 val preview = Preview.Builder().build().also {
                     it.surfaceProvider = previewView.surfaceProvider
@@ -260,9 +334,9 @@ private fun CameraPreviewWithAnalysis(
                                 imageProxy = imageProxy,
                                 scanner = scanner,
                                 onFound = { barcode ->
-                                    if (!hasScanned) {
-                                        hasScanned = true
-                                        barcode.rawValue?.let { onBarcodeScanned(it) }
+                                    val raw = barcode.rawValue
+                                    if (raw != null && isScanGated()) {
+                                        onBarcodeScanned(raw)
                                     }
                                 },
                             )

@@ -69,4 +69,18 @@ class QrParserTest {
         assertEquals("http://x:8080", config!!.serverUrl)
         assertEquals("k", config.apiKey)
     }
+
+    @Test
+    fun testParseAcceptsQueryStyleForm() {
+        // README documents the spec form as `branchdam://?server=…&key=…&agent=…`
+        // — the literal `?` separator after the scheme. Parser must accept both
+        // `branchdam://server=…` and `branchdam://?server=…`.
+        val config = QrParser.parseQrPayload(
+            "branchdam://?server=http://192.168.1.100:8080&key=abc123&agent=pixel-10-fold"
+        )
+        assertNotNull(config)
+        assertEquals("http://192.168.1.100:8080", config!!.serverUrl)
+        assertEquals("abc123", config.apiKey)
+        assertEquals("pixel-10-fold", config.agentId)
+    }
 }

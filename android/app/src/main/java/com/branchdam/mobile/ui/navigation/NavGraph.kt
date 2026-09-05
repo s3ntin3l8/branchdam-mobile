@@ -20,6 +20,9 @@ fun AppNavGraph(
     navController: NavHostController,
     modifier: Modifier = Modifier,
 ) {
+    // SettingsViewModel is scoped to the activity (top-level
+    // viewModel() call) so that fields populated by the QR scan
+    // flow are visible on the Settings screen after pop.
     val settingsViewModel: SettingsViewModel = viewModel()
     NavHost(
         navController = navController,

@@ -9,8 +9,11 @@ import org.junit.Test
  * Tests that [SettingsViewModel.validateUrl] correctly accepts
  * HTTPS and local dev hosts in debug, and rejects plain HTTP and
  * blank URLs. `applyPairingConfig` itself requires an Android
- * Application context (it's an AndroidViewModel) and is exercised
- * end-to-end via the QrScanViewModel flow.
+ * Application context (it's an AndroidViewModel) and is not
+ * directly exercised here — the QrScanViewModel flow tests that
+ * the parser → ApplyResult.Applied path works, but populating
+ * the SettingsViewModel fields downstream is covered by
+ * instrumentation tests.
  */
 class SettingsViewModelPairingTest {
 
