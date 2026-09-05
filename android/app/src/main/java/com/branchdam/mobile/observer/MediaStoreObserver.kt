@@ -191,8 +191,8 @@ class MediaStoreObserver(
 
         // Motion photo detection -- DNG/HEIF motion photos with embedded micro video.
         for (item in newItems.filter { !it.isVideo }) {
-            val file = File(item.filePath)
-            if (MotionPhotoExtractor.detectMotionPhoto(file).isMotionPhoto) {
+            val uri = Uri.parse(item.contentUri)
+            if (MotionPhotoExtractor.detectMotionPhoto(context, uri).isMotionPhoto) {
                 EngineHolder.enqueueLineageEvent(
                     parentLocalID = item.contentUri,
                     childLocalID = item.contentUri,

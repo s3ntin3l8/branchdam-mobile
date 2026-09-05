@@ -8,6 +8,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Environment
 import com.branchdam.mobile.otg.OtgIngestManager
+import androidx.core.content.IntentCompat
 import java.io.File
 
 class UsbOtgReceiver : BroadcastReceiver() {
@@ -17,7 +18,7 @@ class UsbOtgReceiver : BroadcastReceiver() {
 
         when (action) {
             UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+                val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
                 if (device != null && isMassStorageDevice(device)) {
                     val label = getDeviceLabel(device)
                     // Check external storage or fallback to standard OTG / SD mount paths
@@ -27,7 +28,7 @@ class UsbOtgReceiver : BroadcastReceiver() {
             }
 
             UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+                val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
                 if (device != null && isMassStorageDevice(device)) {
                     OtgIngestManager.getInstance(context).reset()
                 }
