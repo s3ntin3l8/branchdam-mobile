@@ -45,7 +45,7 @@ class BranchDamApplication : Application() {
             baseURL = config.serverUrl,
             apiKey = config.apiKey,
             agentID = config.agentId,
-            version = "0.1.0",
+            version = BuildConfig.VERSION_NAME,
             devCleartextHosts = cleartextHosts,
         )
     }

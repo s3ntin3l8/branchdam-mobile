@@ -52,6 +52,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _namingTemplate = MutableStateFlow(EngineHolder.fetchNamingTemplate())
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
+    val versionName: String = BuildConfig.VERSION_NAME
+    val versionCode: Int = BuildConfig.VERSION_CODE
+
     private val _isConnected = MutableStateFlow(EngineHolder.isInitialized())
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
@@ -100,7 +103,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _serverUrl.value,
                 _apiKey.value,
                 _agentId.value,
-                "0.1.0",
+                BuildConfig.VERSION_NAME,
                 devHosts,
             )
             _isConnected.value = success

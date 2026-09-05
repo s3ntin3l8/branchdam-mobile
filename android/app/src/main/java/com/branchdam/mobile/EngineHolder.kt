@@ -42,7 +42,7 @@ object EngineHolder {
         baseURL: String,
         apiKey: String = "",
         agentID: String = "pixel-fold",
-        version: String = "0.1.0",
+        version: String = BuildConfig.VERSION_NAME,
         devCleartextHosts: String = "",
     ): Boolean {
         if (!nativeAvailable.get()) return false

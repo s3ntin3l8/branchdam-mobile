@@ -111,15 +111,43 @@ jobs:
           ./gradlew bundleRelease
 
       - name: Collect and Package Artifacts
+        env:
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag }}
         run: |
           mkdir -p dist
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
+          # Strip the leading 'v' so v0.5.1 → 0.5.1, matching how the
+          # version is recorded in the APK / AAB manifest (Gradle does the
+          # same via appVersionName.removePrefix("v")).
+          VER="${TAG_NAME#v}"
+          if [ -z "$VER" ]; then VER="0.0.0"; fi
+
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*-release.apk" 2>/dev/null | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
+          fi
           if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            cp "$APK_PATH" dist/branchdam-mobile.apk
+            cp "$APK_PATH" "dist/branchdam-mobile-${VER}.apk"
           fi
           AAB_PATH=$(find android/app/build/outputs/bundle/release -name "*.aab" 2>/dev/null | head -n 1)
           if [ -n "$AAB_PATH" ] && [ -f "$AAB_PATH" ]; then
-            cp "$AAB_PATH" dist/branchdam-mobile.aab
+            cp "$AAB_PATH" "dist/branchdam-mobile-${VER}.aab"
+          fi
+
+          # SHA256 sidecar for sideload verification.
+          if ls dist/branchdam-mobile-${VER}.* >/dev/null 2>&1; then
+            ( cd dist && sha256sum branchdam-mobile-${VER}.* > "branchdam-mobile-${VER}.sha256" )
+          fi
+
+          # Plain-text size + filename manifest for sideloaders / mirrors.
+          # ls -l emits "<modes> <links> <owner> <group> <bytes> <month> <day> <time> <name>"
+          # — we only need the filename and the size column.
+          if ls dist/branchdam-mobile-${VER}.apk dist/branchdam-mobile-${VER}.aab >/dev/null 2>&1; then
+            {
+              printf 'branchdam-mobile %s\n' "${VER}"
+              printf '%s\n' "--------------------------------"
+              ( cd dist && ls -l branchdam-mobile-${VER}.apk branchdam-mobile-${VER}.aab \
+                | awk '{printf "%-44s  %10d bytes\n", $NF, $5}' )
+            } > "dist/branchdam-mobile-${VER}.manifest.txt"
           fi
 
       - name: Upload Build Artifacts
