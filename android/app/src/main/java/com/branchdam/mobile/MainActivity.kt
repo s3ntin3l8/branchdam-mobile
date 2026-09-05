@@ -276,7 +276,19 @@ class MainActivity : ComponentActivity() {
                         is OtgState.AwaitingConfirmation -> {
                             OtgImportConfirmationDialog(
                                 scanResult = state.scanResult,
-                                onConfirm = { otgManager.confirmImport(state.scanResult) },
+                                onConfirm = {
+                                    otgManager.confirmImport(
+                                        scanResult = state.scanResult,
+                                        onFileStaged = { file, candidate ->
+                                            EngineHolder.enqueueMedia(
+                                                localPath = file.absolutePath,
+                                                filename = candidate.fileName,
+                                                capturedAtUnix = candidate.lastModifiedUnix,
+                                                localId = candidate.uri
+                                            )
+                                        }
+                                    )
+                                },
                                 onDismiss = { otgManager.cancelImport() },
                             )
                         }
