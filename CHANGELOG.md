@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.6.0...branchdam-mobile-v0.7.0) (2026-09-05)
+
+
+### Features
+
+* **android:** version-stamp apk/aab releases and surface in Settings ([#123](https://github.com/s3ntin3l8/branchdam-mobile/issues/123)) ([16a2eb8](https://github.com/s3ntin3l8/branchdam-mobile/commit/16a2eb84d97e6e742c681cac5b2dd4029409f523))
+
 ## [0.6.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.5.1...branchdam-mobile-v0.6.0) (2026-09-05)
 
 
