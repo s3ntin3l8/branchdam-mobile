@@ -54,3 +54,11 @@ repos:
         types: [go]
         pass_filenames: false
         stages: [pre-commit]
+
+      - id: go-mod-tidy-root
+        name: go mod tidy check (root)
+        entry: bash -c 'go mod tidy -diff && git diff --exit-code go.mod go.sum'
+        language: system
+        types: [go]
+        pass_filenames: false
+        stages: [pre-commit]

@@ -6,6 +6,11 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
     directory: "/core"
     schedule:
       interval: "weekly"
