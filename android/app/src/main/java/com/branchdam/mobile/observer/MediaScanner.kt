@@ -5,8 +5,11 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 
 object MediaScanner {
+
+    private const val TAG = "MediaScanner"
 
     fun queryRecentImages(context: Context, minDateTakenUnix: Long = 0, limit: Int = 100): List<MediaItem> {
         val projection = arrayOf(
@@ -70,7 +73,7 @@ object MediaScanner {
         val items = mutableListOf<MediaItem>()
         val cursor: Cursor? = try {
             context.contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
-        } catch (_: SecurityException) {
+        } catch (e: SecurityException) {
             // Cold launch can race the runtime permission grant: the
             // ViewModel's `init` fires the query before the user has
             // tapped "Allow" on the permission dialog. Returning an
@@ -79,6 +82,14 @@ object MediaScanner {
             // permission is granted (the relevant screens expose a
             // refresh action, and the MediaStoreObserver re-enqueues
             // on the next onChange).
+            //
+            // We log the exception (with the URI) so that *other*
+            // SecurityException causes — cross-user URI access, the
+            // Android 14+ photo-picker race, a malformed sub-URI —
+            // remain distinguishable from the cold-launch case in
+            // production telemetry. Silently swallowing this would
+            // make any future "no media found" regression invisible.
+            Log.w(TAG, "queryMediaUri($uri) denied; returning empty list", e)
             return emptyList()
         }
 

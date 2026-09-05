@@ -9,12 +9,14 @@ import org.junit.Test
  * `requestPermissions()` calls synchronously inside `onCreate`, and on
  * Android 13+ the second call dismissed the first dialog without
  * delivering its result. The state machine replaces that with a
- * NONE → NOTIFICATIONS → MEDIA transition so the second dialog cannot
- * appear before the first dialog has been resolved.
+ * NONE → NOTIFICATIONS → MEDIA → DONE transition so the second dialog
+ * cannot appear before the first dialog has been resolved and so a
+ * user who permanently denies a permission cannot cause the flow to
+ * loop forever.
  *
- * The state machine is the contract that eliminates the bug; these
- * tests pin its transitions so a future "optimization" cannot
- * regress back to back-to-back `requestPermissions()` calls.
+ * `DONE` is the regression guard: pre-fix the flow reset to `NONE`
+ * after every callback, which meant a deny-everything user would
+ * re-trigger the launchers on every Compose recomposition.
  */
 class PermissionFlowStateTest {
 
@@ -40,21 +42,33 @@ class PermissionFlowStateTest {
     }
 
     @Test
-    fun testNextBatchFromMediaStaysAtMedia() {
+    fun testNextBatchFromMediaGoesToDone() {
         val flow = PermissionFlowState()
         flow.nextBatch()
         flow.nextBatch()
         flow.nextBatch()
-        assertEquals(PermissionBatch.MEDIA, flow.batch.value)
+        assertEquals(PermissionBatch.DONE, flow.batch.value)
     }
 
     @Test
-    fun testResetReturnsToNone() {
+    fun testNextBatchFromDoneStaysAtDone() {
         val flow = PermissionFlowState()
         flow.nextBatch()
         flow.nextBatch()
-        flow.reset()
-        assertEquals(PermissionBatch.NONE, flow.batch.value)
+        flow.nextBatch()
+        flow.nextBatch()
+        assertEquals(PermissionBatch.DONE, flow.batch.value)
+    }
+
+    @Test
+    fun testDoneStateIsTerminal() {
+        val flow = PermissionFlowState()
+        flow.markDone()
+        assertEquals(PermissionBatch.DONE, flow.batch.value)
+        flow.nextBatch()
+        assertEquals(PermissionBatch.DONE, flow.batch.value)
+        flow.markDone()
+        assertEquals(PermissionBatch.DONE, flow.batch.value)
     }
 
     @Test
@@ -70,14 +84,14 @@ class PermissionFlowStateTest {
         flow.nextBatch()
         assertEquals(PermissionBatch.MEDIA, flow.batch.value)
 
-        // The media launcher's callback calls reset(), returning to
-        // NONE — at which point the LaunchedEffect re-fires and the
-        // cycle restarts (with all permissions already granted this
-        // time, so no launcher actually launches).
-        flow.reset()
-        assertEquals(PermissionBatch.NONE, flow.batch.value)
-
+        // The media launcher's callback calls nextBatch(), advancing
+        // to DONE — the terminal state. A user who denies everything
+        // will still terminate here, not loop back to NONE.
         flow.nextBatch()
-        assertEquals(PermissionBatch.NOTIFICATIONS, flow.batch.value)
+        assertEquals(PermissionBatch.DONE, flow.batch.value)
+
+        // Any further nextBatch / markDone calls are no-ops.
+        flow.nextBatch()
+        assertEquals(PermissionBatch.DONE, flow.batch.value)
     }
 }

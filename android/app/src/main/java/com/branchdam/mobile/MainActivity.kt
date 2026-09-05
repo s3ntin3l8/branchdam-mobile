@@ -35,20 +35,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Tracks which permission batch is currently pending. Each batch is
- * requested sequentially: NONE → NOTIFICATIONS → MEDIA → MEDIA (terminal).
+ * Tracks which permission batch is currently pending. The flow is:
  *
- * The original implementation fired two `requestPermissions()` calls
- * synchronously inside `onCreate`, and on Android 13+ the second call
- * dismissed the first dialog without delivering its result. Sequencing
- * through a state machine means the next batch's launcher is only
- * invoked after the previous batch's callback fires — there is no
- * overlap, no dismissed dialog, and no missing `onRequestPermissionsResult`.
+ * ```
+ * NONE → NOTIFICATIONS → MEDIA → DONE
+ * ```
+ *
+ * `DONE` is the terminal state and short-circuits the
+ * [DrivePermissionFlow] `LaunchedEffect`, so a user who permanently
+ * denies a permission (which on Android 13+ returns the launcher
+ * callback immediately with `false`) cannot cause the state machine to
+ * loop forever. The pre-fix design over-loaded `MEDIA` as a de-facto
+ * terminal state and reset to `NONE` after every media-batch callback,
+ * which meant a user denying everything would re-trigger the launchers
+ * on every Compose recomposition. See
+ * `PermissionFlowStateTest.testDoneStateIsTerminal` for the
+ * regression guard.
  */
 enum class PermissionBatch {
     NONE,
     NOTIFICATIONS,
     MEDIA,
+    DONE,
 }
 
 class PermissionFlowState {
@@ -59,12 +67,13 @@ class PermissionFlowState {
         _batch.value = when (_batch.value) {
             PermissionBatch.NONE -> PermissionBatch.NOTIFICATIONS
             PermissionBatch.NOTIFICATIONS -> PermissionBatch.MEDIA
-            PermissionBatch.MEDIA -> PermissionBatch.MEDIA
+            PermissionBatch.MEDIA -> PermissionBatch.DONE
+            PermissionBatch.DONE -> PermissionBatch.DONE
         }
     }
 
-    fun reset() {
-        _batch.value = PermissionBatch.NONE
+    fun markDone() {
+        _batch.value = PermissionBatch.DONE
     }
 }
 
@@ -94,17 +103,71 @@ internal fun runtimePermissionBatches(): Pair<List<String>, List<String>> {
 }
 
 /**
- * Drives the permission request state machine. Lives in a top-level
- * Composable so unit tests can call it directly with a fake
- * [PermissionFlowState] and inspect state transitions without
- * instantiating an Activity.
+ * Pure decision function: given the current state and the runtime
+ * batches, decide what action to take next. Extracted from
+ * [DrivePermissionFlow] so unit tests can exercise the sequencing
+ * logic without instantiating a Compose runtime.
  *
- * The [LaunchedEffect] re-runs only when [batch] changes; within a
- * batch, it either launches the corresponding dialog (if the batch has
- * permissions and any are still missing) or advances to the next
- * batch. Both launchers' callbacks feed back into the state machine
- * via `nextBatch()` / `reset()`, so the second dialog cannot appear
- * before the first dialog has been resolved.
+ * Returns the next [PermissionBatch] state the flow should transition
+ * to. `null` means "stay where you are" (used when a launcher has
+ * fired and is awaiting the user's callback).
+ *
+ * The "already granted" filter is applied to *both* batches — without
+ * it, a user who has already granted `POST_NOTIFICATIONS` would see
+ * one no-op dialog fire after the first cycle before settling. (The
+ * pre-fix `MEDIA`-only filter meant a `POST_NOTIFICATIONS` denial
+ * would cause a re-launch.)
+ */
+internal fun nextPermissionAction(
+    batch: PermissionBatch,
+    notificationsBatch: List<String>,
+    mediaBatch: List<String>,
+    hasPermission: (String) -> Boolean,
+): PermissionAction {
+    return when (batch) {
+        PermissionBatch.NONE -> PermissionAction.Advance
+        PermissionBatch.NOTIFICATIONS -> {
+            if (notificationsBatch.isEmpty()) {
+                PermissionAction.Advance
+            } else {
+                val missing = notificationsBatch.filter { !hasPermission(it) }
+                if (missing.isEmpty()) {
+                    PermissionAction.Advance
+                } else {
+                    PermissionAction.LaunchNotifications(missing)
+                }
+            }
+        }
+        PermissionBatch.MEDIA -> {
+            val missing = mediaBatch.filter { !hasPermission(it) }
+            if (missing.isEmpty()) {
+                PermissionAction.MarkDone
+            } else {
+                PermissionAction.LaunchMedia(missing)
+            }
+        }
+        PermissionBatch.DONE -> PermissionAction.Stay
+    }
+}
+
+internal sealed class PermissionAction {
+    object Advance : PermissionAction()
+    object MarkDone : PermissionAction()
+    object Stay : PermissionAction()
+    data class LaunchNotifications(val perms: List<String>) : PermissionAction()
+    data class LaunchMedia(val perms: List<String>) : PermissionAction()
+}
+
+/**
+ * Drives the permission request state machine. Lives in a top-level
+ * Composable so unit tests can call [nextPermissionAction] directly
+ * with the same parameters and inspect state transitions without
+ * instantiating a Compose runtime.
+ *
+ * The [LaunchedEffect] re-runs only when [batch] changes. The state
+ * machine reaches [PermissionBatch.DONE] on its own once every
+ * permission is granted (or after the media-batch callback fires),
+ * so the loop is bounded regardless of how many times the user denies.
  */
 @Composable
 internal fun DrivePermissionFlow(
@@ -117,21 +180,21 @@ internal fun DrivePermissionFlow(
 ) {
     val batch by flow.batch.collectAsState()
     LaunchedEffect(batch) {
-        when (batch) {
-            PermissionBatch.NONE -> flow.nextBatch()
-            PermissionBatch.NOTIFICATIONS -> {
-                if (notificationsBatch.isEmpty()) {
-                    flow.nextBatch()
-                } else {
-                    launchNotifications(notificationsBatch.toTypedArray())
-                }
-            }
-            PermissionBatch.MEDIA -> {
-                val missing = mediaBatch.filter { perm -> !hasPermission(perm) }
-                if (missing.isNotEmpty()) {
-                    launchMedia(missing.toTypedArray())
-                }
-            }
+        when (
+            val action = nextPermissionAction(
+                batch,
+                notificationsBatch,
+                mediaBatch,
+                hasPermission,
+            )
+        ) {
+            PermissionAction.Advance -> flow.nextBatch()
+            PermissionAction.MarkDone -> flow.markDone()
+            PermissionAction.Stay -> Unit
+            is PermissionAction.LaunchNotifications ->
+                launchNotifications(action.perms.toTypedArray())
+            is PermissionAction.LaunchMedia ->
+                launchMedia(action.perms.toTypedArray())
         }
     }
 }
@@ -152,7 +215,14 @@ class MainActivity : ComponentActivity() {
                 val mediaLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions(),
                 ) { _ ->
-                    permissionFlow.reset()
+                    // Advance to the next batch even on denial. The
+                    // next LaunchedEffect pass will short-circuit
+                    // to MarkDone if the user has now granted or
+                    // permanently refused everything. This is the
+                    // fix for the "infinite no-op loop" the previous
+                    // design introduced when both launchers reset
+                    // back to NONE on every callback.
+                    permissionFlow.nextBatch()
                 }
 
                 val notificationsLauncher = rememberLauncherForActivityResult(
