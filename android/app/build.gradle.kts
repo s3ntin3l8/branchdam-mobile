@@ -187,11 +187,12 @@ dependencies {
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     // Robolectric is only used by tests that exercise real Bundle /
     // ContentResolver / ApplicationProvider / WorkManager behavior
-    // (PR #130 MediaScannerTest, PR #131 SyncStatusViewModelTest).
-    // Other tests stay on `isReturnDefaultValues = true` so they
-    // keep working without a shadow runtime. The Robolectric
-    // annotation (`@RunWith(...)`) is the seam that opts a single
-    // class out of the module-wide default.
+    // (PR #130 MediaScannerTest, PR #131 SyncStatusViewModelTest,
+    // PR #132 MotionPhotoExtractorTest). Other tests stay on
+    // `isReturnDefaultValues = true` so they keep working without a
+    // shadow runtime. The Robolectric annotation (`@RunWith(...)`)
+    // is the seam that opts a single class out of the module-wide
+    // default.
     testImplementation("org.robolectric:robolectric:4.13")
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.test.ext:junit:1.2.1")
