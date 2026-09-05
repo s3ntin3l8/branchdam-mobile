@@ -68,7 +68,19 @@ object MediaScanner {
         isVideo: Boolean
     ): List<MediaItem> {
         val items = mutableListOf<MediaItem>()
-        val cursor: Cursor? = context.contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+        val cursor: Cursor? = try {
+            context.contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+        } catch (_: SecurityException) {
+            // Cold launch can race the runtime permission grant: the
+            // ViewModel's `init` fires the query before the user has
+            // tapped "Allow" on the permission dialog. Returning an
+            // empty list lets the UI render its empty state instead of
+            // a red error message; the user can refresh once the
+            // permission is granted (the relevant screens expose a
+            // refresh action, and the MediaStoreObserver re-enqueues
+            // on the next onChange).
+            return emptyList()
+        }
 
         cursor?.use {
             val idColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
