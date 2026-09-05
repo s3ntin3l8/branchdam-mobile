@@ -134,6 +134,16 @@ fun SettingsScreen(
             ) {
                 Text(if (isConnecting) "Connecting..." else "Save and Connect")
             }
+
+            // Footer: shows the running build's identity, derived from
+            // BuildConfig so it tracks the APK/AAB's actual versionName
+            // and versionCode rather than a hardcoded literal.
+            Text(
+                text = "branchDAM Mobile ${viewModel.versionName} (build ${viewModel.versionCode})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

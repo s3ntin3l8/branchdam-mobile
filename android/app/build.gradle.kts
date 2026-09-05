@@ -11,20 +11,37 @@ android {
     val appVersionName = System.getenv("APP_VERSION_NAME")?.removePrefix("v") ?: run {
         val manifestFile = rootProject.file("../.release-please-manifest.json")
         if (manifestFile.exists()) {
-            val json = manifestFile.readText()
-            val match = Regex("\"\\.\":\\s*\"([^\"]+)\"").find(json)
-            match?.groupValues?.get(1) ?: "0.2.0"
+            // release-please's manifest is a JSON object keyed by package
+            // path ("." for the root). Parse it via JsonSlurper rather than
+            // a regex on the raw text so the read survives future schema
+            // changes (extra package keys, comments, etc). Wrap in
+            // runCatching so a malformed manifest on a dev box falls back
+            // to a hardcoded default rather than failing the build with a
+            // noisy stack trace.
+            runCatching {
+                @Suppress("UNCHECKED_CAST")
+                (groovy.json.JsonSlurper().parse(manifestFile) as Map<String, Any>)["."] as? String
+            }.getOrNull() ?: "0.2.0"
         } else {
             "0.2.0"
         }
     }
+    // versionCode layout: MAJOR*1_000_000 + MINOR*10_000 + PATCH*100 + PRE.
+    // PRE is the trailing integer after the first `-` of the patch segment
+    // (e.g. "1-rc3" → 3), so each pre-release of a given semver gets a
+    // unique, monotonic code that Google Play will accept. Falls back to
+    // APP_VERSION_CODE when explicitly set, so callers can override.
     val appVersionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: run {
         val parts = appVersionName.split(".")
-        if (parts.size >= 3) {
-            (parts[0].toIntOrNull() ?: 0) * 10000 + (parts[1].toIntOrNull() ?: 0) * 100 + (parts[2].substringBefore("-").toIntOrNull() ?: 0)
-        } else {
-            1
-        }
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val patchFull = parts.getOrNull(2) ?: ""
+        val patch = patchFull.substringBefore("-").toIntOrNull() ?: 0
+        val pre = patchFull.substringAfter("-", "")
+            .let { Regex("""^[A-Za-z]+(\d+)$""").find(it) }
+            ?.groupValues?.get(1)
+            ?.toIntOrNull() ?: 0
+        major * 1_000_000 + minor * 10_000 + patch * 100 + pre
     }
 
     defaultConfig {
