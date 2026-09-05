@@ -46,6 +46,10 @@ fun SettingsScreen(
     val connectionError by viewModel.connectionError.collectAsStateWithLifecycle()
     val urlError by viewModel.urlError.collectAsStateWithLifecycle()
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.checkConnection()
+    }
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings") }) },
         modifier = modifier,

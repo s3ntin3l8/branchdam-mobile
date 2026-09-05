@@ -160,6 +160,26 @@ object EngineHolder {
         }
     }
 
+    /**
+     * Attempts a handshake with the server to verify reachability and
+     * authentication. Returns true if the handshake succeeded, false
+     * otherwise.
+     */
+    fun testConnection(): Boolean {
+        if (!nativeAvailable.get()) return false
+        return try {
+            val template = executor.submit(Callable {
+                Branchdam.bindingFetchNamingTemplate()
+            }).get()
+            // If we got a non-mock-looking template, or at least didn't throw,
+            // we consider it a success. The binding throws on 404/500 etc.
+            template != null && template.isNotBlank()
+        } catch (t: Throwable) {
+            Log.w(TAG, "testConnection failed: $t")
+            false
+        }
+    }
+
     fun reclaimSafeSpace(localID: String): Boolean {
         if (!nativeAvailable.get()) return false
         return try {
