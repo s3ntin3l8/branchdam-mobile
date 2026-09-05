@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.2](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.1...branchdam-mobile-v0.7.2) (2026-09-05)
+
+
+### Features
+
+* **android:** add server reachability check and improve sync status UI ([#131](https://github.com/s3ntin3l8/branchdam-mobile/issues/131)) ([c41db09](https://github.com/s3ntin3l8/branchdam-mobile/commit/c41db098e7463af54967555354314963392a2513))
+* **android:** refresh connection status on settings screen and after QR scan ([#133](https://github.com/s3ntin3l8/branchdam-mobile/issues/133)) ([d69a3f7](https://github.com/s3ntin3l8/branchdam-mobile/commit/d69a3f70b3f2490dc3cf462223737c963d6e8531))
+
+
+### Bug Fixes
+
+* **android:** complete OTG ingest flow and improve Motion Photo detection ([#132](https://github.com/s3ntin3l8/branchdam-mobile/issues/132)) ([11e289d](https://github.com/s3ntin3l8/branchdam-mobile/commit/11e289d7ac7eff584c82356e8c7f4883ee9135c0))
+* **android:** resolve foreground service crash and MediaStore query error on Android 15 ([#130](https://github.com/s3ntin3l8/branchdam-mobile/issues/130)) ([e7d6b4e](https://github.com/s3ntin3l8/branchdam-mobile/commit/e7d6b4e5db2db813d348509cbca3280394784716))
+
 ## [0.7.1](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.0...branchdam-mobile-v0.7.1) (2026-09-05)
 
 
