@@ -56,7 +56,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val versionName: String = BuildConfig.VERSION_NAME
     val versionCode: Int = BuildConfig.VERSION_CODE
 
-    private val _isConnected = MutableStateFlow(EngineHolder.isInitialized())
+    private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
     private val _isConnecting = MutableStateFlow(false)
@@ -67,6 +67,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _urlError = MutableStateFlow<String?>(null)
     val urlError: StateFlow<String?> = _urlError.asStateFlow()
+
+    init {
+        checkConnection()
+    }
+
+    fun checkConnection() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isConnected.value = EngineHolder.testConnection()
+        }
+    }
 
     fun updateServerUrl(url: String) {
         _serverUrl.value = url
@@ -82,6 +92,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _apiKey.value = config.apiKey
         _agentId.value = config.agentId
         _urlError.value = validateUrl(config.serverUrl, BuildConfig.DEBUG)
+        connect()
     }
 
     fun setSyncOnMobileData(enabled: Boolean) {
