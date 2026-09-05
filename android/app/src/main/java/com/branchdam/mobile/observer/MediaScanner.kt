@@ -11,6 +11,23 @@ object MediaScanner {
 
     private const val TAG = "MediaScanner"
 
+    /**
+     * The `ContentResolver.QUERY_ARG_*` bundle keys used by the
+     * API 26+ `query(uri, projection, bundle, cancellationSignal)`
+     * overload. Mirrored as local `const val`s from
+     * `ContentResolver`'s public string constants (same values, see
+     * AOSP `frameworks/base/core/java/android/content/ContentResolver.java`)
+     * so the testable seam `buildQueryBundle` has a single
+     * self-contained source of truth and the keys are visible to
+     * static analysis. The platform constants are unstable to
+     * reference directly across Robolectric API levels, so the
+     * string literals are the safer surface.
+     */
+    private const val QUERY_ARG_SQL_SELECTION = "android:query-arg-sql-selection"
+    private const val QUERY_ARG_SQL_SELECTION_ARGS = "android:query-arg-sql-selection-args"
+    private const val QUERY_ARG_SQL_SORT_ORDER = "android:query-arg-sql-sort-order"
+    private const val QUERY_ARG_LIMIT = "android:query-arg-limit"
+
     fun queryRecentImages(context: Context, minDateTakenUnix: Long = 0, limit: Int = 100): List<MediaItem> {
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
@@ -23,7 +40,7 @@ object MediaScanner {
 
         val selection = "${MediaStore.Images.Media.DATE_TAKEN} > ?"
         val selectionArgs = arrayOf(minDateTakenUnix.toString())
-        val sortOrder = "${MediaStore.Images.Media.DATE_TAKEN} DESC LIMIT $limit"
+        val sortOrder = "${MediaStore.Images.Media.DATE_TAKEN} DESC"
 
         return queryMediaUri(
             context,
@@ -32,7 +49,8 @@ object MediaScanner {
             selection,
             selectionArgs,
             sortOrder,
-            isVideo = false
+            isVideo = false,
+            limit = limit
         )
     }
 
@@ -48,7 +66,7 @@ object MediaScanner {
 
         val selection = "${MediaStore.Video.Media.DATE_TAKEN} > ?"
         val selectionArgs = arrayOf(minDateTakenUnix.toString())
-        val sortOrder = "${MediaStore.Video.Media.DATE_TAKEN} DESC LIMIT $limit"
+        val sortOrder = "${MediaStore.Video.Media.DATE_TAKEN} DESC"
 
         return queryMediaUri(
             context,
@@ -57,7 +75,8 @@ object MediaScanner {
             selection,
             selectionArgs,
             sortOrder,
-            isVideo = true
+            isVideo = true,
+            limit = limit
         )
     }
 
@@ -68,11 +87,15 @@ object MediaScanner {
         selection: String,
         selectionArgs: Array<String>,
         sortOrder: String,
-        isVideo: Boolean
+        isVideo: Boolean,
+        limit: Int
     ): List<MediaItem> {
         val items = mutableListOf<MediaItem>()
+
+        val bundle = buildQueryBundle(selection, selectionArgs, sortOrder, limit)
+
         val cursor: Cursor? = try {
-            context.contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+            context.contentResolver.query(uri, projection, bundle, null)
         } catch (e: SecurityException) {
             // Cold launch can race the runtime permission grant: the
             // ViewModel's `init` fires the query before the user has
@@ -127,5 +150,37 @@ object MediaScanner {
             }
         }
         return items
+    }
+
+    /**
+     * Builds the `Bundle` of `ContentResolver.QUERY_ARG_*` keys used by
+     * the API 26+ `query(uri, projection, bundle, cancellationSignal)`
+     * overload. Extracted from [queryMediaUri] so unit tests can
+     * exercise the bundle contract (selection, args, sort order,
+     * limit) without needing a real `ContentResolver` or Robolectric.
+     *
+     * The pre-API-34 sortOrder interpolation (`... DESC LIMIT $limit`)
+     * silently broke on Android 14+ because the system rejects the
+     * legacy `query(uri, projection, selection, selectionArgs,
+     * sortOrder)` overload with an `IllegalArgumentException` that
+     * surfaced verbatim as the "invalid token limit" red error on
+     * Lineage Audit and Gallery. See PR #130.
+     *
+     * Returns the `Bundle` directly rather than a wrapper data class
+     * so the resolver call site is a single allocation. The test seam
+     * is the key string literals: any regression that drops the limit
+     * out of `QUERY_ARG_LIMIT` and into the sortOrder string surfaces
+     * as the "invalid token limit" IAE on a real device.
+     */
+    internal fun buildQueryBundle(
+        selection: String,
+        selectionArgs: Array<String>,
+        sortOrder: String,
+        limit: Int,
+    ): android.os.Bundle = android.os.Bundle().apply {
+        putString(QUERY_ARG_SQL_SELECTION, selection)
+        putStringArray(QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
+        putString(QUERY_ARG_SQL_SORT_ORDER, sortOrder)
+        putInt(QUERY_ARG_LIMIT, limit)
     }
 }
