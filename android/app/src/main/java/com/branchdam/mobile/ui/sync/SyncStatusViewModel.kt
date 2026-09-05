@@ -11,13 +11,16 @@ import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.service.SyncWorker
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SyncStatusUiState(
     val isConnected: Boolean = false,
+    val isServerReachable: Boolean = false,
     val isSyncing: Boolean = false,
     val lastSyncTime: Long = 0L,
     val workerState: String = "Idle",
@@ -33,6 +36,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
 
     init {
         observeWorker()
+        checkConnection()
     }
 
     private fun observeWorker() {
@@ -68,7 +72,17 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun checkConnection() {
+        viewModelScope.launch {
+            val isReachable = withContext(Dispatchers.IO) {
+                EngineHolder.testConnection()
+            }
+            _uiState.value = _uiState.value.copy(isServerReachable = isReachable)
+        }
+    }
+
     fun refresh() {
+        checkConnection()
         _uiState.value = _uiState.value.copy(
             isConnected = EngineHolder.isInitialized(),
             lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
