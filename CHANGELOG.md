@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.1...branchdam-mobile-v0.7.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **android:** resolve foreground service crash and MediaStore query error on Android 15 ([#130](https://github.com/s3ntin3l8/branchdam-mobile/issues/130)) ([e7d6b4e](https://github.com/s3ntin3l8/branchdam-mobile/commit/e7d6b4e5db2db813d348509cbca3280394784716))
+
 ## [0.7.1](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.0...branchdam-mobile-v0.7.1) (2026-09-05)
 
 
