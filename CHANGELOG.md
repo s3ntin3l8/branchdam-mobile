@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.5.1...branchdam-mobile-v0.6.0) (2026-09-05)
+
+
+### Features
+
+* **android:** add Gallery thumbnail grid and Sync Status dashboard ([#112](https://github.com/s3ntin3l8/branchdam-mobile/issues/112)) ([49b41b7](https://github.com/s3ntin3l8/branchdam-mobile/commit/49b41b70037040454c0d9403a8089db6ccce70b8))
+* **android:** add Settings and Safe Space screens, wire into navigation ([#111](https://github.com/s3ntin3l8/branchdam-mobile/issues/111)) ([72f620d](https://github.com/s3ntin3l8/branchdam-mobile/commit/72f620de55e340260b79d8dd4ee022cec7a79c9a))
+* **android:** wire navigation framework and LineageScreen to real backend data ([#110](https://github.com/s3ntin3l8/branchdam-mobile/issues/110)) ([adec81a](https://github.com/s3ntin3l8/branchdam-mobile/commit/adec81aa148ad74e9a3e24091c69f600189d088b))
+
+
+### Bug Fixes
+
+* **android:** align native libs to 16KB pages and drop 32-bit ABIs ([#113](https://github.com/s3ntin3l8/branchdam-mobile/issues/113)) ([0f47151](https://github.com/s3ntin3l8/branchdam-mobile/commit/0f47151651c69c8ff9394c0cedbcceae4812de03))
+
 ## [0.5.1](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.5.0...branchdam-mobile-v0.5.1) (2026-09-04)
 
 
