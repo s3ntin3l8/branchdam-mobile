@@ -184,4 +184,13 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.mockito:mockito-core:5.12.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    // Robolectric is only used by `MediaScannerTest` (PR #130) to exercise
+    // the `ContentResolver.query(uri, projection, Bundle, ...)` contract
+    // without an instrumented test. Other tests stay on
+    // `isReturnDefaultValues = true` so they keep working without a
+    // shadow runtime. The Robolectric annotation (`@RunWith(...)`) is
+    // the seam that opts a single class out of the module-wide default.
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
 }
