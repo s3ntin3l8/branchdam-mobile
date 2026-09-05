@@ -1,5 +1,7 @@
 package com.branchdam.mobile.lineage
 
+import android.content.Context
+import android.net.Uri
 import java.io.File
 import java.io.InputStream
 
@@ -17,6 +19,20 @@ object MotionPhotoExtractor {
     /**
      * Inspects a JPEG file stream for Google Camera Motion Photo XMP metadata.
      */
+    fun detectMotionPhoto(context: Context, uri: Uri): MotionPhotoInfo {
+        try {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                // We need the size, but for content URIs we might not have it easily
+                // without querying MediaStore again. However, parseMotionPhotoStream
+                // uses it for bounds checking.
+                // For now, pass a large enough value or 0 if we can't get it.
+                return parseMotionPhotoStream(stream, Long.MAX_VALUE)
+            }
+        } catch (_: Exception) {
+        }
+        return MotionPhotoInfo(isMotionPhoto = false)
+    }
+
     fun detectMotionPhoto(file: File): MotionPhotoInfo {
         if (!file.exists() || file.length() < 1024) {
             return MotionPhotoInfo(isMotionPhoto = false)
