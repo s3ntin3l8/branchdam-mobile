@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.1](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.0...branchdam-mobile-v0.7.1) (2026-09-05)
+
+
+### Features
+
+* **android:** add QR pairing scan in Settings ([#128](https://github.com/s3ntin3l8/branchdam-mobile/issues/128)) ([4b523a2](https://github.com/s3ntin3l8/branchdam-mobile/commit/4b523a21af0c877af7b564942cc284834767c1e6))
+
+
+### Bug Fixes
+
+* **android:** sequence runtime permission requests and fix layout-blocking bugs ([#126](https://github.com/s3ntin3l8/branchdam-mobile/issues/126)) ([dd320ac](https://github.com/s3ntin3l8/branchdam-mobile/commit/dd320ac3f278a2c8aa8b9d2449c27ba3f6e27580))
+
 ## [0.7.0](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.6.0...branchdam-mobile-v0.7.0) (2026-09-05)
 
 
