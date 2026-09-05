@@ -3,7 +3,9 @@
     ".": {
       "release-type": "go",
       "package-name": "branchdam-mobile",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
     }
   }
 }
