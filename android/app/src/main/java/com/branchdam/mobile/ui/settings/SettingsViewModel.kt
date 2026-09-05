@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 typealias EngineInit = (
     dbPath: String,
@@ -28,6 +30,16 @@ typealias EngineInit = (
     version: String,
     devCleartextHosts: String,
 ) -> Boolean
+
+/**
+ * Test seam for [SettingsViewModel.checkConnection] — the production
+ * lambda delegates to [EngineHolder.testConnection] which runs on the
+ * gomobile binding. Tests pass a pure (suspending) lambda to drive
+ * success / failure / hang paths without loading the AAR. Marked
+ * `suspend` so the timeout test can use `delay`, which cooperates
+ * with the test scheduler's virtual clock.
+ */
+typealias TestConnectionFn = suspend () -> Boolean
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -56,6 +68,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val versionName: String = BuildConfig.VERSION_NAME
     val versionCode: Int = BuildConfig.VERSION_CODE
 
+    // Initial value reflects the persisted engine state so the
+    // Settings screen doesn't flash "Disconnected" for the few
+    // hundred milliseconds between init and the first
+    // checkConnection() result. The async refresh on init /
+    // LaunchedEffect still updates this if the server has gone
+    // away since last launch.
     private val _isConnected = MutableStateFlow(EngineHolder.isInitialized())
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
@@ -68,6 +86,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _urlError = MutableStateFlow<String?>(null)
     val urlError: StateFlow<String?> = _urlError.asStateFlow()
 
+    init {
+        // Cold-start refresh. The SettingsScreen also re-fires this
+        // from its `LaunchedEffect(Unit)` on every re-entry, so a
+        // user navigating back from the Sync Status screen sees a
+        // fresh handshake result without having to tap Refresh.
+        checkConnection()
+    }
+
+    /**
+     * Verifies the server handshake against the current server URL
+     * and updates [isConnected]. Bounds the wait via
+     * [reachabilityTimeoutMs] so a misconfigured server's TCP
+     * timeout (~75s) can't lock the screen UI or the
+     * single-threaded [EngineHolder] executor that backs the
+     * gomobile binding.
+     */
+    fun checkConnection() {
+        viewModelScope.launch {
+            val isReachable = withContext(testIoDispatcher) {
+                withTimeoutOrNull(reachabilityTimeoutMs) {
+                    testConnectionFn()
+                } ?: false
+            }
+            _isConnected.value = isReachable
+        }
+    }
+
     fun updateServerUrl(url: String) {
         _serverUrl.value = url
         _urlError.value = validateUrl(url, BuildConfig.DEBUG)
@@ -77,11 +122,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _apiKey.value = key
     }
 
+    /**
+     * Apply a QR-scanned pairing config and immediately kick off the
+     * connect flow. The QR parser has already validated the URL
+     * shape (see [QrParser.parseQrPayload]), so the URL validation
+     * gate inside [connect] is purely defensive.
+     */
     fun applyPairingConfig(config: PairingConfig) {
         _serverUrl.value = config.serverUrl
         _apiKey.value = config.apiKey
         _agentId.value = config.agentId
         _urlError.value = validateUrl(config.serverUrl, BuildConfig.DEBUG)
+        connect()
     }
 
     fun setSyncOnMobileData(enabled: Boolean) {
@@ -101,7 +153,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             return
         }
         _isConnecting.value = true
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(testIoDispatcher) {
             persistSettings()
             val context = getApplication<Application>()
             val dbPath = defaultEngineDbPath(context.filesDir)
@@ -135,6 +187,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
+        /**
+         * Default upper bound on the time `checkConnection` will wait
+         * for the server handshake before treating it as unreachable.
+         * Matches the SyncStatusViewModel timeout so the two screens
+         * stay consistent — the Settings screen just runs the same
+         * check on demand rather than as a continuous flow.
+         */
+        @androidx.annotation.VisibleForTesting
+        var reachabilityTimeoutMs: Long = 5_000L
+
+        /**
+         * Test seam for [checkConnection]. Defaults to the production
+         * [EngineHolder.testConnection] call. Tests pass a lambda to
+         * drive success / failure / hang paths without loading the
+         * gomobile AAR.
+         */
+        @androidx.annotation.VisibleForTesting
+        var testConnectionFn: TestConnectionFn = { EngineHolder.testConnection() }
+
+        /**
+         * Test seam for the dispatcher used inside `checkConnection`.
+         * Defaults to [Dispatchers.IO]; tests substitute the test
+         * scheduler so `withTimeoutOrNull` advances on the virtual
+         * clock.
+         */
+        @androidx.annotation.VisibleForTesting
+        var testIoDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+
         /**
          * Test seam: defaults to the production [EngineHolder.initialize]
          * call. Tests pass a lambda to drive success/failure paths

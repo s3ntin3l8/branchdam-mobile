@@ -163,7 +163,10 @@ object EngineHolder {
     /**
      * Attempts a handshake with the server to verify reachability and
      * authentication. Returns true if the handshake succeeded, false
-     * otherwise.
+     * otherwise. The actual `withTimeoutOrNull` wrapper lives in
+     * [SyncStatusViewModel] / [SettingsViewModel]; this method
+     * blocks on the gomobile binding for as long as the network
+     * round-trip takes.
      */
     fun testConnection(): Boolean {
         if (!nativeAvailable.get()) return false
