@@ -13,6 +13,7 @@ import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.defaultEngineDbPath
 import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncScheduler
+import com.branchdam.mobile.ui.PairingConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -74,6 +75,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun updateApiKey(key: String) {
         _apiKey.value = key
+    }
+
+    fun applyPairingConfig(config: PairingConfig) {
+        _serverUrl.value = config.serverUrl
+        _apiKey.value = config.apiKey
+        _agentId.value = config.agentId
+        _urlError.value = validateUrl(config.serverUrl, BuildConfig.DEBUG)
     }
 
     fun setSyncOnMobileData(enabled: Boolean) {

@@ -160,6 +160,14 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.3")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // QR code scanning via CameraX + ML Kit (bundled, no network needed).
+    val cameraxVersion = "1.4.1"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
     // branchdam Go engine, gomobile-bound. The .aar is produced by
     // `make mobile-build-android` (scripts/build-mobile.sh) and dropped into
     // app/libs/. File-tree dep is conditional so the project still builds
