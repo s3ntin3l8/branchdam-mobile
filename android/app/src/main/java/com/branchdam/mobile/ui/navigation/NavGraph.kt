@@ -40,7 +40,9 @@ fun AppNavGraph(
             SettingsScreen()
         }
         composable(Screen.SafeSpace.route) {
-            SafeSpaceScreen()
+            SafeSpaceScreen(
+                onNavigateBack = { navController.navigateUp() },
+            )
         }
     }
 }
