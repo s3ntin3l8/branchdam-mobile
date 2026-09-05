@@ -133,20 +133,27 @@ jobs:
             cp "$AAB_PATH" "dist/branchdam-mobile-${VER}.aab"
           fi
 
-          # SHA256 sidecar for sideload verification.
-          if ls dist/branchdam-mobile-${VER}.* >/dev/null 2>&1; then
-            ( cd dist && sha256sum branchdam-mobile-${VER}.* > "branchdam-mobile-${VER}.sha256" )
+          # SHA256 sidecar for sideload verification. List the files
+          # explicitly so a stale `.sha256` from a re-run of this job is
+          # not hashed into itself.
+          if [ -f "dist/branchdam-mobile-${VER}.apk" ] || [ -f "dist/branchdam-mobile-${VER}.aab" ]; then
+            ( cd dist && sha256sum \
+                "branchdam-mobile-${VER}.apk" \
+                "branchdam-mobile-${VER}.aab" \
+              2>/dev/null > "branchdam-mobile-${VER}.sha256" )
           fi
 
           # Plain-text size + filename manifest for sideloaders / mirrors.
           # ls -l emits "<modes> <links> <owner> <group> <bytes> <month> <day> <time> <name>"
-          # — we only need the filename and the size column.
-          if ls dist/branchdam-mobile-${VER}.apk dist/branchdam-mobile-${VER}.aab >/dev/null 2>&1; then
+          # — we only need the filename and the size column. ($5 is size in
+          # bytes on GNU and BSD ls; $NF is filename.)
+          if [ -f "dist/branchdam-mobile-${VER}.apk" ] || [ -f "dist/branchdam-mobile-${VER}.aab" ]; then
             {
               printf 'branchdam-mobile %s\n' "${VER}"
               printf '%s\n' "--------------------------------"
-              ( cd dist && ls -l branchdam-mobile-${VER}.apk branchdam-mobile-${VER}.aab \
+              ( cd dist && ls -l "branchdam-mobile-${VER}.apk" "branchdam-mobile-${VER}.aab" 2>/dev/null \
                 | awk '{printf "%-44s  %10d bytes\n", $NF, $5}' )
+              printf '\n'
             } > "dist/branchdam-mobile-${VER}.manifest.txt"
           fi
 

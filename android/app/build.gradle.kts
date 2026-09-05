@@ -14,9 +14,14 @@ android {
             // release-please's manifest is a JSON object keyed by package
             // path ("." for the root). Parse it via JsonSlurper rather than
             // a regex on the raw text so the read survives future schema
-            // changes (extra package keys, comments, etc).
-            @Suppress("UNCHECKED_CAST")
-            ((groovy.json.JsonSlurper().parse(manifestFile) as Map<String, Any>)["."] as? String) ?: "0.2.0"
+            // changes (extra package keys, comments, etc). Wrap in
+            // runCatching so a malformed manifest on a dev box falls back
+            // to a hardcoded default rather than failing the build with a
+            // noisy stack trace.
+            runCatching {
+                @Suppress("UNCHECKED_CAST")
+                (groovy.json.JsonSlurper().parse(manifestFile) as Map<String, Any>)["."] as? String
+            }.getOrNull() ?: "0.2.0"
         } else {
             "0.2.0"
         }

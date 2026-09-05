@@ -74,7 +74,7 @@ class SettingsViewModelTest {
             true
         }
         val result: Boolean = SettingsViewModel.engineInit(
-            "dbPath", "https://x", "key", "agent", "0.1.0", "",
+            "dbPath", "https://x", "key", "agent", "test-version", "",
         )
         assertTrue(result)
         assertTrue(called)
@@ -84,7 +84,7 @@ class SettingsViewModelTest {
     fun testEngineInitFailurePathReturnsFalse() {
         SettingsViewModel.engineInit = { _, _, _, _, _, _ -> false }
         val result: Boolean = SettingsViewModel.engineInit(
-            "dbPath", "https://x", "key", "agent", "0.1.0", "",
+            "dbPath", "https://x", "key", "agent", "test-version", "",
         )
         assertFalse(result)
     }
