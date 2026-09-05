@@ -23,7 +23,7 @@ object MediaScanner {
 
         val selection = "${MediaStore.Images.Media.DATE_TAKEN} > ?"
         val selectionArgs = arrayOf(minDateTakenUnix.toString())
-        val sortOrder = "${MediaStore.Images.Media.DATE_TAKEN} DESC LIMIT $limit"
+        val sortOrder = "${MediaStore.Images.Media.DATE_TAKEN} DESC"
 
         return queryMediaUri(
             context,
@@ -32,7 +32,8 @@ object MediaScanner {
             selection,
             selectionArgs,
             sortOrder,
-            isVideo = false
+            isVideo = false,
+            limit = limit
         )
     }
 
@@ -48,7 +49,7 @@ object MediaScanner {
 
         val selection = "${MediaStore.Video.Media.DATE_TAKEN} > ?"
         val selectionArgs = arrayOf(minDateTakenUnix.toString())
-        val sortOrder = "${MediaStore.Video.Media.DATE_TAKEN} DESC LIMIT $limit"
+        val sortOrder = "${MediaStore.Video.Media.DATE_TAKEN} DESC"
 
         return queryMediaUri(
             context,
@@ -57,7 +58,8 @@ object MediaScanner {
             selection,
             selectionArgs,
             sortOrder,
-            isVideo = true
+            isVideo = true,
+            limit = limit
         )
     }
 
@@ -68,11 +70,20 @@ object MediaScanner {
         selection: String,
         selectionArgs: Array<String>,
         sortOrder: String,
-        isVideo: Boolean
+        isVideo: Boolean,
+        limit: Int
     ): List<MediaItem> {
         val items = mutableListOf<MediaItem>()
+
+        val bundle = android.os.Bundle().apply {
+            putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+            putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
+            putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sortOrder)
+            putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, limit)
+        }
+
         val cursor: Cursor? = try {
-            context.contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+            context.contentResolver.query(uri, projection, bundle, null)
         } catch (e: SecurityException) {
             // Cold launch can race the runtime permission grant: the
             // ViewModel's `init` fires the query before the user has
