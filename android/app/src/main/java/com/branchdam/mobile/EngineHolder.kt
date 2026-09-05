@@ -160,6 +160,24 @@ object EngineHolder {
         }
     }
 
+    /**
+     * Attempts a handshake with the server to verify reachability and
+     * authentication. Returns true if the handshake succeeded, false
+     * otherwise.
+     */
+    fun testConnection(): Boolean {
+        if (!nativeAvailable.get()) return false
+        return try {
+            executor.submit(Callable {
+                Branchdam.bindingFetchNamingTemplate()
+                true
+            }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "testConnection failed: $t")
+            false
+        }
+    }
+
     fun reclaimSafeSpace(localID: String): Boolean {
         if (!nativeAvailable.get()) return false
         return try {

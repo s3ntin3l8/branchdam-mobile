@@ -57,13 +57,21 @@ fun SyncStatusScreen(
                     Surface(
                         modifier = Modifier.size(12.dp),
                         shape = MaterialTheme.shapes.small,
-                        color = if (uiState.isConnected) MaterialTheme.colorScheme.primary
+                        color = if (uiState.isServerReachable) MaterialTheme.colorScheme.primary
                                else MaterialTheme.colorScheme.error,
                     ) {}
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (uiState.isConnected) "Connected to server" else "Disconnected",
+                        if (uiState.isServerReachable) "Connected to server" else "Server unreachable",
                         style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                if (uiState.isConnected && !uiState.isServerReachable) {
+                    Text(
+                        "Local engine is ready, but server handshake failed.",
+                        modifier = Modifier.padding(start = 36.dp, bottom = 16.dp, end = 16.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -91,7 +99,7 @@ fun SyncStatusScreen(
 
             Button(
                 onClick = { viewModel.triggerSync() },
-                enabled = uiState.isConnected && !uiState.isSyncing,
+                enabled = uiState.isServerReachable && !uiState.isSyncing,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (uiState.isSyncing) "Syncing..." else "Sync Now")
