@@ -9,13 +9,12 @@ type ClientError struct {
 	Cause   error
 }
 
-// Error implements the error interface.
+// Error implements the error interface. The body/cause is intentionally
+// omitted from the message to prevent API key re-leakage via logs (S-7).
+// The Cause is still accessible via Unwrap for errors.Is/errors.As.
 func (e *ClientError) Error() string {
 	if e == nil {
 		return ""
-	}
-	if e.Cause != nil {
-		return "branchdam client: " + e.Code + ": " + e.Message + ": " + e.Cause.Error()
 	}
 	return "branchdam client: " + e.Code + ": " + e.Message
 }
