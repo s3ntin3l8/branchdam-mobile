@@ -289,7 +289,7 @@ class MainActivity : ComponentActivity() {
                                 BottomNavBar(
                                     currentRoute = currentRoute,
                                     onNavigate = { route: String ->
-                                        if (currentRoute == route && route == Screen.Settings.route) {
+                                        if (route == Screen.Settings.route) {
                                             settingsViewModel.triggerNavigationReset()
                                         }
                                         navController.navigate(route) {

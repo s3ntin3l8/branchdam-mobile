@@ -96,8 +96,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
     val themeMode: StateFlow<ThemeMode> = themePreferences.mode
 
-    private val _navigationResetTrigger = MutableStateFlow(0L)
-    val navigationResetTrigger: StateFlow<Long> = _navigationResetTrigger.asStateFlow()
+    private val _navigationResetTrigger = MutableStateFlow(0)
+    val navigationResetTrigger: StateFlow<Int> = _navigationResetTrigger.asStateFlow()
 
     val versionName: String = BuildConfig.VERSION_NAME
     val versionCode: Int = BuildConfig.VERSION_CODE
@@ -210,7 +210,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun triggerNavigationReset() {
-        _navigationResetTrigger.value = System.currentTimeMillis()
+        _navigationResetTrigger.value += 1
     }
 
     fun connect() {

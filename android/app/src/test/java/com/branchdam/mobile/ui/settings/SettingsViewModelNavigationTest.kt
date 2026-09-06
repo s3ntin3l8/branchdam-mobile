@@ -2,9 +2,8 @@ package com.branchdam.mobile.ui.settings
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,7 +20,7 @@ class SettingsViewModelNavigationTest {
     }
 
     @Test
-    fun testTriggerNavigationReset_UpdatesFlow() = runBlocking {
+    fun testTriggerNavigationReset_IncrementsCounter() = runBlocking {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = SettingsViewModel(application)
 
@@ -29,7 +28,11 @@ class SettingsViewModelNavigationTest {
 
         viewModel.triggerNavigationReset()
 
-        val newValue = viewModel.navigationResetTrigger.value
-        assertNotEquals("Trigger should update the timestamp", initialValue, newValue)
+        val firstReset = viewModel.navigationResetTrigger.value
+        assertEquals("Trigger should increment the counter", initialValue + 1, firstReset)
+
+        viewModel.triggerNavigationReset()
+        val secondReset = viewModel.navigationResetTrigger.value
+        assertEquals("Second trigger should increment again", firstReset + 1, secondReset)
     }
 }
