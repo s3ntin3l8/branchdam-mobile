@@ -59,6 +59,7 @@ object SyncNotificationHelper {
             .setProgress(0, 0, true)
             .setOngoing(true)
             .setSilent(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(pending)
             .build()
     }
