@@ -16,11 +16,10 @@ object QrParser {
      * (`branchdam://server=…&key=…&agent=…`, no `?`).
      *
      * The server-side `qrPayloadFor()` emits values via
-     * `url.Values.Encode()` — standard `application/x-www-form
-     * -urlencoded` — so each segment value is percent-decoded here
-     * before use. Malformed percent-encoding (stray `%` not followed by
-     * two hex digits) is rejected by returning `null` rather than
-     * silently passing the raw string downstream.
+     * `url.Values.Encode()`; each segment value is percent-decoded
+     * here before use. Malformed percent-encoding (stray `%` not
+     * followed by two hex digits) is rejected by returning `null`
+     * rather than silently passing the raw string downstream.
      */
     fun parseQrPayload(payload: String): PairingConfig? {
         if (!payload.startsWith("branchdam://")) return null

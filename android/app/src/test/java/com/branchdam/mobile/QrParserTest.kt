@@ -60,6 +60,15 @@ class QrParserTest {
     }
 
     @Test
+    fun testParseRejectsEmptyServer() {
+        // Mirrors the iOS testParseRejectsEmptyServer — pins that an
+        // explicit empty server value is treated as a hard parse
+        // failure rather than yielding a PairingConfig with an empty
+        // serverUrl.
+        assertNull(QrParser.parseQrPayload("branchdam://server=&key=abc"))
+    }
+
+    @Test
     fun testParseIgnoresUnknownParams() {
         // Unknown params are silently ignored; known params are parsed.
         val config = QrParser.parseQrPayload(

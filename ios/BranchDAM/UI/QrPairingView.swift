@@ -30,7 +30,7 @@ public class AppleQrParser {
 
         guard let server = dict["server"], !server.isEmpty else { return nil }
         let key = dict["key"] ?? ""
-        let agent = dict["agent"]?.isEmpty == false ? dict["agent"]! : "iphone-companion"
+        let agent = dict["agent"].flatMap { $0.isEmpty ? nil : $0 } ?? "iphone-companion"
 
         return ApplePairingConfig(serverUrl: server, apiKey: key, agentId: agent)
     }
