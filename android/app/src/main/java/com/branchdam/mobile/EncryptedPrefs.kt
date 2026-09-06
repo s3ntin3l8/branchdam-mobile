@@ -78,6 +78,9 @@ object EncryptedPrefs {
             prefs
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to initialize encrypted prefs '$name': $t")
+            if (name == SECURE_PREFS_NAME) {
+                cachedPrefs = null
+            }
             null
         }
     }

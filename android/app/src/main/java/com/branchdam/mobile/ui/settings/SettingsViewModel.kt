@@ -119,6 +119,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * gomobile binding.
      */
     fun checkConnection() {
+        _connectionError.value = null
         viewModelScope.launch {
             val isReachable = withContext(testIoDispatcher) {
                 withTimeoutOrNull(reachabilityTimeoutMs) {
