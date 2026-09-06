@@ -22,9 +22,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +48,12 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel,
 ) {
-    var currentPage by rememberSaveable { mutableStateOf(SettingsPage.Categories) }
+    var currentPage by remember { mutableStateOf(SettingsPage.Categories) }
+
+    val resetTrigger by viewModel.navigationResetTrigger.collectAsStateWithLifecycle()
+    LaunchedEffect(resetTrigger) {
+        currentPage = SettingsPage.Categories
+    }
 
     when (currentPage) {
         SettingsPage.Categories -> {
