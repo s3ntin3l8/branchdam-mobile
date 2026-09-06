@@ -51,6 +51,57 @@ final class QrPairingViewTests: XCTestCase {
         XCTAssertNil(AppleQrParser.parse(uriString: "branchdam://server=&key=abc"))
     }
 
+    func testParseDecodesPercentEncodedServer() {
+        // Mirrors the exact payload the server emits via url.Values.Encode():
+        // `://` becomes `%3A%2F%2F`. Without decoding the parser used to
+        // hand the raw encoded string to the engine, which failed to parse it.
+        let config = AppleQrParser.parse(uriString: "branchdam://?server=https%3A%2F%2Fdam.example.com&key=abc123&agent=iphone-test")
+        XCTAssertNotNil(config)
+        XCTAssertEqual(config?.serverUrl, "https://dam.example.com")
+        XCTAssertEqual(config?.apiKey, "abc123")
+        XCTAssertEqual(config?.agentId, "iphone-test")
+    }
+
+    func testParseDecodesServerWithPort() {
+        // Port-bearing host: the `:` after the host is encoded to `%3A`
+        // by the server. The parser must decode it back.
+        let config = AppleQrParser.parse(uriString: "branchdam://?server=https%3A%2F%2Fdam.example.com%3A8443&key=secret&agent=phone")
+        XCTAssertNotNil(config)
+        XCTAssertEqual(config?.serverUrl, "https://dam.example.com:8443")
+        XCTAssertEqual(config?.apiKey, "secret")
+        XCTAssertEqual(config?.agentId, "phone")
+    }
+
+    func testParseRejectsMalformedPercentEncoding() {
+        // Stray `%` not followed by two hex digits → removingPercentEncoding
+        // returns nil → parser must return null rather than silently
+        // passing through a malformed string.
+        XCTAssertNil(AppleQrParser.parse(uriString: "branchdam://?server=https%ZZdam.example.com&key=abc&agent=test"))
+        XCTAssertNil(AppleQrParser.parse(uriString: "branchdam://?server=https%&key=abc&agent=test"))
+        XCTAssertNil(AppleQrParser.parse(uriString: "branchdam://?server=https%2&key=abc&agent=test"))
+    }
+
+    func testParseHandlesApiKeyContainingEquals() {
+        // Regression guard: an `=` inside a percent-encoded API key
+        // stays part of the value.
+        let config = AppleQrParser.parse(uriString: "branchdam://?server=https%3A%2F%2Fx&key=abc%3Ddef&agent=test")
+        XCTAssertNotNil(config)
+        XCTAssertEqual(config?.serverUrl, "https://x")
+        XCTAssertEqual(config?.apiKey, "abc=def")
+    }
+
+    func testParseEncodedAndUnencodedFormsAgree() {
+        // The two payload shapes (encoded by the server vs. unencoded in
+        // some test fixtures) must yield identical ApplePairingConfig values.
+        let encoded = AppleQrParser.parse(uriString: "branchdam://?server=https%3A%2F%2Fdam.example.com&key=abc&agent=phone")
+        let unencoded = AppleQrParser.parse(uriString: "branchdam://?server=https://dam.example.com&key=abc&agent=phone")
+        XCTAssertNotNil(encoded)
+        XCTAssertNotNil(unencoded)
+        XCTAssertEqual(unencoded?.serverUrl, encoded?.serverUrl)
+        XCTAssertEqual(unencoded?.apiKey, encoded?.apiKey)
+        XCTAssertEqual(unencoded?.agentId, encoded?.agentId)
+    }
+
     // MARK: - Documents-directory DB path (F plan: reconfigure does
     // not orphan the documents-directory DB)
 
