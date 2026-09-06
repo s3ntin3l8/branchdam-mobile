@@ -7,7 +7,7 @@ import com.branchdam.mobile.observer.MediaStoreObserver
 import com.branchdam.mobile.service.SyncScheduler
 import java.io.File
 
-class BranchDamApplication : Application() {
+open class BranchDamApplication : Application() {
 
     lateinit var mediaStoreObserver: MediaStoreObserver
         private set
