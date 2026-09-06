@@ -44,6 +44,23 @@ public enum BranchDamKeys: String {
     /// is stored. The companion service identifier lives at
     /// `keychainService`.
     case apiKeyAccount = "branchdam_api_key" // pragma: allowlist secret
+
+    /// Background sync interval in minutes. Read by `BackgroundSyncManager`
+    /// when scheduling background processing tasks.
+    case syncIntervalMinutes = "branchdam_sync_interval_minutes"
+
+    /// Whether to allow background sync when battery is low. When true,
+    /// the external-power constraint is relaxed for periodic sync.
+    /// Read by `BackgroundSyncManager`.
+    case syncOnBatteryOnly = "branchdam_sync_on_battery_only"
+
+    /// Number of items to process per sync batch. Passed to
+    /// `BranchDamCoreBridge.syncBatch` by `BackgroundSyncManager`.
+    case uploadBatchSize = "branchdam_upload_batch_size"
+
+    /// Maximum seconds to wait for a sync batch to complete. Passed to
+    /// `BranchDamCoreBridge.syncBatch` by `BackgroundSyncManager`.
+    case syncTimeoutSecs = "branchdam_sync_timeout_secs"
 }
 
 extension BranchDamKeys {
@@ -53,5 +70,10 @@ extension BranchDamKeys {
     public enum Android {
         public static let SYNC_ON_MOBILE_DATA = "branchdam_sync_on_mobile_data"
         public static let AUTO_IMPORT_CAMERA_ROLL = "branchdam_auto_import_camera_roll"
+        public static let SYNC_INTERVAL_MINUTES = "branchdam_sync_interval_minutes"
+        public static let SYNC_ON_BATTERY_ONLY = "branchdam_sync_on_battery_only"
+        public static let UPLOAD_BATCH_SIZE = "branchdam_upload_batch_size"
+        public static let SYNC_TIMEOUT_SECS = "branchdam_sync_timeout_secs"
+        public static let OBSERVER_DEBOUNCE_MS = "branchdam_observer_debounce_ms"
     }
 }

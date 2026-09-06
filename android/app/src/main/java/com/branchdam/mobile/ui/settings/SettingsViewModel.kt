@@ -44,6 +44,7 @@ typealias TestConnectionFn = suspend () -> Boolean
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs: SharedPreferences = resolvePrefs(application)
+    private val nonSecretPrefs: SharedPreferences = application.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
 
     private val initialConfig = BranchDamApplication.readEngineConfig(prefs)
 
@@ -64,6 +65,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _namingTemplate = MutableStateFlow(EngineHolder.fetchNamingTemplate())
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
+
+    // Sync settings
+    private val _syncIntervalMinutes = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, DEFAULT_SYNC_INTERVAL_MINUTES))
+    val syncIntervalMinutes: StateFlow<Int> = _syncIntervalMinutes.asStateFlow()
+
+    private val _syncOnBatteryOnly = MutableStateFlow(nonSecretPrefs.getBoolean(BranchDamKeys.SYNC_ON_BATTERY_ONLY, false))
+    val syncOnBatteryOnly: StateFlow<Boolean> = _syncOnBatteryOnly.asStateFlow()
+
+    // Advanced settings
+    private val _uploadBatchSize = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.UPLOAD_BATCH_SIZE, DEFAULT_UPLOAD_BATCH_SIZE))
+    val uploadBatchSize: StateFlow<Int> = _uploadBatchSize.asStateFlow()
+
+    private val _syncTimeoutSecs = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.SYNC_TIMEOUT_SECS, DEFAULT_SYNC_TIMEOUT_SECS))
+    val syncTimeoutSecs: StateFlow<Int> = _syncTimeoutSecs.asStateFlow()
+
+    private val _observerDebounceMs = MutableStateFlow(nonSecretPrefs.getLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, DEFAULT_OBSERVER_DEBOUNCE_MS))
+    val observerDebounceMs: StateFlow<Long> = _observerDebounceMs.asStateFlow()
 
     val versionName: String = BuildConfig.VERSION_NAME
     val versionCode: Int = BuildConfig.VERSION_CODE
@@ -146,6 +164,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         ImportConfirmationNotifier.setAutoImportEnabled(getApplication(), enabled)
     }
 
+    fun setSyncIntervalMinutes(minutes: Int) {
+        _syncIntervalMinutes.value = minutes
+        nonSecretPrefs.edit().putInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, minutes).apply()
+    }
+
+    fun setSyncOnBatteryOnly(enabled: Boolean) {
+        _syncOnBatteryOnly.value = enabled
+        nonSecretPrefs.edit().putBoolean(BranchDamKeys.SYNC_ON_BATTERY_ONLY, enabled).apply()
+    }
+
+    fun setUploadBatchSize(size: Int) {
+        _uploadBatchSize.value = size
+        nonSecretPrefs.edit().putInt(BranchDamKeys.UPLOAD_BATCH_SIZE, size).apply()
+    }
+
+    fun setSyncTimeoutSecs(secs: Int) {
+        _syncTimeoutSecs.value = secs
+        nonSecretPrefs.edit().putInt(BranchDamKeys.SYNC_TIMEOUT_SECS, secs).apply()
+    }
+
+    fun setObserverDebounceMs(ms: Long) {
+        _observerDebounceMs.value = ms
+        nonSecretPrefs.edit().putLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, ms).apply()
+    }
+
     fun connect() {
         val urlError = validateUrl(_serverUrl.value, BuildConfig.DEBUG)
         if (urlError != null) {
@@ -187,6 +230,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
+        const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
+        const val DEFAULT_UPLOAD_BATCH_SIZE = 10
+        const val DEFAULT_SYNC_TIMEOUT_SECS = 120
+        const val DEFAULT_OBSERVER_DEBOUNCE_MS = 500L
         /**
          * Default upper bound on the time `checkConnection` will wait
          * for the server handshake before treating it as unreachable.

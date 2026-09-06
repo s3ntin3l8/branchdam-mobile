@@ -18,6 +18,8 @@ object SyncScheduler {
     const val PERIODIC_WORK_TAG = "branchdam_periodic_sync"
     const val IMMEDIATE_WORK_TAG = "branchdam_immediate_sync"
 
+    private const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
+
     fun getSyncOnMobileData(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean(KEY_SYNC_ON_MOBILE_DATA, false)
@@ -28,10 +30,27 @@ object SyncScheduler {
         prefs.edit().putBoolean(KEY_SYNC_ON_MOBILE_DATA, enabled).apply()
     }
 
+    fun getSyncIntervalMinutes(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, DEFAULT_SYNC_INTERVAL_MINUTES)
+    }
+
+    fun getSyncOnBatteryOnly(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(BranchDamKeys.SYNC_ON_BATTERY_ONLY, false)
+    }
+
     fun schedulePeriodicSync(context: Context, requireCharging: Boolean = false) {
+        val intervalMinutes = getSyncIntervalMinutes(context)
+        val batteryOnly = getSyncOnBatteryOnly(context)
+
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.UNMETERED) // Wi-Fi preferred for periodic background
-            .setRequiresBatteryNotLow(true)
+            .setRequiredNetworkType(NetworkType.UNMETERED)
+            .apply {
+                if (!batteryOnly) {
+                    setRequiresBatteryNotLow(true)
+                }
+            }
             .apply {
                 if (requireCharging) {
                     setRequiresCharging(true)
@@ -39,14 +58,14 @@ object SyncScheduler {
             }
             .build()
 
-        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(intervalMinutes.toLong(), TimeUnit.MINUTES)
             .setConstraints(constraints)
             .addTag(PERIODIC_WORK_TAG)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             PERIODIC_WORK_TAG,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             syncRequest
         )
     }

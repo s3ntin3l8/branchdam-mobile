@@ -49,4 +49,35 @@ object BranchDamKeys {
      * after observing a successful [androidx.work.WorkInfo.State.SUCCEEDED].
      */
     const val LAST_SYNC_TIME = "branchdam_last_sync_time"
+
+    /**
+     * Background sync interval in minutes. Read by [com.branchdam.mobile.service.SyncScheduler]
+     * when scheduling periodic WorkManager jobs.
+     */
+    const val SYNC_INTERVAL_MINUTES = "branchdam_sync_interval_minutes"
+
+    /**
+     * Whether to allow background sync when battery is low. When true,
+     * the battery-not-low constraint is removed from periodic WorkManager jobs.
+     * Read by [com.branchdam.mobile.service.SyncScheduler].
+     */
+    const val SYNC_ON_BATTERY_ONLY = "branchdam_sync_on_battery_only"
+
+    /**
+     * Number of items to process per sync batch. Passed to
+     * [EngineHolder.syncBatch] by [com.branchdam.mobile.service.SyncWorker].
+     */
+    const val UPLOAD_BATCH_SIZE = "branchdam_upload_batch_size"
+
+    /**
+     * Maximum seconds to wait for a sync batch to complete. Passed to
+     * [EngineHolder.syncBatch] by [com.branchdam.mobile.service.SyncWorker].
+     */
+    const val SYNC_TIMEOUT_SECS = "branchdam_sync_timeout_secs"
+
+    /**
+     * Debounce window (milliseconds) for MediaStore change callbacks.
+     * Read by [com.branchdam.mobile.observer.MediaStoreObserver].
+     */
+    const val OBSERVER_DEBOUNCE_MS = "branchdam_observer_debounce_ms"
 }

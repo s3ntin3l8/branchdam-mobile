@@ -23,6 +23,10 @@ public class BackgroundSyncManager {
 
     private var urlSession: URLSession?
 
+    private static let defaultBatchSize = 10
+    private static let defaultTimeoutSecs = 120
+    private static let defaultIntervalMinutes = 15
+
     private init() {
         setupUrlSession()
     }
@@ -33,6 +37,25 @@ public class BackgroundSyncManager {
         config.sessionSendsLaunchEvents = true
         config.allowsCellularAccess = syncOnMobileData
         self.urlSession = URLSession(configuration: config)
+    }
+
+    private func readBatchSize() -> Int {
+        let stored = UserDefaults.standard.object(forKey: BranchDamKeys.uploadBatchSize.rawValue) as? Int
+        return stored ?? Self.defaultBatchSize
+    }
+
+    private func readTimeoutSecs() -> Int {
+        let stored = UserDefaults.standard.object(forKey: BranchDamKeys.syncTimeoutSecs.rawValue) as? Int
+        return stored ?? Self.defaultTimeoutSecs
+    }
+
+    private func readIntervalMinutes() -> Int {
+        let stored = UserDefaults.standard.object(forKey: BranchDamKeys.syncIntervalMinutes.rawValue) as? Int
+        return stored ?? Self.defaultIntervalMinutes
+    }
+
+    private func readSyncOnBatteryOnly() -> Bool {
+        return UserDefaults.standard.bool(forKey: BranchDamKeys.syncOnBatteryOnly.rawValue)
     }
 
     public func shouldAllowImmediateSync(isOnCellular: Bool) -> Bool {
@@ -48,8 +71,10 @@ public class BackgroundSyncManager {
             return
         }
 
+        let timeout = readTimeoutSecs()
+        let batch = readBatchSize()
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 60, batchSize: 10)
+            let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
             completion?(result.uploaded > 0 || result.eventsSent > 0)
         }
     }
@@ -64,8 +89,10 @@ public class BackgroundSyncManager {
     public func scheduleBackgroundSync(requiresExternalPower: Bool = false) {
         let request = BGProcessingTaskRequest(identifier: Self.syncTaskId)
         request.requiresNetworkConnectivity = true
-        request.requiresExternalPower = requiresExternalPower
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 min interval
+        let batteryOnly = readSyncOnBatteryOnly()
+        request.requiresExternalPower = requiresExternalPower || !batteryOnly
+        let intervalMinutes = readIntervalMinutes()
+        request.earliestBeginDate = Date(timeIntervalSinceNow: TimeInterval(intervalMinutes * 60))
 
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -89,8 +116,10 @@ public class BackgroundSyncManager {
             task.setTaskCompleted(success: false)
         }
 
+        let timeout = readTimeoutSecs()
+        let batch = readBatchSize()
         DispatchQueue.global(qos: .background).async {
-            let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: 120, batchSize: 10)
+            let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
             completionLock.lock()
             defer { completionLock.unlock() }
             guard !completed else { return }
