@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.4](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.3...branchdam-mobile-v0.7.4) (2026-09-06)
+
+
+### Features
+
+* **android:** add system/light/dark theme mode and Appearance settings ([#142](https://github.com/s3ntin3l8/branchdam-mobile/issues/142)) ([59f8ba6](https://github.com/s3ntin3l8/branchdam-mobile/commit/59f8ba63e7a215f6c0bd287476a1f23cd8a22489))
+
+
+### Bug Fixes
+
+* **android,ios:** URL-decode QR payload values from server ([#141](https://github.com/s3ntin3l8/branchdam-mobile/issues/141)) ([14168ba](https://github.com/s3ntin3l8/branchdam-mobile/commit/14168badb5a4708a712910deecc6d676a1c15b1a))
+
 ## [0.7.3](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.2...branchdam-mobile-v0.7.3) (2026-09-06)
 
 
