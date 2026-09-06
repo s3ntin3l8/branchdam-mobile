@@ -46,6 +46,23 @@ class QrScanViewModelTest {
     }
 
     @Test
+    fun testOnQrCodeScanned_encodedPayloadDecodesToValidConfig() {
+        // Server emits percent-encoded values (server=https%3A%2F%2F…).
+        // ViewModel must decode them before showing the confirm dialog,
+        // otherwise the user sees a malformed URL and the engine can't
+        // connect.
+        val vm = viewModel()
+        vm.onQrCodeScanned(
+            "branchdam://?server=https%3A%2F%2Fdam.example.com&key=secret&agent=pixel-10"
+        )
+        assertTrue(vm.showConfirm.value)
+        val config = vm.parsedConfig.value
+        assertEquals("https://dam.example.com", config?.serverUrl)
+        assertEquals("secret", config?.apiKey)
+        assertEquals("pixel-10", config?.agentId)
+    }
+
+    @Test
     fun testOnConfirm_setsApplyResult() {
         val vm = viewModel()
         vm.onQrCodeScanned(
