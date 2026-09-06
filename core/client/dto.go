@@ -95,3 +95,11 @@ func AsDedupResponse(err error) (DedupResponse, bool) {
 	}
 	return DedupResponse{}, false
 }
+
+// ContentCheckResult is the response body for GET /api/v1/agent/check-content.
+type ContentCheckResult struct {
+	Found          bool   `json:"found"`
+	NodeUUID       string `json:"nodeUuid,omitempty"`
+	FilePath       string `json:"filePath,omitempty"`
+	LifecycleState string `json:"lifecycleState,omitempty"`
+}

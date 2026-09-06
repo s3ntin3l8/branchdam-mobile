@@ -3,10 +3,15 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -412,5 +417,194 @@ func TestUploadStream_HashMismatch(t *testing.T) {
 	}
 	if ce.Code != CodeHashMismatch {
 		t.Fatalf("Code = %q, want %q", ce.Code, CodeHashMismatch)
+	}
+}
+
+func TestRequestHeaders_SignaturePresent(t *testing.T) {
+	var sawTimestamp, sawNonce, sawSignature bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawTimestamp = r.Header.Get("X-Timestamp") != ""
+		sawNonce = r.Header.Get("X-Nonce") != ""
+		sawSignature = r.Header.Get("X-Signature") != ""
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(HandshakeResponse{OK: true})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "secret-key", AgentID: "agent"})
+	if _, err := c.Handshake(context.Background(), ""); err != nil {
+		t.Fatalf("Handshake: %v", err)
+	}
+	if !sawTimestamp {
+		t.Fatal("X-Timestamp header not set")
+	}
+	if !sawNonce {
+		t.Fatal("X-Nonce header not set")
+	}
+	if !sawSignature {
+		t.Fatal("X-Signature header not set")
+	}
+}
+
+func TestRequestHeaders_NoSignatureOnUpload(t *testing.T) {
+	var sawSignature bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawSignature = r.Header.Get("X-Signature") != ""
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(UploadResponse{OK: true, NodeUUID: "node-1"})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent"})
+	_, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("payload")),
+		7,
+		"test.dng",
+		UploadOptions{},
+	)
+	if err != nil {
+		t.Fatalf("UploadStream: %v", err)
+	}
+	if sawSignature {
+		t.Fatal("upload should not carry X-Signature (server exempts /upload)")
+	}
+}
+
+func TestSignRequest_CanonicalString(t *testing.T) {
+	apiKey := "test-api-key-1234567890123456" // pragma: allowlist secret
+	method := "POST"
+	path := "/api/v1/agent/handshake"
+	nonce := "aabbccdd"
+	timestamp := "1234567890"
+	body := []byte(`{"agentId":"test"}`)
+
+	c := New(Config{BaseURL: "http://localhost", APIKey: apiKey, AgentID: "agent"})
+	sig := c.signRequest(method, path, nonce, timestamp, body)
+
+	// Compute expected HMAC independently
+	mac := hmac.New(sha256.New, []byte(apiKey))
+	mac.Write([]byte(method + "\n" + path + "\n" + nonce + "\n" + timestamp + "\n"))
+	mac.Write(body)
+	expected := hex.EncodeToString(mac.Sum(nil))
+
+	if sig != expected {
+		t.Fatalf("signature mismatch:\n  got:  %s\n  want: %s", sig, expected)
+	}
+}
+
+func TestReplayProtection_NonceUniqueness(t *testing.T) {
+	_, nonce1, err := newReplayProtectionFields()
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	_, nonce2, err := newReplayProtectionFields()
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if nonce1 == nonce2 {
+		t.Fatal("two consecutive nonces should differ")
+	}
+}
+
+func TestTLS12Minimum(t *testing.T) {
+	c := New(Config{BaseURL: "https://example.com", APIKey: "key", AgentID: "agent"})
+
+	transport, ok := c.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("httpClient.Transport is %T, want *http.Transport", c.httpClient.Transport)
+	}
+	if transport.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if transport.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Fatalf("MinVersion = %v, want %v", transport.TLSClientConfig.MinVersion, tls.VersionTLS12)
+	}
+
+	uploadTransport, ok := c.uploadClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("uploadClient.Transport is %T, want *http.Transport", c.uploadClient.Transport)
+	}
+	if uploadTransport.TLSClientConfig == nil {
+		t.Fatal("upload TLSClientConfig is nil")
+	}
+	if uploadTransport.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Fatalf("upload MinVersion = %v, want %v", uploadTransport.TLSClientConfig.MinVersion, tls.VersionTLS12)
+	}
+}
+
+func TestClientError_Sanitized(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "invalid or missing X-API-Key", http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "wrong-key", AgentID: "agent"})
+	_, err := c.Handshake(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error on 401, got nil")
+	}
+
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "invalid or missing X-API-Key") {
+		t.Fatalf("error message must not echo response body (S-7): %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "http error 401") {
+		t.Fatalf("error message should contain status code: %s", errMsg)
+	}
+}
+
+func TestCheckContent_Found(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/agent/check-content" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		fullHash := r.URL.Query().Get("fullHash")
+		if fullHash == "" {
+			t.Error("fullHash query param missing")
+		}
+		_ = json.NewEncoder(w).Encode(ContentCheckResult{
+			Found:    true,
+			NodeUUID: "node-uuid-1",
+			FilePath: "/archive/photo.dng",
+		})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent"})
+	result, err := c.CheckContent(context.Background(), "", "abc123")
+	if err != nil {
+		t.Fatalf("CheckContent: %v", err)
+	}
+	if !result.Found || result.NodeUUID != "node-uuid-1" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestCheckContent_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(ContentCheckResult{Found: false})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent"})
+	result, err := c.CheckContent(context.Background(), "", "abc123")
+	if err != nil {
+		t.Fatalf("CheckContent: %v", err)
+	}
+	if result.Found {
+		t.Fatal("expected Found=false")
+	}
+}
+
+func TestCheckContent_NetworkError(t *testing.T) {
+	c := New(Config{BaseURL: "http://127.0.0.1:1", APIKey: "key", AgentID: "agent"})
+	_, err := c.CheckContent(context.Background(), "", "abc123")
+	if err == nil {
+		t.Fatal("expected error on connection refused")
 	}
 }

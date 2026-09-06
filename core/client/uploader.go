@@ -119,7 +119,7 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, &ClientError{
 			Code:    CodeNetworkError,
-			Message: fmt.Sprintf("upload rejected with status %d: %s", resp.StatusCode, string(respBody)),
+			Message: fmt.Sprintf("upload rejected with status %d", resp.StatusCode),
 		}
 	}
 

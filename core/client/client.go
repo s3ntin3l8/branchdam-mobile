@@ -1,8 +1,14 @@
 package client
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,6 +37,9 @@ func New(cfg Config) *Client {
 	if httpClient == nil {
 		httpClient = &http.Client{
 			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+			},
 		}
 	}
 	uploadClient := cfg.UploadClient
@@ -39,6 +48,9 @@ func New(cfg Config) *Client {
 		// rather than a static 30s client-level timeout that would cut off large media streams.
 		uploadClient = &http.Client{
 			Timeout: 0,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+			},
 		}
 	}
 	version := cfg.ClientVersion
@@ -72,4 +84,27 @@ func (c *Client) setHeaders(req *http.Request) {
 	}
 	req.Header.Set("User-Agent", fmt.Sprintf("branchdam-mobile/%s (%s)", c.clientVersion, c.agentID))
 	req.Header.Set("Content-Type", "application/json")
+}
+
+// signRequest computes the HMAC-SHA256 signature over the canonical string
+// "method\npath\nnonce\ntimestamp\n" followed by the raw request body bytes,
+// keyed by the API key. For GET requests, path includes the full query string.
+func (c *Client) signRequest(method, path, nonce, timestamp string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(c.apiKey))
+	mac.Write([]byte(method + "\n" + path + "\n" + nonce + "\n" + timestamp + "\n"))
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// newReplayProtectionFields returns a fresh (timestamp, nonce) pair for
+// a single outgoing request. Timestamp is UnixNano as a base-10 string.
+// Nonce is 16 random bytes hex-encoded. Returns error on crypto/rand failure
+// rather than falling back to a deterministic nonce.
+func newReplayProtectionFields() (timestamp, nonce string, err error) {
+	ts := strconv.FormatInt(time.Now().UnixNano(), 10)
+	var nonceBytes [16]byte
+	if _, rerr := rand.Read(nonceBytes[:]); rerr != nil {
+		return "", "", fmt.Errorf("branchdam: read crypto/rand for replay nonce: %w", rerr)
+	}
+	return ts, hex.EncodeToString(nonceBytes[:]), nil
 }

@@ -1,6 +1,8 @@
 package branchdam
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -266,4 +268,25 @@ func BindingLookupBlake3ForLocalID(localID string) (string, error) {
 		return "", err
 	}
 	return state.Blake3Hash, nil
+}
+
+// BindingCheckContent calls GET /api/v1/agent/check-content with the given
+// hashes. Returns a JSON-encoded ContentCheckResult string, or "" on error.
+// Follows the BindingCheckSafeSpaceCandidates pattern for gomobile compatibility.
+func BindingCheckContent(fastHash, fullHash string) (string, error) {
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if bindingEngine == nil {
+		return "", fmt.Errorf("engine not open")
+	}
+	result, err := bindingEngine.client.CheckContent(
+		context.Background(), fastHash, fullHash)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }

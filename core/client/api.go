@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
 // Handshake performs agent handshake against POST /api/v1/agent/handshake.
@@ -110,6 +111,14 @@ func (c *Client) postJSON(ctx context.Context, path string, reqData any, respDat
 	}
 	c.setHeaders(req)
 
+	timestamp, nonce, rerr := newReplayProtectionFields()
+	if rerr != nil {
+		return fmt.Errorf("build replay protection fields: %w", rerr)
+	}
+	req.Header.Set("X-Timestamp", timestamp)
+	req.Header.Set("X-Nonce", nonce)
+	req.Header.Set("X-Signature", c.signRequest(req.Method, path, nonce, timestamp, jsonData))
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return &ClientError{
@@ -134,7 +143,7 @@ func (c *Client) postJSON(ctx context.Context, path string, reqData any, respDat
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &ClientError{
 			Code:    CodeNetworkError,
-			Message: fmt.Sprintf("http error %d: %s", resp.StatusCode, string(bodyBytes)),
+			Message: fmt.Sprintf("http error %d", resp.StatusCode),
 		}
 	}
 
@@ -145,4 +154,79 @@ func (c *Client) postJSON(ctx context.Context, path string, reqData any, respDat
 	}
 
 	return nil
+}
+
+func (c *Client) get(ctx context.Context, path string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("create request failed: %w", err)
+	}
+	c.setHeaders(req)
+	req.Header.Del("Content-Type")
+
+	timestamp, nonce, rerr := newReplayProtectionFields()
+	if rerr != nil {
+		return fmt.Errorf("build replay protection fields: %w", rerr)
+	}
+	req.Header.Set("X-Timestamp", timestamp)
+	req.Header.Set("X-Nonce", nonce)
+	req.Header.Set("X-Signature", c.signRequest(req.Method, path, nonce, timestamp, nil))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return &ClientError{
+			Code:    CodeNetworkError,
+			Message: "http execute failed",
+			Cause:   err,
+		}
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := readResponseBody(resp.Body)
+	if err != nil {
+		var ce *ClientError
+		if errors.As(err, &ce) {
+			return ce
+		}
+		return fmt.Errorf("read response failed: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &ClientError{
+			Code:    CodeNetworkError,
+			Message: fmt.Sprintf("http error %d", resp.StatusCode),
+		}
+	}
+
+	if out != nil && len(bodyBytes) > 0 {
+		if err := json.Unmarshal(bodyBytes, out); err != nil {
+			return fmt.Errorf("unmarshal response failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// CheckContent calls GET /api/v1/agent/check-content.
+// fastHash is optional (empty string = skip fast pre-screen).
+// Returns (result, nil) on success; (zero, err) on network failure.
+// Callers treat any network error as "not found" (fail-open) so ingest
+// proceeds rather than blocking on server unavailability.
+func (c *Client) CheckContent(ctx context.Context, fastHash, fullHash string) (ContentCheckResult, error) {
+	params := url.Values{}
+	if fastHash != "" {
+		params.Set("fastHash", fastHash)
+	}
+	if fullHash != "" {
+		params.Set("fullHash", fullHash)
+	}
+	path := "/api/v1/agent/check-content"
+	if q := params.Encode(); q != "" {
+		path += "?" + q
+	}
+	var out ContentCheckResult
+	if err := c.get(ctx, path, &out); err != nil {
+		return ContentCheckResult{}, err
+	}
+	return out, nil
 }
