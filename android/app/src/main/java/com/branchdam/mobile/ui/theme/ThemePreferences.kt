@@ -28,6 +28,12 @@ class ThemePreferences(private val prefs: SharedPreferences) {
     private val _mode = MutableStateFlow(readMode())
     val mode: StateFlow<ThemeMode> = _mode.asStateFlow()
 
+    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == BranchDamKeys.THEME_MODE) {
+            _mode.value = readMode()
+        }
+    }
+
     init {
         // Re-read whenever THEME_MODE changes — covers writes from
         // any consumer (the setter calls edit().apply()), from
@@ -36,11 +42,7 @@ class ThemePreferences(private val prefs: SharedPreferences) {
         // the Android prefs file. Filtering on key avoids spurious
         // emissions for unrelated preference writes; the `clear()`
         // callback arrives with key=null and is filtered out as well.
-        prefs.registerOnSharedPreferenceChangeListener { _, key ->
-            if (key == BranchDamKeys.THEME_MODE) {
-                _mode.value = readMode()
-            }
-        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
     }
 
     /**
