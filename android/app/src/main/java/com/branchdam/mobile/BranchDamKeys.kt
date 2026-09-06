@@ -81,6 +81,13 @@ object BranchDamKeys {
      */
     const val OBSERVER_DEBOUNCE_MS = "branchdam_observer_debounce_ms"
 
+    /**
+     * Timestamp (seconds since epoch) of the last completed MediaStore
+     * scan. Read by [com.branchdam.mobile.observer.MediaStoreObserver]
+     * on startup to resume scanning from where it left off.
+     */
+    const val OBSERVER_LAST_SCANNED_TIMESTAMP = "branchdam_observer_last_scanned_timestamp"
+
     /** Default background sync interval in minutes. */
     const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
 

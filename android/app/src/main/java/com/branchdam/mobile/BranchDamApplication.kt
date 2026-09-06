@@ -18,16 +18,25 @@ class BranchDamApplication : Application() {
 
         // T2-10: copy any pre-T2-10 preference keys (sync_on_mobile_data,
         // auto_import_camera_roll) into the canonical branchdam_-prefixed
-        // keys before any other component reads them. The migration is
+        // keys before any other component reads them. Also migrates
+        // T2-5 secrets into EncryptedSharedPreferences. The migration is
         // silent and idempotent — see PrefKeyMigration.
         val nonSecretPrefs = getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
-        PrefKeyMigration.migrate(nonSecretPrefs)
+        val securePrefs = EncryptedPrefs.get(this)
+        PrefKeyMigration.migrate(nonSecretPrefs, securePrefs)
 
-        // Initialize the gomobile-bound Go engine. The holder falls back
-        // to mock values when the AAR is not on the classpath, so
-        // unit tests that run without the native binary still work.
+        // T2-11: Load any pending imports from the previous session.
+        ImportConfirmationNotifier.loadPendingItems(this)
+
+        // T2-11: Initialize the gomobile-bound Go engine off the main thread
+        // to avoid startup lag. The holder fallbacks to mock values when
+        // the AAR is not on the classpath. Subsequent EngineHolder calls
+        // (like those from MediaStoreObserver) will safely queue up behind
+        // this on the EngineHolder's single-threaded executor.
         val dbFile = File(filesDir, "branchdam_queue.db")
-        initCoreEngine(dbFile.absolutePath)
+        Thread {
+            initCoreEngine(dbFile.absolutePath)
+        }.start()
 
         mediaStoreObserver = MediaStoreObserver(this)
         mediaStoreObserver.register()

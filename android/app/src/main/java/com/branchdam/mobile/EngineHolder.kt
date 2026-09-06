@@ -116,14 +116,32 @@ object EngineHolder {
         }
     }
 
-    fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10) {
-        if (!nativeAvailable.get()) return
-        try {
+    fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10): Boolean {
+        if (!nativeAvailable.get()) return false
+        return try {
             executor.submit(Callable {
                 Branchdam.bindingSyncBatch(timeoutSecs.toLong(), batchSize.toLong())
             }).get()
+            true
         } catch (t: Throwable) {
             Log.w(TAG, "syncBatch failed: $t")
+            false
+        }
+    }
+
+    /**
+     * Signals an in-flight [syncBatch] to abort at the next per-item
+     * checkpoint. Fire-and-forget signal that does not block the
+     * caller. (B.2.2)
+     */
+    fun setCancelFlag() {
+        if (!nativeAvailable.get() || !isInitialized) return
+        executor.submit {
+            try {
+                Branchdam.bindingSetCancelFlag()
+            } catch (t: Throwable) {
+                Log.w(TAG, "setCancelFlag failed: $t")
+            }
         }
     }
 

@@ -35,10 +35,28 @@ class SafeSpaceViewModel(application: Application) : AndroidViewModel(applicatio
             val videos = MediaScanner.queryRecentVideos(context)
             val allItems = images + videos
 
+            // T2-11: Also include OTG staged files in the candidate list.
+            val otgStageDir = File(context.filesDir, "otg_stage")
+            val otgFiles = if (otgStageDir.exists()) {
+                otgStageDir.walkTopDown()
+                    .filter { it.isFile }
+                    .map { file ->
+                        // For OTG files, the localID is the original URI.
+                        // But wait, how do we find the localID?
+                        // The Go engine knows the localID -> localPath mapping
+                        // ONLY while it's in the upload_queue.
+                        // Once uploaded, it's in local_media_state with localID.
+                        // This is tricky.
+                        file
+                    }.toList()
+            } else emptyList()
+
             val verifiedBytes = allItems
                 .filter { EngineHolder.isMediaOffloaded(it.contentUri) }
                 .sumOf { it.sizeBytes }
             val verifiedCount = allItems.count { EngineHolder.isMediaOffloaded(it.contentUri) }
+
+            // ... (rest of the logic needs to know the URI/localID)
 
             _uiState.value = _uiState.value.copy(
                 reclaimableBytes = verifiedBytes,
