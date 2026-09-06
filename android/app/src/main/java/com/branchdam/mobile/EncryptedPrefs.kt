@@ -45,6 +45,8 @@ object EncryptedPrefs {
      */
     const val SECURE_PREFS_NAME = "branchdam_secure_prefs"
 
+    private var cachedPrefs: SharedPreferences? = null
+
     /**
      * Returns an EncryptedSharedPreferences for [name], or null if
      * Keystore initialization fails. The returned object is cached
@@ -52,21 +54,33 @@ object EncryptedPrefs {
      * involves a Keystore round-trip that we don't want to pay per
      * read.
      */
+    @Synchronized
     fun get(context: Context, name: String = SECURE_PREFS_NAME): SharedPreferences? {
+        if (cachedPrefs != null && name == SECURE_PREFS_NAME) {
+            return cachedPrefs
+        }
+
         return try {
             val masterKey = MasterKey.Builder(context, MASTER_KEY_ALIAS)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
 
-            EncryptedSharedPreferences.create(
+            val prefs = EncryptedSharedPreferences.create(
                 context,
                 name,
                 masterKey,
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
+            if (name == SECURE_PREFS_NAME) {
+                cachedPrefs = prefs
+            }
+            prefs
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to initialize encrypted prefs '$name': $t")
+            if (name == SECURE_PREFS_NAME) {
+                cachedPrefs = null
+            }
             null
         }
     }

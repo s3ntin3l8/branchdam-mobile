@@ -87,13 +87,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val versionName: String = BuildConfig.VERSION_NAME
     val versionCode: Int = BuildConfig.VERSION_CODE
 
-    // Initial value reflects the persisted engine state so the
-    // Settings screen doesn't flash "Disconnected" for the few
-    // hundred milliseconds between init and the first
-    // checkConnection() result. The async refresh on init /
-    // LaunchedEffect still updates this if the server has gone
-    // away since last launch.
-    private val _isConnected = MutableStateFlow(EngineHolder.isInitialized())
+    // Initial value is false; checkConnection() runs immediately on
+    // init to determine reachability. This ensures we don't show
+    // "Connected" until a successful handshake has actually happened.
+    private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
     private val _isConnecting = MutableStateFlow(false)
@@ -122,6 +119,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * gomobile binding.
      */
     fun checkConnection() {
+        _connectionError.value = null
         viewModelScope.launch {
             val isReachable = withContext(testIoDispatcher) {
                 withTimeoutOrNull(reachabilityTimeoutMs) {
@@ -199,12 +197,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             return
         }
         _isConnecting.value = true
+        _connectionError.value = null
         viewModelScope.launch(testIoDispatcher) {
             persistSettings()
             val context = getApplication<Application>()
             val dbPath = defaultEngineDbPath(context.filesDir)
             val devHosts = UrlValidator.cleartextHostsCsv(BuildConfig.DEBUG)
-            val success = engineInit(
+            val initSuccess = engineInit(
                 dbPath,
                 _serverUrl.value,
                 _apiKey.value,
@@ -212,14 +211,29 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 BuildConfig.VERSION_NAME,
                 devHosts,
             )
-            _isConnected.value = success
-            _isConnecting.value = false
-            _connectionError.value = if (success) null else "Connection failed"
-            if (success) {
-                val template = EngineHolder.fetchNamingTemplate()
-                if (template.isNotBlank()) {
-                    _namingTemplate.value = template
+
+            if (initSuccess) {
+                // T2-11: Verify the server is actually reachable before
+                // declaring the connection "Connected".
+                val isReachable = withTimeoutOrNull(reachabilityTimeoutMs) {
+                    testConnectionFn()
+                } ?: false
+
+                _isConnected.value = isReachable
+                _isConnecting.value = false
+                if (isReachable) {
+                    _connectionError.value = null
+                    val template = EngineHolder.fetchNamingTemplate()
+                    if (template.isNotBlank()) {
+                        _namingTemplate.value = template
+                    }
+                } else {
+                    _connectionError.value = "Server unreachable"
                 }
+            } else {
+                _isConnected.value = false
+                _isConnecting.value = false
+                _connectionError.value = "Engine initialization failed"
             }
         }
     }
