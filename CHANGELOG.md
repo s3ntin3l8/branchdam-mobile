@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.5](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.4...branchdam-mobile-v0.7.5) (2026-09-06)
+
+
+### Features
+
+* reset settings navigation on tab switch or re-selection ([#145](https://github.com/s3ntin3l8/branchdam-mobile/issues/145)) ([4c07ff9](https://github.com/s3ntin3l8/branchdam-mobile/commit/4c07ff97aedbda4ac70a799f31cee752a375bece))
+
+
+### Bug Fixes
+
+* move ui-test-manifest to testImplementation and add GC durability test ([0a5a958](https://github.com/s3ntin3l8/branchdam-mobile/commit/0a5a958172eeca10d18b953fffc9166ec0c21f19))
+* prevent theme preference listener from being garbage collected ([#144](https://github.com/s3ntin3l8/branchdam-mobile/issues/144)) ([76bac31](https://github.com/s3ntin3l8/branchdam-mobile/commit/76bac31f4f1a0a26568328ff5e6346c6fe284b14))
+* restore missing test code and resolve WorkManager unit-test conflict ([#147](https://github.com/s3ntin3l8/branchdam-mobile/issues/147)) ([cc1b53f](https://github.com/s3ntin3l8/branchdam-mobile/commit/cc1b53f5238917cdb971a4e1e3ed8a0171e5cec6))
+
 ## [0.7.4](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.3...branchdam-mobile-v0.7.4) (2026-09-06)
 
 
