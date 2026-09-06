@@ -9,14 +9,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.branchdam.mobile.otg.OtgIngestManager
@@ -30,6 +34,8 @@ import com.branchdam.mobile.ui.navigation.BottomNavBar
 import com.branchdam.mobile.ui.navigation.Screen
 import com.branchdam.mobile.ui.navigation.bottomNavRoutes
 import com.branchdam.mobile.ui.theme.BranchDamTheme
+import com.branchdam.mobile.ui.theme.ThemeMode
+import com.branchdam.mobile.ui.theme.ThemePreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -207,7 +213,31 @@ class MainActivity : ComponentActivity() {
         val otgManager = OtgIngestManager.getInstance(this)
 
         setContent {
-            BranchDamTheme {
+            val themePrefs = remember {
+                ThemePreferences(
+                    applicationContext.getSharedPreferences(
+                        BranchDamKeys.PREFS_NAME,
+                        android.content.Context.MODE_PRIVATE,
+                    ),
+                )
+            }
+            val themeMode by themePrefs.mode.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = when (themeMode) {
+                ThemeMode.SYSTEM -> systemDark
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            val view = LocalView.current
+            if (!view.isInEditMode) {
+                SideEffect {
+                    WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = !darkTheme
+                        isAppearanceLightNavigationBars = !darkTheme
+                    }
+                }
+            }
+            BranchDamTheme(themeMode = themeMode) {
                 val permissionFlow = remember { PermissionFlowState() }
 
                 val (notificationsBatch, mediaBatch) = remember { runtimePermissionBatches() }

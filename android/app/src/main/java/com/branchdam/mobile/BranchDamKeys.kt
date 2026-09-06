@@ -88,6 +88,18 @@ object BranchDamKeys {
      */
     const val OBSERVER_LAST_SCANNED_TIMESTAMP = "branchdam_observer_last_scanned_timestamp"
 
+    /**
+     * User-selected color-scheme mode (System / Light / Dark).
+     * Stored as the lowercase [com.branchdam.mobile.ui.theme.ThemeMode]
+     * name (`"system"` / `"light"` / `"dark"`).
+     *
+     * iOS parity: the iOS shell will use this exact spelling for
+     * the matching `UserDefaults` key when its theme selector is
+     * implemented in a follow-up PR, so a future cross-platform
+     * sync tool can target one string.
+     */
+    const val THEME_MODE = "branchdam_theme_mode"
+
     /** Default background sync interval in minutes. */
     const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
 

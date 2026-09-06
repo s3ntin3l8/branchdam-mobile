@@ -85,8 +85,11 @@ tmp/
 *.aar
 *.xcframework/
 
-# Superpowers working notes (audits, specs, plans)
+# Superpowers scratch
+# - docs/superpowers/: committed audit/spec/plan documents
+# - .superpowers/:    uncommitted brainstorm-companion session state
 docs/superpowers/
+.superpowers/
 
 # Agent worktrees
 .worktrees/
