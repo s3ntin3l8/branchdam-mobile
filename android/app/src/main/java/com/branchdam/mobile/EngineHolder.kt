@@ -77,7 +77,7 @@ object EngineHolder {
         capturedAtUnix: Long,
         localId: String,
     ): Long {
-        if (!nativeAvailable.get()) return 1L
+        if (!nativeAvailable.get() || !isInitialized) return 1L
         return try {
             executor.submit(Callable {
                 Branchdam.bindingEnqueueMedia(localPath, filename, localId, "", capturedAtUnix, 0L)
@@ -95,7 +95,7 @@ object EngineHolder {
         resolver: String = "android_camera_pair",
         confidence: Double = 1.00,
     ): String {
-        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
+        if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
         return try {
             executor.submit(Callable {
                 Branchdam.bindingEnqueueLineageEvent(parentLocalID, childLocalID, relationshipType, resolver, confidence)
@@ -107,7 +107,7 @@ object EngineHolder {
     }
 
     fun enqueueDeleteEvent(localID: String): String {
-        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
+        if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
         return try {
             executor.submit(Callable { Branchdam.bindingEnqueueDeleteEvent(localID) }).get()
         } catch (t: Throwable) {

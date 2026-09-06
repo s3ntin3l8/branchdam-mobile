@@ -59,12 +59,23 @@ object PrefKeyMigration {
         BooleanMigration(LEGACY_AUTO_IMPORT_CAMERA_ROLL, LEGACY_AUTO_IMPORT_CAMERA_ROLL_NEW)
     )
 
+    private val SECRET_KEYS = listOf(
+        BranchDamApplication.KEY_SERVER_URL,
+        BranchDamApplication.KEY_API_KEY,
+        BranchDamApplication.KEY_AGENT_ID
+    )
+
     /**
      * Runs all registered migrations against [prefs]. Acquires a
      * single editor and applies it once so the migration is
      * atomic from the prefs file's perspective.
+     *
+     * Also migrates secrets from [prefs] to [encryptedPrefs] if
+     * they are found in the plain prefs. This covers the T2-5
+     * upgrade path for existing users whose API keys were stored
+     * in plain text before the encrypted prefs were introduced.
      */
-    fun migrate(prefs: SharedPreferences) {
+    fun migrate(prefs: SharedPreferences, encryptedPrefs: SharedPreferences? = null) {
         val editor = prefs.edit()
         var changed = false
         for (migration in BOOLEAN_MIGRATIONS) {
@@ -78,6 +89,27 @@ object PrefKeyMigration {
             editor.remove(migration.oldKey)
             changed = true
         }
+
+        // T2-5: Migrate secrets to encrypted storage
+        if (encryptedPrefs != null) {
+            val secureEditor = encryptedPrefs.edit()
+            var secureChanged = false
+            for (key in SECRET_KEYS) {
+                if (prefs.contains(key)) {
+                    val value = prefs.getString(key, null)
+                    if (value != null) {
+                        secureEditor.putString(key, value)
+                        secureChanged = true
+                    }
+                    editor.remove(key)
+                    changed = true
+                }
+            }
+            if (secureChanged) {
+                secureEditor.apply()
+            }
+        }
+
         if (changed) {
             editor.apply()
         }

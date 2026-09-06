@@ -30,16 +30,6 @@ object ImportConfirmationNotifier {
     private val suppressedIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     private val pendingItemsMap = ConcurrentHashMap<String, MediaItem>()
 
-    /**
-     * T2-11: Placeholder for loading pending items. In a future
-     * update, this could use a local database to persist the
-     * list of photos awaiting user confirmation.
-     */
-    fun loadPendingItems(context: Context) {
-        // No-op for now to keep the code clean while I evaluate
-        // the best persistence strategy for MediaItem.
-    }
-
     fun getAutoImportEnabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences(SyncScheduler.PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean(KEY_AUTO_IMPORT, false)

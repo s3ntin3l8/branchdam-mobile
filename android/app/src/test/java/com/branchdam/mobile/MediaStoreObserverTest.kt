@@ -1,6 +1,7 @@
 package com.branchdam.mobile
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.branchdam.mobile.observer.MediaStoreObserver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -36,25 +37,32 @@ import org.mockito.kotlin.whenever
  */
 class MediaStoreObserverTest {
 
+    /**
+     * Creates a mock Context that returns a mock SharedPreferences
+     * for the branchdam prefs. The mock SharedPreferences returns
+     * 0L for getLong (matching the default timestamp path).
+     */
+    private fun createContext(): Context {
+        val context: Context = mock()
+        val prefs: SharedPreferences = mock()
+        val editor: SharedPreferences.Editor = mock()
+        whenever(prefs.getLong(BranchDamKeys.OBSERVER_LAST_SCANNED_TIMESTAMP, 0L)).thenReturn(0L)
+        whenever(prefs.edit()).thenReturn(editor)
+        whenever(editor.putLong(org.mockito.kotlin.any(), org.mockito.kotlin.any())).thenReturn(editor)
+        whenever(context.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)).thenReturn(prefs)
+        return context
+    }
+
     @Test
     fun testObserverIsConstructable() {
-        // The observer takes a Context (required for register). With
-        // a mock Context, construction succeeds. The default Handler
-        // parameter is a HandlerThread; with isReturnDefaultValues,
-        // HandlerThread() returns a stub instead of throwing.
-        val context: Context = mock()
+        val context = createContext()
         val observer = MediaStoreObserver(context)
         assertNotNull(observer)
     }
 
     @Test
     fun testObserverExtendsContentObserver() {
-        // ContentObserver is the Android base class for receiving
-        // content-change notifications. MediaStoreObserver inherits
-        // from it so the ContentResolver can dispatch onChange calls.
-        // The cast itself is a compile-time check; the assertion
-        // verifies the runtime type is correct.
-        val context: Context = mock()
+        val context = createContext()
         val observer: android.database.ContentObserver = MediaStoreObserver(context)
         assertTrue(
             "MediaStoreObserver must extend android.database.ContentObserver",
@@ -64,27 +72,17 @@ class MediaStoreObserverTest {
 
     @Test
     fun testRegisterUnregisterMethodsExist() {
-        // Verify the public lifecycle hooks exist and accept no
-        // arguments. This is a structural test; the actual
-        // ContentResolver interaction requires a real provider.
         val observerClass = Class.forName("com.branchdam.mobile.observer.MediaStoreObserver")
         val registerMethod = observerClass.getMethod("register")
         val unregisterMethod = observerClass.getMethod("unregister")
         assertNotNull(registerMethod)
         assertNotNull(unregisterMethod)
-        // With isReturnDefaultValues=true, the return type of the
-        // stub method is not reliably Unit::class.java, so we only
-        // check that the methods exist. The actual return type is
-        // verified at compile time.
     }
 
     @Test
     fun testObserverUsesDefaultContext() {
-        // The observer's first constructor parameter is the Context.
-        // Verify the value is stored and accessible.
-        val context: Context = mock()
+        val context = createContext()
         val observer = MediaStoreObserver(context)
-        // Use reflection to read the private context field.
         val field = observer.javaClass.getDeclaredField("context")
         field.isAccessible = true
         assertEquals(context, field.get(observer))

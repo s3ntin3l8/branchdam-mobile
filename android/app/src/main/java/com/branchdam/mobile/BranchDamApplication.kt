@@ -25,18 +25,16 @@ class BranchDamApplication : Application() {
         val securePrefs = EncryptedPrefs.get(this)
         PrefKeyMigration.migrate(nonSecretPrefs, securePrefs)
 
-        // T2-11: Load any pending imports from the previous session.
-        ImportConfirmationNotifier.loadPendingItems(this)
-
-        // T2-11: Initialize the gomobile-bound Go engine off the main thread
+        // Initialize the gomobile-bound Go engine off the main thread
         // to avoid startup lag. The holder fallbacks to mock values when
         // the AAR is not on the classpath. Subsequent EngineHolder calls
         // (like those from MediaStoreObserver) will safely queue up behind
         // this on the EngineHolder's single-threaded executor.
         val dbFile = File(filesDir, "branchdam_queue.db")
-        Thread {
-            initCoreEngine(dbFile.absolutePath)
-        }.start()
+        Thread({ initCoreEngine(dbFile.absolutePath) }, "EngineInit").apply {
+            isDaemon = true
+            start()
+        }
 
         mediaStoreObserver = MediaStoreObserver(this)
         mediaStoreObserver.register()
