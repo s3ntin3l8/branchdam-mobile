@@ -15,20 +15,22 @@ public struct ApplePairingConfig: Equatable {
 public class AppleQrParser {
     public static func parse(uriString: String) -> ApplePairingConfig? {
         guard uriString.hasPrefix("branchdam://") else { return nil }
-        let clean = uriString.replacingOccurrences(of: "branchdam://", with: "")
-        let components = clean.components(separatedBy: "&")
+        var body = uriString.replacingOccurrences(of: "branchdam://", with: "")
+        if body.hasPrefix("?") { body.removeFirst() }
 
         var dict = [String: String]()
-        for comp in components {
+        for comp in body.components(separatedBy: "&") where !comp.isEmpty {
             let pair = comp.components(separatedBy: "=")
-            if pair.count == 2 {
-                dict[pair[0]] = pair[1]
+            guard pair.count == 2,
+                  let decoded = pair[1].removingPercentEncoding else {
+                return nil
             }
+            dict[pair[0]] = decoded
         }
 
         guard let server = dict["server"], !server.isEmpty else { return nil }
         let key = dict["key"] ?? ""
-        let agent = dict["agent"] ?? "iphone-companion"
+        let agent = dict["agent"]?.isEmpty == false ? dict["agent"]! : "iphone-companion"
 
         return ApplePairingConfig(serverUrl: server, apiKey: key, agentId: agent)
     }
