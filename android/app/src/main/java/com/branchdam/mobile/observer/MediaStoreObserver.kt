@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.provider.MediaStore
+import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.lineage.EditCorrelator
 import com.branchdam.mobile.lineage.MotionPhotoExtractor
@@ -61,8 +62,8 @@ class MediaStoreObserver(
      * [DEFAULT_DEBOUNCE_WINDOW_MS] if the key is absent.
      */
     private fun readDebounceWindowMs(): Long {
-        val prefs = context.getSharedPreferences(com.branchdam.mobile.BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getLong(com.branchdam.mobile.BranchDamKeys.OBSERVER_DEBOUNCE_MS, DEFAULT_DEBOUNCE_WINDOW_MS)
+        val prefs = context.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, BranchDamKeys.DEFAULT_OBSERVER_DEBOUNCE_MS)
     }
 
     /**
@@ -78,7 +79,7 @@ class MediaStoreObserver(
      */
     private val debouncer = Debouncer(
         scope = scope,
-        windowMs = readDebounceWindowMs(),
+        windowMs = ::readDebounceWindowMs,
         onFire = ::scanAndSyncTrash,
     )
 
@@ -212,9 +213,5 @@ class MediaStoreObserver(
                 )
             }
         }
-    }
-
-    private companion object {
-        const val DEFAULT_DEBOUNCE_WINDOW_MS = 500L
     }
 }

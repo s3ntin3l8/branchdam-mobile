@@ -18,8 +18,6 @@ object SyncScheduler {
     const val PERIODIC_WORK_TAG = "branchdam_periodic_sync"
     const val IMMEDIATE_WORK_TAG = "branchdam_immediate_sync"
 
-    private const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
-
     fun getSyncOnMobileData(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean(KEY_SYNC_ON_MOBILE_DATA, false)
@@ -32,7 +30,7 @@ object SyncScheduler {
 
     fun getSyncIntervalMinutes(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, DEFAULT_SYNC_INTERVAL_MINUTES)
+        return prefs.getInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, BranchDamKeys.DEFAULT_SYNC_INTERVAL_MINUTES)
     }
 
     fun getSyncOnBatteryOnly(context: Context): Boolean {

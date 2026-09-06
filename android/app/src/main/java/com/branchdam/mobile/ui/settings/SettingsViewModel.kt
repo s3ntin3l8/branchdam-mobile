@@ -67,20 +67,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
     // Sync settings
-    private val _syncIntervalMinutes = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, DEFAULT_SYNC_INTERVAL_MINUTES))
+    private val _syncIntervalMinutes = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, BranchDamKeys.DEFAULT_SYNC_INTERVAL_MINUTES))
     val syncIntervalMinutes: StateFlow<Int> = _syncIntervalMinutes.asStateFlow()
 
     private val _syncOnBatteryOnly = MutableStateFlow(nonSecretPrefs.getBoolean(BranchDamKeys.SYNC_ON_BATTERY_ONLY, false))
     val syncOnBatteryOnly: StateFlow<Boolean> = _syncOnBatteryOnly.asStateFlow()
 
     // Advanced settings
-    private val _uploadBatchSize = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.UPLOAD_BATCH_SIZE, DEFAULT_UPLOAD_BATCH_SIZE))
+    private val _uploadBatchSize = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.UPLOAD_BATCH_SIZE, BranchDamKeys.DEFAULT_UPLOAD_BATCH_SIZE))
     val uploadBatchSize: StateFlow<Int> = _uploadBatchSize.asStateFlow()
 
-    private val _syncTimeoutSecs = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.SYNC_TIMEOUT_SECS, DEFAULT_SYNC_TIMEOUT_SECS))
+    private val _syncTimeoutSecs = MutableStateFlow(nonSecretPrefs.getInt(BranchDamKeys.SYNC_TIMEOUT_SECS, BranchDamKeys.DEFAULT_SYNC_TIMEOUT_SECS))
     val syncTimeoutSecs: StateFlow<Int> = _syncTimeoutSecs.asStateFlow()
 
-    private val _observerDebounceMs = MutableStateFlow(nonSecretPrefs.getLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, DEFAULT_OBSERVER_DEBOUNCE_MS))
+    private val _observerDebounceMs = MutableStateFlow(nonSecretPrefs.getLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, BranchDamKeys.DEFAULT_OBSERVER_DEBOUNCE_MS))
     val observerDebounceMs: StateFlow<Long> = _observerDebounceMs.asStateFlow()
 
     val versionName: String = BuildConfig.VERSION_NAME
@@ -167,11 +167,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setSyncIntervalMinutes(minutes: Int) {
         _syncIntervalMinutes.value = minutes
         nonSecretPrefs.edit().putInt(BranchDamKeys.SYNC_INTERVAL_MINUTES, minutes).apply()
+        SyncScheduler.schedulePeriodicSync(getApplication())
     }
 
     fun setSyncOnBatteryOnly(enabled: Boolean) {
         _syncOnBatteryOnly.value = enabled
         nonSecretPrefs.edit().putBoolean(BranchDamKeys.SYNC_ON_BATTERY_ONLY, enabled).apply()
+        SyncScheduler.schedulePeriodicSync(getApplication())
     }
 
     fun setUploadBatchSize(size: Int) {
@@ -230,10 +232,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
-        const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
-        const val DEFAULT_UPLOAD_BATCH_SIZE = 10
-        const val DEFAULT_SYNC_TIMEOUT_SECS = 120
-        const val DEFAULT_OBSERVER_DEBOUNCE_MS = 500L
         /**
          * Default upper bound on the time `checkConnection` will wait
          * for the server handshake before treating it as unreachable.

@@ -80,4 +80,16 @@ object BranchDamKeys {
      * Read by [com.branchdam.mobile.observer.MediaStoreObserver].
      */
     const val OBSERVER_DEBOUNCE_MS = "branchdam_observer_debounce_ms"
+
+    /** Default background sync interval in minutes. */
+    const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
+
+    /** Default number of items per sync batch. */
+    const val DEFAULT_UPLOAD_BATCH_SIZE = 10
+
+    /** Default maximum seconds to wait for a sync batch to complete. */
+    const val DEFAULT_SYNC_TIMEOUT_SECS = 120
+
+    /** Default debounce window for MediaStore observer (ms). */
+    const val DEFAULT_OBSERVER_DEBOUNCE_MS = 500L
 }

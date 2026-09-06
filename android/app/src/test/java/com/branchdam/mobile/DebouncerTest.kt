@@ -38,7 +38,7 @@ class DebouncerTest {
         val callCount = intArrayOf(0)
         val debouncer = Debouncer(
             scope = this,
-            windowMs = 500L,
+            windowMs = { 500L },
             onFire = { callCount[0]++ }
         )
 
@@ -73,7 +73,7 @@ class DebouncerTest {
         val callCount = intArrayOf(0)
         val debouncer = Debouncer(
             scope = this,
-            windowMs = 500L,
+            windowMs = { 500L },
             onFire = { callCount[0]++ }
         )
 
@@ -101,7 +101,7 @@ class DebouncerTest {
         val callCount = intArrayOf(0)
         val debouncer = Debouncer(
             scope = this,
-            windowMs = 500L,
+            windowMs = { 500L },
             onFire = { callCount[0]++ }
         )
 
@@ -138,7 +138,7 @@ class DebouncerTest {
         val callCount = intArrayOf(0)
         val debouncer = Debouncer(
             scope = this,
-            windowMs = 500L,
+            windowMs = { 500L },
             onFire = { callCount[0]++ }
         )
 
@@ -199,7 +199,7 @@ class DebouncerTest {
         val callCount = intArrayOf(0)
         val debouncer = Debouncer(
             scope = this,
-            windowMs = 500L,
+            windowMs = { 500L },
             onFire = {
                 activeRuns[0]++
                 if (activeRuns[0] > maxActive[0]) maxActive[0] = activeRuns[0]
@@ -296,7 +296,7 @@ class DebouncerTest {
         val callCount = intArrayOf(0)
         val debouncer = Debouncer(
             scope = this,
-            windowMs = 100L,
+            windowMs = { 100L },
             onFire = {
                 callCount[0]++
                 delay(200L)
@@ -384,7 +384,7 @@ class DebouncerTest {
         val debouncerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val debouncer = Debouncer(
             scope = debouncerScope,
-            windowMs = windowMs,
+            windowMs = { windowMs },
             onFire = {
                 val now = activeRuns.incrementAndGet()
                 // Atomic CAS loop to track the high-water mark across

@@ -24,8 +24,8 @@ class SyncWorker(
             }
 
             val prefs = applicationContext.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
-            val batchSize = prefs.getInt(BranchDamKeys.UPLOAD_BATCH_SIZE, DEFAULT_BATCH_SIZE)
-            val timeoutSecs = prefs.getInt(BranchDamKeys.SYNC_TIMEOUT_SECS, DEFAULT_TIMEOUT_SECS)
+            val batchSize = prefs.getInt(BranchDamKeys.UPLOAD_BATCH_SIZE, BranchDamKeys.DEFAULT_UPLOAD_BATCH_SIZE)
+            val timeoutSecs = prefs.getInt(BranchDamKeys.SYNC_TIMEOUT_SECS, BranchDamKeys.DEFAULT_SYNC_TIMEOUT_SECS)
 
             EngineHolder.syncBatch(timeoutSecs = timeoutSecs, batchSize = batchSize)
             Log.i(TAG, "syncBatch complete (batch=$batchSize, timeout=${timeoutSecs}s)")
@@ -52,7 +52,5 @@ class SyncWorker(
     companion object {
         private const val TAG = "SyncWorker"
         const val MAX_ATTEMPTS = 3
-        private const val DEFAULT_BATCH_SIZE = 10
-        private const val DEFAULT_TIMEOUT_SECS = 120
     }
 }
