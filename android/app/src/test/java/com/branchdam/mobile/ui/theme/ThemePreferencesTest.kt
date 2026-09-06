@@ -146,7 +146,26 @@ class ThemePreferencesTest {
 
     @Test
     fun testListenerHandlesMultiKeyEditBatch() = runTest {
-        // ... (existing test code)
+        // Regression guard for a batch where one of the keys is the
+        // listener's key and another is unrelated. The listener
+        // must fire exactly once for THEME_MODE and the flow must
+        // reflect the new THEME_MODE value, with no spurious
+        // extra emissions from the unrelated key.
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences(
+            "test_batch_${System.nanoTime()}",
+            Context.MODE_PRIVATE,
+        )
+        val repo = ThemePreferences(prefs)
+        repo.setMode(ThemeMode.LIGHT)
+        assertEquals(ThemeMode.LIGHT, repo.mode.value)
+
+        prefs.edit()
+            .putString(BranchDamKeys.THEME_MODE, ThemeMode.DARK.toStorageString())
+            .putString("unrelated_key", "ignored")
+            .apply()
+        advanceUntilIdle()
+
         assertEquals(ThemeMode.DARK, repo.mode.value)
         assertEquals(
             "ignored",
