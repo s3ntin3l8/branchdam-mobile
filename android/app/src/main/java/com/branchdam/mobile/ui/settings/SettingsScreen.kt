@@ -1,5 +1,6 @@
 package com.branchdam.mobile.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,152 +12,167 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+
+private enum class SettingsPage {
+    Categories,
+    Connection,
+    Sync,
+    Import,
+    Advanced,
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onScanQr: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: SettingsViewModel = viewModel(),
+    viewModel: SettingsViewModel,
 ) {
-    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
-    val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
-    val syncOnMobileData by viewModel.syncOnMobileData.collectAsStateWithLifecycle()
-    val autoImportEnabled by viewModel.autoImportEnabled.collectAsStateWithLifecycle()
-    val namingTemplate by viewModel.namingTemplate.collectAsStateWithLifecycle()
-    val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
-    val isConnecting by viewModel.isConnecting.collectAsStateWithLifecycle()
-    val connectionError by viewModel.connectionError.collectAsStateWithLifecycle()
-    val urlError by viewModel.urlError.collectAsStateWithLifecycle()
+    var currentPage by rememberSaveable { mutableStateOf(SettingsPage.Categories) }
 
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        viewModel.checkConnection()
-    }
+    when (currentPage) {
+        SettingsPage.Categories -> {
+            val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Settings") }) },
-        modifier = modifier,
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(12.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = if (isConnected) MaterialTheme.colorScheme.primary
-                           else MaterialTheme.colorScheme.error,
-                ) {}
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (isConnected) "Connected" else "Disconnected",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            Scaffold(
+                topBar = { TopAppBar(title = { Text("Settings") }) },
+                modifier = modifier,
+            ) { padding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            modifier = Modifier.size(12.dp),
+                            shape = MaterialTheme.shapes.small,
+                            color = if (isConnected) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.error,
+                        ) {}
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (isConnected) "Connected" else "Disconnected",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+
+                    Spacer(Modifier.size(12.dp))
+
+                    SettingsCategoryRow(
+                        title = "Connection",
+                        subtitle = "Server URL, API key, and pairing",
+                        onClick = { currentPage = SettingsPage.Connection },
+                    )
+                    SettingsCategoryRow(
+                        title = "Sync",
+                        subtitle = "Network, schedule, and battery",
+                        onClick = { currentPage = SettingsPage.Sync },
+                    )
+                    SettingsCategoryRow(
+                        title = "Import",
+                        subtitle = "Camera roll auto-import",
+                        onClick = { currentPage = SettingsPage.Import },
+                    )
+                    SettingsCategoryRow(
+                        title = "Advanced",
+                        subtitle = "Batch size, timeout, debounce",
+                        onClick = { currentPage = SettingsPage.Advanced },
+                    )
+
+                    Spacer(Modifier.weight(1f))
+
+                    Text(
+                        text = "branchDAM Mobile ${viewModel.versionName} (build ${viewModel.versionCode})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 24.dp),
+                    )
+                }
             }
+        }
 
-            connectionError?.let { error ->
-                Text(
-                    error,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-
-            OutlinedTextField(
-                value = serverUrl,
-                onValueChange = { viewModel.updateServerUrl(it) },
-                label = { Text("Server URL") },
-                isError = urlError != null,
-                supportingText = urlError?.let { err -> { Text(err) } },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = { viewModel.updateApiKey(it) },
-                label = { Text("API Key") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            OutlinedTextField(
-                value = namingTemplate,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Naming Template") },
-                supportingText = { Text("Synchronized via server handshake (POST /api/v1/agent/upload)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Sync on Mobile Data")
-                Switch(
-                    checked = syncOnMobileData,
-                    onCheckedChange = { viewModel.setSyncOnMobileData(it) },
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Auto-import Camera Roll")
-                Switch(
-                    checked = autoImportEnabled,
-                    onCheckedChange = { viewModel.setAutoImportEnabled(it) },
-                )
-            }
-
-            Button(
-                onClick = { viewModel.connect() },
-                enabled = !isConnecting,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(if (isConnecting) "Connecting..." else "Save and Connect")
-            }
-
-            OutlinedButton(
-                onClick = onScanQr,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Scan QR Code")
-            }
-
-            // Footer: shows the running build's identity, derived from
-            // BuildConfig so it tracks the APK/AAB's actual versionName
-            // and versionCode rather than a hardcoded literal.
-            Text(
-                text = "branchDAM Mobile ${viewModel.versionName} (build ${viewModel.versionCode})",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
+        SettingsPage.Connection -> {
+            ConnectionSettingsScreen(
+                onNavigateBack = { currentPage = SettingsPage.Categories },
+                onScanQr = onScanQr,
+                viewModel = viewModel,
             )
         }
+
+        SettingsPage.Sync -> {
+            SyncSettingsScreen(
+                onNavigateBack = { currentPage = SettingsPage.Categories },
+                viewModel = viewModel,
+            )
+        }
+
+        SettingsPage.Import -> {
+            ImportSettingsScreen(
+                onNavigateBack = { currentPage = SettingsPage.Categories },
+                viewModel = viewModel,
+            )
+        }
+
+        SettingsPage.Advanced -> {
+            AdvancedSettingsScreen(
+                onNavigateBack = { currentPage = SettingsPage.Categories },
+                viewModel = viewModel,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsCategoryRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

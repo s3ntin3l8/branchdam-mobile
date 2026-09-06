@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,11 +23,12 @@ class SyncWorker(
                 Log.w(TAG, "foreground promotion denied, falling back to background: $e")
             }
 
-            // Sub-issue B: the gomobile-bound branchdam engine handles
-            // the sync. EngineHolder.syncBatch triggers the sync cycle
-            // and logs success/failure via the gomobile binding.
-            EngineHolder.syncBatch(timeoutSecs = 120, batchSize = 10)
-            Log.i(TAG, "syncBatch complete")
+            val prefs = applicationContext.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+            val batchSize = prefs.getInt(BranchDamKeys.UPLOAD_BATCH_SIZE, BranchDamKeys.DEFAULT_UPLOAD_BATCH_SIZE)
+            val timeoutSecs = prefs.getInt(BranchDamKeys.SYNC_TIMEOUT_SECS, BranchDamKeys.DEFAULT_SYNC_TIMEOUT_SECS)
+
+            EngineHolder.syncBatch(timeoutSecs = timeoutSecs, batchSize = batchSize)
+            Log.i(TAG, "syncBatch complete (batch=$batchSize, timeout=${timeoutSecs}s)")
 
             Result.success()
         } catch (_: Exception) {
@@ -36,11 +38,6 @@ class SyncWorker(
                 Result.failure()
             }
         }
-        // No notification cancellation here: WorkManager owns the
-        // foreground-service notification and calls stopForeground() when
-        // doWork returns. Cancelling here would race stopForeground and
-        // could leave the FGS momentarily running without its required
-        // visible notification (FGS contract violation on newer Android).
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {

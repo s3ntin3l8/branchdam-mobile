@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.provider.MediaStore
+import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.lineage.EditCorrelator
 import com.branchdam.mobile.lineage.MotionPhotoExtractor
@@ -56,19 +57,29 @@ class MediaStoreObserver(
     )
 
     /**
+     * Reads the debounce window from SharedPreferences so the user can
+     * tune it from the Advanced settings screen. Falls back to
+     * [DEFAULT_DEBOUNCE_WINDOW_MS] if the key is absent.
+     */
+    private fun readDebounceWindowMs(): Long {
+        val prefs = context.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, BranchDamKeys.DEFAULT_OBSERVER_DEBOUNCE_MS)
+    }
+
+    /**
      * Coalesces rapid-fire onChange callbacks into a single scan +
-     * trash-sync + lineage pipeline run after a 500ms quiet window.
+     * trash-sync + lineage pipeline run after a quiet window.
      * Burst capture that emits 50 events in 1 second collapses to one
-     * scan 500ms after the last event, satisfying the T2-3 acceptance
-     * criterion of at most 2 scans per burst. Folding
-     * [scanAndSyncTrash] (which runs the trash sync too) into the
-     * same debounced coroutine ensures the burst-coalescing goal
-     * holds end-to-end: a 50-event burst produces one recycle-bin
-     * query and one MediaStore rescan, not 50 of each.
+     * scan after the window, satisfying the T2-3 acceptance criterion
+     * of at most 2 scans per burst. Folding [scanAndSyncTrash] (which
+     * runs the trash sync too) into the same debounced coroutine ensures
+     * the burst-coalescing goal holds end-to-end: a 50-event burst
+     * produces one recycle-bin query and one MediaStore rescan, not 50
+     * of each.
      */
     private val debouncer = Debouncer(
         scope = scope,
-        windowMs = DEBOUNCE_WINDOW_MS,
+        windowMs = ::readDebounceWindowMs,
         onFire = ::scanAndSyncTrash,
     )
 
@@ -202,9 +213,5 @@ class MediaStoreObserver(
                 )
             }
         }
-    }
-
-    private companion object {
-        const val DEBOUNCE_WINDOW_MS = 500L
     }
 }

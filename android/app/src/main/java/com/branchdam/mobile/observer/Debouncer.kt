@@ -10,15 +10,15 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Coalesces a burst of [trigger] calls into at most one [onFire] per
- * 500ms quiet window. Used by [MediaStoreObserver] to prevent 50
+ * quiet window. Used by [MediaStoreObserver] to prevent 50
  * onChange callbacks during burst photo capture from triggering 50
  * full ContentProvider rescans.
  *
  * Trailing-edge debouncing: each new [trigger] arriving during the
  * debounce window cancels the pending [onFire] and reschedules a
- * fresh [windowMs] delay. A burst of 50 events over 1s therefore
- * produces exactly one [onFire] call 500ms after the last trigger
- * in the burst.
+ * fresh delay. A burst of 50 events over 1s therefore
+ * produces exactly one [onFire] call after the quiet window following
+ * the last trigger in the burst.
  *
  * Single-in-flight semantics: when [onFire] is already running and a
  * new [trigger] arrives, the running scan cannot be aborted (the
@@ -51,7 +51,7 @@ import kotlinx.coroutines.sync.withLock
  */
 class Debouncer(
     private val scope: CoroutineScope,
-    private val windowMs: Long,
+    private val windowMs: () -> Long,
     private val onFire: suspend () -> Unit,
 ) {
     private val channel = Channel<Unit>(Channel.CONFLATED)
@@ -78,7 +78,7 @@ class Debouncer(
                         // and schedule a fresh one windowMs in the future.
                         delayJob?.cancel()
                         delayJob = scope.launch {
-                            delay(windowMs)
+                            delay(windowMs())
                             // Acquiring the mutex here serialises the
                             // "fireInProgress = true" write with the
                             // dispatcher's read of fireInProgress below, so
@@ -108,9 +108,9 @@ class Debouncer(
     }
 
     /**
-     * Schedules [onFire] to run after a [windowMs] quiet period.
-     * Non-blocking; safe to call from any thread including the main
-     * thread. Coalesces with any pending trigger or in-flight scan.
+     * Schedules [onFire] to run after a quiet period. Non-blocking;
+     * safe to call from any thread including the main thread. Coalesces
+     * with any pending trigger or in-flight scan.
      */
     fun trigger() {
         channel.trySend(Unit)
