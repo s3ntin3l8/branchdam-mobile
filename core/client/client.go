@@ -13,6 +13,11 @@ import (
 	"time"
 )
 
+// Config defines the client configuration.
+// HTTPClient and UploadClient are optional overrides for testing or power-users.
+// When nil, the default clients use TLS 1.2 minimum (MinVersion: tls.VersionTLS12).
+// If injected, the caller MUST ensure the client enforces TLS 1.2+; the
+// injected client is used as-is without validation.
 type Config struct {
 	BaseURL       string
 	APIKey        string

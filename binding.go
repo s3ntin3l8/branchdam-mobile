@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
 
 // gomobile-compatible binding layer. gomobile's gobind skips methods that
@@ -273,14 +274,16 @@ func BindingLookupBlake3ForLocalID(localID string) (string, error) {
 // BindingCheckContent calls GET /api/v1/agent/check-content with the given
 // hashes. Returns a JSON-encoded ContentCheckResult string, or "" on error.
 // Follows the BindingCheckSafeSpaceCandidates pattern for gomobile compatibility.
+// Uses a 30-second timeout to prevent ANR on mobile if the server is slow.
 func BindingCheckContent(fastHash, fullHash string) (string, error) {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()
 	if bindingEngine == nil {
 		return "", fmt.Errorf("engine not open")
 	}
-	result, err := bindingEngine.client.CheckContent(
-		context.Background(), fastHash, fullHash)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := bindingEngine.client.CheckContent(ctx, fastHash, fullHash)
 	if err != nil {
 		return "", err
 	}

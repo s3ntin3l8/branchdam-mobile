@@ -471,6 +471,32 @@ func TestRequestHeaders_NoSignatureOnUpload(t *testing.T) {
 	}
 }
 
+func TestRequestHeaders_GETSignaturePresent(t *testing.T) {
+	var sawTimestamp, sawNonce, sawSignature bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawTimestamp = r.Header.Get("X-Timestamp") != ""
+		sawNonce = r.Header.Get("X-Nonce") != ""
+		sawSignature = r.Header.Get("X-Signature") != ""
+		_ = json.NewEncoder(w).Encode(ContentCheckResult{Found: false})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "secret-key", AgentID: "agent"})
+	_, err := c.CheckContent(context.Background(), "", "abc123")
+	if err != nil {
+		t.Fatalf("CheckContent: %v", err)
+	}
+	if !sawTimestamp {
+		t.Fatal("X-Timestamp header not set on GET request")
+	}
+	if !sawNonce {
+		t.Fatal("X-Nonce header not set on GET request")
+	}
+	if !sawSignature {
+		t.Fatal("X-Signature header not set on GET request")
+	}
+}
+
 func TestSignRequest_CanonicalString(t *testing.T) {
 	apiKey := "test-api-key-1234567890123456" // pragma: allowlist secret
 	method := "POST"
