@@ -71,8 +71,8 @@ public class BackgroundSyncManager {
             return
         }
 
-        let timeout = readTimeoutSecs()
-        let batch = readBatchSize()
+        let timeout = Int32(readTimeoutSecs())
+        let batch = Int32(readBatchSize())
         DispatchQueue.global(qos: .userInitiated).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
             completion?(result.uploaded > 0 || result.eventsSent > 0)
@@ -116,8 +116,8 @@ public class BackgroundSyncManager {
             task.setTaskCompleted(success: false)
         }
 
-        let timeout = readTimeoutSecs()
-        let batch = readBatchSize()
+        let timeout = Int32(readTimeoutSecs())
+        let batch = Int32(readBatchSize())
         DispatchQueue.global(qos: .background).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
             completionLock.lock()

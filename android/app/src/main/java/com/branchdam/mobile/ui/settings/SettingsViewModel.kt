@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.branchdam.mobile.BranchDamApplication
+import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.BuildConfig
 import com.branchdam.mobile.EncryptedPrefs
 import com.branchdam.mobile.EngineHolder
