@@ -27,7 +27,20 @@ class MediaStoreObserver(
     handler: Handler = Handler(HandlerThread("MediaStoreObserver").apply { start() }.looper)
 ) : ContentObserver(handler) {
 
-    private val lastScannedTimestamp = AtomicLong(System.currentTimeMillis() / 1000L - 60)
+    private val prefs = context.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+
+    /**
+     * Initialized from [BranchDamKeys.OBSERVER_LAST_SCANNED_TIMESTAMP]
+     * or defaults to 24 hours ago to catch any items missed while
+     * the app was closed. T2-11: persisting this ensures we don't
+     * miss media items across process restarts.
+     */
+    private val lastScannedTimestamp = AtomicLong(
+        prefs.getLong(
+            BranchDamKeys.OBSERVER_LAST_SCANNED_TIMESTAMP,
+            System.currentTimeMillis() / 1000L - 86400 // 24h fallback
+        )
+    )
 
     /**
      * Tracks content URIs of trashed items already processed. Prevents
@@ -145,16 +158,20 @@ class MediaStoreObserver(
         val allMedia = (images + videos).sortedBy { it.dateTakenUnix }
         val newItems = mutableListOf<MediaItem>()
 
+        var maxTimestamp = minTimestamp
         for (item in allMedia) {
             if (item.filePath.isNotEmpty() && !com.branchdam.mobile.service.ImportConfirmationNotifier.isItemSuppressed(item.contentUri)) {
                 newItems.add(item)
-                if (item.dateTakenUnix > lastScannedTimestamp.get()) {
-                    lastScannedTimestamp.set(item.dateTakenUnix)
+                if (item.dateTakenUnix > maxTimestamp) {
+                    maxTimestamp = item.dateTakenUnix
                 }
             }
         }
 
         if (newItems.isNotEmpty()) {
+            lastScannedTimestamp.set(maxTimestamp)
+            prefs.edit().putLong(BranchDamKeys.OBSERVER_LAST_SCANNED_TIMESTAMP, maxTimestamp).apply()
+
             val autoImport = com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)
             if (autoImport) {
                 for (item in newItems) {

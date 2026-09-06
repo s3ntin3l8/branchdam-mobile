@@ -77,7 +77,7 @@ object EngineHolder {
         capturedAtUnix: Long,
         localId: String,
     ): Long {
-        if (!nativeAvailable.get()) return 1L
+        if (!nativeAvailable.get() || !isInitialized) return 1L
         return try {
             executor.submit(Callable {
                 Branchdam.bindingEnqueueMedia(localPath, filename, localId, "", capturedAtUnix, 0L)
@@ -95,7 +95,7 @@ object EngineHolder {
         resolver: String = "android_camera_pair",
         confidence: Double = 1.00,
     ): String {
-        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
+        if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
         return try {
             executor.submit(Callable {
                 Branchdam.bindingEnqueueLineageEvent(parentLocalID, childLocalID, relationshipType, resolver, confidence)
@@ -107,7 +107,7 @@ object EngineHolder {
     }
 
     fun enqueueDeleteEvent(localID: String): String {
-        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
+        if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
         return try {
             executor.submit(Callable { Branchdam.bindingEnqueueDeleteEvent(localID) }).get()
         } catch (t: Throwable) {
@@ -116,14 +116,32 @@ object EngineHolder {
         }
     }
 
-    fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10) {
-        if (!nativeAvailable.get()) return
-        try {
+    fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10): Boolean {
+        if (!nativeAvailable.get()) return false
+        return try {
             executor.submit(Callable {
                 Branchdam.bindingSyncBatch(timeoutSecs.toLong(), batchSize.toLong())
             }).get()
+            true
         } catch (t: Throwable) {
             Log.w(TAG, "syncBatch failed: $t")
+            false
+        }
+    }
+
+    /**
+     * Signals an in-flight [syncBatch] to abort at the next per-item
+     * checkpoint. Fire-and-forget signal that does not block the
+     * caller. (B.2.2)
+     */
+    fun setCancelFlag() {
+        if (!nativeAvailable.get() || !isInitialized) return
+        executor.submit {
+            try {
+                Branchdam.bindingSetCancelFlag()
+            } catch (t: Throwable) {
+                Log.w(TAG, "setCancelFlag failed: $t")
+            }
         }
     }
 
