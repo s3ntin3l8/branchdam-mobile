@@ -96,6 +96,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
     val themeMode: StateFlow<ThemeMode> = themePreferences.mode
 
+    private val _navigationResetTrigger = MutableStateFlow(0)
+    val navigationResetTrigger: StateFlow<Int> = _navigationResetTrigger.asStateFlow()
+
     val versionName: String = BuildConfig.VERSION_NAME
     val versionCode: Int = BuildConfig.VERSION_CODE
 
@@ -204,6 +207,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setThemeMode(mode: ThemeMode) {
         themePreferences.setMode(mode)
+    }
+
+    fun triggerNavigationReset() {
+        _navigationResetTrigger.value += 1
     }
 
     fun connect() {

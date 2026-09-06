@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -33,6 +34,7 @@ import com.branchdam.mobile.ui.navigation.AppNavGraph
 import com.branchdam.mobile.ui.navigation.BottomNavBar
 import com.branchdam.mobile.ui.navigation.Screen
 import com.branchdam.mobile.ui.navigation.bottomNavRoutes
+import com.branchdam.mobile.ui.settings.SettingsViewModel
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 import com.branchdam.mobile.ui.theme.ThemeMode
 import com.branchdam.mobile.ui.theme.ThemePreferences
@@ -242,6 +244,8 @@ class MainActivity : ComponentActivity() {
 
                 val (notificationsBatch, mediaBatch) = remember { runtimePermissionBatches() }
 
+                val settingsViewModel = viewModel<SettingsViewModel>()
+
                 val mediaLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions(),
                 ) { _ ->
@@ -285,6 +289,9 @@ class MainActivity : ComponentActivity() {
                                 BottomNavBar(
                                     currentRoute = currentRoute,
                                     onNavigate = { route: String ->
+                                        if (route == Screen.Settings.route) {
+                                            settingsViewModel.triggerNavigationReset()
+                                        }
                                         navController.navigate(route) {
                                             popUpTo(navController.graph.startDestinationId) { saveState = true }
                                             launchSingleTop = true

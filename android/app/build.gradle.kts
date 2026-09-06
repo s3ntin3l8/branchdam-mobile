@@ -134,7 +134,7 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
-            isIncludeAndroidResources = false
+            isIncludeAndroidResources = true
         }
     }
 
@@ -202,4 +202,6 @@ dependencies {
     // Application so SyncStatusViewModel can be instantiated without
     // the production WorkManagerInitializer firing.
     testImplementation("androidx.work:work-testing:2.10.0")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
