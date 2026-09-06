@@ -13,6 +13,7 @@ import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.defaultEngineDbPath
 import com.branchdam.mobile.service.ImportConfirmationNotifier
+import com.branchdam.mobile.service.SyncLogger
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.ui.PairingConfig
 import kotlinx.coroutines.Dispatchers
@@ -236,6 +237,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _connectionError.value = "Engine initialization failed"
             }
         }
+    }
+
+    fun hasDiagnosticLog(): Boolean =
+        SyncLogger.hasLog(getApplication())
+
+    fun shareDiagnosticLog(context: android.content.Context) {
+        val logFile = java.io.File(SyncLogger.getLogPath(context))
+        if (!logFile.exists()) return
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            logFile
+        )
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(android.content.Intent.createChooser(intent, "Share Sync Log"))
     }
 
     private fun persistSettings() {

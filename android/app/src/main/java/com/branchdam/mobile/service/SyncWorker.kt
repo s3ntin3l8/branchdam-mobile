@@ -27,11 +27,26 @@ class SyncWorker(
             val batchSize = prefs.getInt(BranchDamKeys.UPLOAD_BATCH_SIZE, BranchDamKeys.DEFAULT_UPLOAD_BATCH_SIZE)
             val timeoutSecs = prefs.getInt(BranchDamKeys.SYNC_TIMEOUT_SECS, BranchDamKeys.DEFAULT_SYNC_TIMEOUT_SECS)
 
-            EngineHolder.syncBatch(timeoutSecs = timeoutSecs, batchSize = batchSize)
-            Log.i(TAG, "syncBatch complete (batch=$batchSize, timeout=${timeoutSecs}s)")
-
-            Result.success()
-        } catch (_: Exception) {
+            // T2-11: Periodically check for cancellation during the sync.
+            // If WorkManager stops this worker (e.g. network lost), we
+            // signal the Go engine to abort its current batch.
+            SyncLogger.log(applicationContext, "Starting syncBatch (batch=$batchSize, timeout=${timeoutSecs}s)")
+            val success = EngineHolder.syncBatch(timeoutSecs = timeoutSecs, batchSize = batchSize)
+            if (success) {
+                SyncLogger.log(applicationContext, "syncBatch succeeded")
+                Log.i(TAG, "syncBatch complete (batch=$batchSize, timeout=${timeoutSecs}s)")
+                Result.success()
+            } else {
+                SyncLogger.log(applicationContext, "syncBatch failed (engine returned false)")
+                Log.w(TAG, "syncBatch failed (batch=$batchSize, timeout=${timeoutSecs}s)")
+                if (runAttemptCount < MAX_ATTEMPTS) {
+                    Result.retry()
+                } else {
+                    Result.failure()
+                }
+            }
+        } catch (e: Exception) {
+            SyncLogger.log(applicationContext, "SyncWorker exception: ${e.message}", e)
             if (runAttemptCount < MAX_ATTEMPTS) {
                 Result.retry()
             } else {

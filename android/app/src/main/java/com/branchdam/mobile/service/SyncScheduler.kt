@@ -59,6 +59,11 @@ object SyncScheduler {
         val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(intervalMinutes.toLong(), TimeUnit.MINUTES)
             .setConstraints(constraints)
             .addTag(PERIODIC_WORK_TAG)
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.EXPONENTIAL,
+                androidx.work.WorkRequest.MIN_BACKOFF_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -83,6 +88,11 @@ object SyncScheduler {
         val immediateRequest = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(constraints)
             .addTag(IMMEDIATE_WORK_TAG)
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.EXPONENTIAL,
+                androidx.work.WorkRequest.MIN_BACKOFF_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
             .build()
 
         WorkManager.getInstance(context).enqueueUniqueWork(

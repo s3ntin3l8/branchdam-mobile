@@ -101,6 +101,18 @@ fun SettingsScreen(
                         onClick = { currentPage = SettingsPage.Advanced },
                     )
 
+                    Spacer(Modifier.size(12.dp))
+
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val hasLog = viewModel.hasDiagnosticLog()
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { viewModel.shareDiagnosticLog(context) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = hasLog,
+                    ) {
+                        Text("Share Diagnostic Log")
+                    }
+
                     Spacer(Modifier.weight(1f))
 
                     Text(
