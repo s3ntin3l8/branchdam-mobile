@@ -16,6 +16,8 @@ import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncLogger
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.ui.PairingConfig
+import com.branchdam.mobile.ui.theme.ThemeMode
+import com.branchdam.mobile.ui.theme.ThemePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,6 +86,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _observerDebounceMs = MutableStateFlow(nonSecretPrefs.getLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, BranchDamKeys.DEFAULT_OBSERVER_DEBOUNCE_MS))
     val observerDebounceMs: StateFlow<Long> = _observerDebounceMs.asStateFlow()
+
+    // Theme mode — each consumer constructs its own
+    // ThemePreferences bound to the canonical prefs file; the
+    // SharedPreferences listener keeps every instance's StateFlow
+    // in sync without requiring a process-wide singleton.
+    private val themePreferences: ThemePreferences = ThemePreferences(
+        application.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE),
+    )
+    val themeMode: StateFlow<ThemeMode> = themePreferences.mode
 
     val versionName: String = BuildConfig.VERSION_NAME
     val versionCode: Int = BuildConfig.VERSION_CODE
@@ -189,6 +200,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setObserverDebounceMs(ms: Long) {
         _observerDebounceMs.value = ms
         nonSecretPrefs.edit().putLong(BranchDamKeys.OBSERVER_DEBOUNCE_MS, ms).apply()
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        themePreferences.setMode(mode)
     }
 
     fun connect() {

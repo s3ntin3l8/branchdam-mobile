@@ -36,6 +36,7 @@ private enum class SettingsPage {
     Connection,
     Sync,
     Import,
+    Appearance,
     Advanced,
 }
 
@@ -96,6 +97,11 @@ fun SettingsScreen(
                         onClick = { currentPage = SettingsPage.Import },
                     )
                     SettingsCategoryRow(
+                        title = "Appearance",
+                        subtitle = "Theme and dynamic color",
+                        onClick = { currentPage = SettingsPage.Appearance },
+                    )
+                    SettingsCategoryRow(
                         title = "Advanced",
                         subtitle = "Batch size, timeout, debounce",
                         onClick = { currentPage = SettingsPage.Advanced },
@@ -144,6 +150,13 @@ fun SettingsScreen(
 
         SettingsPage.Import -> {
             ImportSettingsScreen(
+                onNavigateBack = { currentPage = SettingsPage.Categories },
+                viewModel = viewModel,
+            )
+        }
+
+        SettingsPage.Appearance -> {
+            AppearanceSettingsScreen(
                 onNavigateBack = { currentPage = SettingsPage.Categories },
                 viewModel = viewModel,
             )
