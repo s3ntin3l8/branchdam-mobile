@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.3](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.2...branchdam-mobile-v0.7.3) (2026-09-06)
+
+
+### Features
+
+* **core:** add HMAC signing, TLS 1.2, error sanitization, check-content ([#137](https://github.com/s3ntin3l8/branchdam-mobile/issues/137)) ([6cb02b1](https://github.com/s3ntin3l8/branchdam-mobile/commit/6cb02b199533800ea4d498f3a4e3973800c2f4ef))
+* expand settings with sync, import, and advanced categories ([#135](https://github.com/s3ntin3l8/branchdam-mobile/issues/135)) ([22d1d4b](https://github.com/s3ntin3l8/branchdam-mobile/commit/22d1d4bd514450d9afc5779dd0175d31f7687563))
+* implement sync diagnostics and retry backoff ([#140](https://github.com/s3ntin3l8/branchdam-mobile/issues/140)) ([615ed5d](https://github.com/s3ntin3l8/branchdam-mobile/commit/615ed5d293e790c44f6c192db03e4bb5ec933845))
+
+
+### Bug Fixes
+
+* validate server reachability and migrate legacy secrets ([#139](https://github.com/s3ntin3l8/branchdam-mobile/issues/139)) ([574d5dc](https://github.com/s3ntin3l8/branchdam-mobile/commit/574d5dc3fc4fe0c0f09723dd63319f2e12d2a13e))
+
+
+### Performance Improvements
+
+* optimize startup and persist media scan state ([#138](https://github.com/s3ntin3l8/branchdam-mobile/issues/138)) ([2f46d09](https://github.com/s3ntin3l8/branchdam-mobile/commit/2f46d09372fa50e6270d68c662ab9bc99389b91d))
+
 ## [0.7.2](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.1...branchdam-mobile-v0.7.2) (2026-09-05)
 
 
