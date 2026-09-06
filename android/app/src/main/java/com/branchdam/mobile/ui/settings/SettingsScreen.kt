@@ -104,25 +104,11 @@ fun SettingsScreen(
                     Spacer(Modifier.size(12.dp))
 
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    val hasLog = viewModel.hasDiagnosticLog()
                     androidx.compose.material3.OutlinedButton(
-                        onClick = {
-                            val logFile = java.io.File(context.cacheDir, "branchdam_sync.log")
-                            if (logFile.exists()) {
-                                val uri = androidx.core.content.FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    logFile
-                                )
-                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(android.content.Intent.createChooser(intent, "Share Sync Log"))
-                            }
-                        },
+                        onClick = { viewModel.shareDiagnosticLog(context) },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = java.io.File(context.cacheDir, "branchdam_sync.log").exists()
+                        enabled = hasLog,
                     ) {
                         Text("Share Diagnostic Log")
                     }

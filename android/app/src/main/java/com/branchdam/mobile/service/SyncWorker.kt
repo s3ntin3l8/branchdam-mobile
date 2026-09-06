@@ -52,12 +52,6 @@ class SyncWorker(
             } else {
                 Result.failure()
             }
-        } finally {
-            // Ensure the cancel flag is set if we were stopped.
-            if (isStopped) {
-                Log.i(TAG, "SyncWorker stopped, signaling engine abort")
-                EngineHolder.setCancelFlag()
-            }
         }
     }
 
