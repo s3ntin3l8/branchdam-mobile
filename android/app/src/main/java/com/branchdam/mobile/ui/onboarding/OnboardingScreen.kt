@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CameraAlt
@@ -20,9 +19,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 @Composable
 fun OnboardingScreen(
@@ -61,8 +61,13 @@ fun OnboardingScreen(
     }
 }
 
+@Preview(showBackground = true)
 @Composable
-private fun WelcomePage() {
+fun OnboardingPreview() {
+    BranchDamTheme {
+        OnboardingScreen(onOnboardingComplete = {}, onRequestPermissions = {})
+    }
+}
     OnboardingPageContent(
         title = "Welcome to branchDAM",
         description = "Your secure, offline-first media companion for professional workflows.",
@@ -108,7 +113,7 @@ private fun PermissionsRationalePage(onRequestPermissions: () -> Unit) {
         Spacer(Modifier.height(32.dp))
         Button(
             onClick = onRequestPermissions,
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.large
         ) {
             Text("Grant Access")
         }
@@ -125,7 +130,7 @@ private fun SetupPage(onComplete: () -> Unit) {
             Button(
                 onClick = onComplete,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.large
             ) {
                 Text("Get Started")
             }
@@ -147,7 +152,7 @@ private fun OnboardingPageContent(
     ) {
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(40.dp), // More expressive radius
+            shape = MaterialTheme.shapes.extraLarge,
             modifier = Modifier.size(140.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -162,18 +167,16 @@ private fun OnboardingPageContent(
         Spacer(Modifier.height(64.dp))
         Text(
             title,
-            style = MaterialTheme.typography.displayMedium, // Using larger typography
+            style = MaterialTheme.typography.displayMedium,
             fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
-            lineHeight = 48.sp
+            textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(24.dp))
         Text(
             description,
-            style = MaterialTheme.typography.titleLarge, // Using larger typography
+            style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 32.sp
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (cta != null) {
             Spacer(Modifier.height(64.dp))

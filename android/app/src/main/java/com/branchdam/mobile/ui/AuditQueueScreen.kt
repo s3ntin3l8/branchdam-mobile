@@ -1,7 +1,6 @@
 package com.branchdam.mobile.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -9,19 +8,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.ui.platform.LocalDensity
-import kotlin.math.roundToInt
+import androidx.compose.ui.tooling.preview.Preview
+import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 data class AuditCandidate(
     val edgeId: String,
@@ -96,7 +92,7 @@ private fun AuditCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ),
@@ -132,7 +128,7 @@ private fun AuditCard(
 
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = MaterialTheme.shapes.medium
                     ) {
                         Text(
                             candidate.resolver,
@@ -158,7 +154,7 @@ private fun AuditCard(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 ),
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.large
             ) {
                 Icon(Icons.Default.Close, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
@@ -171,7 +167,7 @@ private fun AuditCard(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.large
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
@@ -181,8 +177,23 @@ private fun AuditCard(
     }
 }
 
+@Preview(showBackground = true)
 @Composable
-private fun AssetInfoRow(label: String, filename: String) {
+fun AuditCardPreview() {
+    BranchDamTheme {
+        AuditCard(
+            candidate = AuditCandidate(
+                edgeId = "1",
+                masterFilename = "IMG_001.DNG",
+                childFilename = "IMG_001.JPG",
+                confidence = 0.95,
+                resolver = "FastHash"
+            ),
+            onConfirm = {},
+            onReject = {}
+        )
+    }
+}
     Column {
         Text(
             label,

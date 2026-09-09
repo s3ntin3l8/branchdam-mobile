@@ -3,9 +3,7 @@ package com.branchdam.mobile.ui.gallery
 import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.*
@@ -16,12 +14,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.branchdam.mobile.ui.components.shimmer
+import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,7 +36,7 @@ fun GalleryScreen(
     val state = rememberPullToRefreshState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Gallery") }) },
+        topBar = { CenterAlignedTopAppBar(title = { Text("Gallery") }) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
@@ -51,16 +51,16 @@ fun GalleryScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 120.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                         userScrollEnabled = false
                     ) {
                         items(12) {
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(MaterialTheme.shapes.medium)
                                     .shimmer()
                             )
                         }
@@ -85,9 +85,9 @@ fun GalleryScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 120.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         items(items, key = { it.mediaItem.id }) { galleryItem ->
                             GalleryItemCard(galleryItem)
@@ -103,7 +103,7 @@ fun GalleryScreen(
 private fun GalleryItemCard(galleryItem: GalleryItem) {
     Card(
         modifier = Modifier.aspectRatio(1f),
-        shape = RoundedCornerShape(24.dp) // More expressive rounded corners
+        shape = MaterialTheme.shapes.large
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -118,7 +118,7 @@ private fun GalleryItemCard(galleryItem: GalleryItem) {
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.extraSmall,
             ) {
                 Text(
                     galleryItem.lineageStatus,
@@ -131,7 +131,7 @@ private fun GalleryItemCard(galleryItem: GalleryItem) {
                 Surface(
                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                     color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.extraSmall,
                 ) {
                     Text(
                         "RAW",
@@ -142,6 +142,14 @@ private fun GalleryItemCard(galleryItem: GalleryItem) {
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun EmptyGalleryPreview() {
+    BranchDamTheme {
+        EmptyGalleryState()
     }
 }
 
@@ -161,7 +169,7 @@ private fun EmptyGalleryState() {
         Spacer(Modifier.height(24.dp))
         Text(
             "No media items found",
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(8.dp))

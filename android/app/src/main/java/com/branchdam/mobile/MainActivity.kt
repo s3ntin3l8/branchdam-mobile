@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.adaptive.currentWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -33,7 +34,7 @@ import com.branchdam.mobile.ui.OtgIngestCompletedDialog
 import com.branchdam.mobile.ui.OtgIngestErrorDialog
 import com.branchdam.mobile.ui.OtgIngestProgressDialog
 import com.branchdam.mobile.ui.navigation.AppNavGraph
-import com.branchdam.mobile.ui.navigation.BottomNavBar
+import com.branchdam.mobile.ui.navigation.NavigationSuiteScaffold
 import com.branchdam.mobile.ui.navigation.Screen
 import com.branchdam.mobile.ui.navigation.bottomNavRoutes
 import com.branchdam.mobile.ui.settings.SettingsViewModel
@@ -244,6 +245,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             BranchDamTheme(themeMode = themeMode) {
+                val windowSizeClass = currentWindowSizeClass()
                 val permissionFlow = remember { PermissionFlowState() }
 
                 val (notificationsBatch, mediaBatch) = remember { runtimePermissionBatches() }
@@ -294,37 +296,30 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            AppNavGraph(
-                                navController = navController,
-                                startDestination = if (isOnboardingCompleted) Screen.Lineage.route else Screen.Onboarding.route,
-                                onRequestPermissions = {
-                                    // Trigger the permission flow batch manually if needed,
-                                    // but DrivePermissionFlow is already active and
-                                    // will fire once the Onboarding page asks for it.
-                                    // For now, we just advance the batch from NONE.
-                                    if (permissionFlow.batch.value == PermissionBatch.NONE) {
-                                        permissionFlow.nextBatch()
-                                    }
+                    NavigationSuiteScaffold(
+                        windowSizeClass = windowSizeClass,
+                        currentRoute = currentRoute,
+                        onNavigate = { route ->
+                            if (route == Screen.Settings.route) {
+                                settingsViewModel.triggerNavigationReset()
+                            }
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    ) {
+                        AppNavGraph(
+                            navController = navController,
+                            windowSizeClass = windowSizeClass,
+                            startDestination = if (isOnboardingCompleted) Screen.Lineage.route else Screen.Onboarding.route,
+                            onRequestPermissions = {
+                                if (permissionFlow.batch.value == PermissionBatch.NONE) {
+                                    permissionFlow.nextBatch()
                                 }
-                            )
-                        }
-                        if (showBottomBar) {
-                            BottomNavBar(
-                                currentRoute = currentRoute,
-                                onNavigate = { route: String ->
-                                    if (route == Screen.Settings.route) {
-                                        settingsViewModel.triggerNavigationReset()
-                                    }
-                                    navController.navigate(route) {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                            )
-                        }
+                            }
+                        )
                     }
 
                     // Handle onboarding completion persistence

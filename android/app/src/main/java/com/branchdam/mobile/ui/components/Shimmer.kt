@@ -2,12 +2,12 @@ package com.branchdam.mobile.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 
 fun Modifier.shimmer(): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "shimmer")
@@ -21,10 +21,11 @@ fun Modifier.shimmer(): Modifier = composed {
         label = "shimmer_translate"
     )
 
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val shimmerColors = listOf(
-        Color.LightGray.copy(alpha = 0.6f),
-        Color.LightGray.copy(alpha = 0.2f),
-        Color.LightGray.copy(alpha = 0.6f),
+        surfaceVariant.copy(alpha = 0.6f),
+        surfaceVariant.copy(alpha = 0.2f),
+        surfaceVariant.copy(alpha = 0.6f),
     )
 
     val brush = Brush.linearGradient(

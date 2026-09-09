@@ -1,27 +1,25 @@
 package com.branchdam.mobile.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 private enum class SettingsPage {
     Categories,
@@ -73,27 +71,26 @@ fun SettingsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(bottom = 24.dp),
                 ) {
-                    // Status Row (Pixel style: simple, no card)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(10.dp),
-                            shape = CircleShape,
-                            color = if (isConnected) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.error,
-                        ) {}
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            if (isConnected) "Connected to server" else "Disconnected",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (isConnected) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.error
-                        )
-                    }
+                    // Status Row
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                if (isConnected) "Connected to server" else "Disconnected",
+                                color = if (isConnected) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.error
+                            )
+                        },
+                        leadingContent = {
+                            Surface(
+                                modifier = Modifier.size(12.dp),
+                                shape = CircleShape,
+                                color = if (isConnected) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.error,
+                            ) {}
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
                     SettingsCategoryHeader("General")
                     SettingsCategoryRow(
@@ -134,13 +131,12 @@ fun SettingsScreen(
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val hasLog = viewModel.hasDiagnosticLog()
 
-                    // Standard Pixel-style button
                     Box(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                         Button(
                             onClick = { viewModel.shareDiagnosticLog(context) },
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             enabled = hasLog,
-                            shape = RoundedCornerShape(28.dp), // Pill shape
+                            shape = MaterialTheme.shapes.extraLarge,
                         ) {
                             Icon(Icons.Default.Share, contentDescription = null)
                             Spacer(Modifier.width(12.dp))
@@ -202,8 +198,13 @@ fun SettingsScreen(
     }
 }
 
+@Preview(showBackground = true)
 @Composable
-private fun SettingsCategoryHeader(title: String) {
+fun SettingsScreenPreview() {
+    BranchDamTheme {
+        SettingsScreen(viewModel = viewModel())
+    }
+}
     Text(
         text = title,
         style = MaterialTheme.typography.labelLarge,
@@ -211,7 +212,7 @@ private fun SettingsCategoryHeader(title: String) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
     )
 }
 
@@ -222,35 +223,24 @@ private fun SettingsCategoryRow(
     icon: ImageVector,
     onClick: () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        color = Color.Transparent // Pixel style: no background for list items
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        leadingContent = {
             Icon(
                 icon,
                 contentDescription = null,
-                modifier = Modifier.size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.width(24.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
+        },
+        trailingContent = {
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    )
 }

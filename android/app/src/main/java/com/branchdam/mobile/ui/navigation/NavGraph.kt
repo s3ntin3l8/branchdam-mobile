@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.material3.adaptive.WindowSizeClass
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -24,6 +25,7 @@ import com.branchdam.mobile.ui.sync.SyncStatusScreen
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
+    windowSizeClass: WindowSizeClass,
     startDestination: String = Screen.Lineage.route,
     onRequestPermissions: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -103,6 +105,7 @@ fun AppNavGraph(
     ) {
         composable(Screen.Lineage.route) {
             LineageScreen(
+                windowSizeClass = windowSizeClass,
                 onNavigateToSafeSpace = {
                     navController.navigate(Screen.SafeSpace.route) {
                         launchSingleTop = true
