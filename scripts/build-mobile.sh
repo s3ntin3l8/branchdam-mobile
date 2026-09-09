@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Outputs:
 #   android/app/libs/branchdam.aar       (Kotlin/Java consumer)
-#   ios/Frameworks/branchdam.xcframework (Swift consumer; ios + iossimulator)
+#   ios/Frameworks/branchdam.xcframework (Swift consumer; ios + iossimulator + macos)
 #
 # Required environment:
 #   For Android:  ANDROID_HOME, ANDROID_NDK_HOME, javac (1.8+)
@@ -109,7 +109,7 @@ if [[ "${BUILD_IOS}" -eq 1 ]]; then
         exit 1
     fi
 
-    echo "=== Building iOS xcframework (ios, iossimulator) ==="
+    echo "=== Building iOS xcframework (ios, iossimulator, macos) ==="
     mkdir -p ios/Frameworks
     # The Swift module name is taken from the .xcframework directory
     # basename; Obj-C class names are built as <Prefix><Title(pkgName)>.
@@ -119,8 +119,12 @@ if [[ "${BUILD_IOS}" -eq 1 ]]; then
     # "branchdam" matches the Obj-C class prefix "Branchdam" —
     # Swift's import is case-insensitive but its Obj-C prefix-stripping
     # logic is case-sensitive, so the names must match exactly.
+    #
+    # macos slice: required so Xcode can build the "My Mac (Designed for iPad)"
+    # destination. maccatalyst is avoided because Xcode 26+ clang rejects the
+    # ios13.0-macabi deployment target that gomobile hardcodes.
     gomobile bind \
-        -target ios,iossimulator \
+        -target ios,iossimulator,macos \
         -o ios/Frameworks/branchdam.xcframework \
         "${PUBLIC_PKG}"
     echo "xcframework: $(ls -la ios/Frameworks/branchdam.xcframework)"
