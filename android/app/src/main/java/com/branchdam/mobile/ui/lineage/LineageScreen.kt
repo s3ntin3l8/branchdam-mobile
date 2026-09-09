@@ -35,14 +35,14 @@ fun LineageScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     Scaffold(
         topBar = {
             if (!isExpanded) {
-                LargeTopAppBar(
+                CenterAlignedTopAppBar(
                     title = { Text("Lineage Audit") },
                     actions = {
                         IconButton(onClick = { viewModel.loadCandidates() }) {
@@ -56,11 +56,9 @@ fun LineageScreen(
                 )
             }
         },
-        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
     ) { padding ->
-        val contentModifier = Modifier.padding(padding)
-
         if (isExpanded) {
             Row(modifier = Modifier.fillMaxSize()) {
                 // Left Panel: Title and Actions
@@ -74,7 +72,7 @@ fun LineageScreen(
                 ) {
                     Text(
                         "Lineage Audit",
-                        style = MaterialTheme.typography.displaySmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -103,7 +101,7 @@ fun LineageScreen(
                 }
 
                 // Right Panel: Audit Queue
-                Box(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.weight(1f).padding(padding)) {
                     LineageContent(
                         isLoading = isLoading,
                         loadError = loadError,
@@ -121,7 +119,7 @@ fun LineageScreen(
                 candidates = candidates,
                 onConfirm = viewModel::confirm,
                 onReject = viewModel::reject,
-                modifier = contentModifier
+                modifier = Modifier.padding(padding)
             )
         }
     }
@@ -187,7 +185,6 @@ fun LineageScreenPreview() {
     val context = LocalContext.current
     val activity = context as? android.app.Activity
     val windowSizeClass = if (activity != null) calculateWindowSizeClass(activity) else {
-        // Fallback for preview if activity is null
         WindowSizeClass.calculateFromSize(androidx.compose.ui.unit.DpSize(400.dp, 800.dp))
     }
     BranchDamTheme {

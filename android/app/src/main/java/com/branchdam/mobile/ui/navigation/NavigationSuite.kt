@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,6 +33,7 @@ private val NavigationItems = listOf(
     BranchDamNavigationItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, Screen.Settings.route),
 )
 
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun NavigationSuiteScaffold(
     windowSizeClass: WindowSizeClass,
@@ -77,9 +79,12 @@ fun NavigationSuiteScaffold(
                             )
                         }
                     }
-                }
+                },
+                contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { padding ->
-                Surface(modifier = Modifier.fillMaxSize()) { content() }
+                Box(modifier = Modifier.padding(padding)) {
+                    content()
+                }
             }
         }
         NavigationLayoutType.Rail -> {
@@ -107,7 +112,9 @@ fun NavigationSuiteScaffold(
                     }
                     Spacer(Modifier.weight(1f))
                 }
-                Surface(modifier = Modifier.weight(1f)) { content() }
+                Box(modifier = Modifier.weight(1f)) {
+                    content()
+                }
             }
         }
         NavigationLayoutType.Drawer -> {
@@ -134,7 +141,9 @@ fun NavigationSuiteScaffold(
                     }
                 }
             ) {
-                Surface(modifier = Modifier.fillMaxSize()) { content() }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    content()
+                }
             }
         }
     }

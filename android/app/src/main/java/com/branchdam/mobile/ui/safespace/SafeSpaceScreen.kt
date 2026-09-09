@@ -30,7 +30,7 @@ fun SafeSpaceScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("Safe Space") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -42,6 +42,7 @@ fun SafeSpaceScreen(
                 },
             )
         },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
         Column(

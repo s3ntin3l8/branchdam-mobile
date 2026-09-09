@@ -55,11 +55,11 @@ fun SettingsScreen(
     when (currentPage) {
         SettingsPage.Categories -> {
             val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
-            val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+            val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
             Scaffold(
                 topBar = {
-                    LargeTopAppBar(
+                    CenterAlignedTopAppBar(
                         title = { Text("Settings") },
                         scrollBehavior = scrollBehavior
                     )

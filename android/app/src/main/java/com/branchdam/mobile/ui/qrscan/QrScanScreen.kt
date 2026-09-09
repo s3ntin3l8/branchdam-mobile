@@ -92,7 +92,7 @@ fun QrScanScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("Scan QR Code") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -101,6 +101,7 @@ fun QrScanScreen(
                 },
             )
         },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
         if (hasCameraPermission) {
             Box(
