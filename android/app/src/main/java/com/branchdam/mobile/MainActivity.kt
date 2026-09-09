@@ -14,7 +14,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.adaptive.currentWindowSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -212,6 +213,7 @@ internal fun DrivePermissionFlow(
 
 class MainActivity : ComponentActivity() {
 
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge()
@@ -245,7 +247,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             BranchDamTheme(themeMode = themeMode) {
-                val windowSizeClass = currentWindowSizeClass()
+                val windowSizeClass = calculateWindowSizeClass(this)
                 val permissionFlow = remember { PermissionFlowState() }
 
                 val (notificationsBatch, mediaBatch) = remember { runtimePermissionBatches() }
@@ -285,8 +287,6 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
-
-                val showBottomBar = currentRoute in bottomNavRoutes && currentRoute != Screen.Onboarding.route
 
                 val isOnboardingCompleted = remember {
                     applicationContext.getSharedPreferences(

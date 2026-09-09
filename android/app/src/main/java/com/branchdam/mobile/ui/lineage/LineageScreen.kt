@@ -6,14 +6,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.material3.adaptive.WindowSizeClass
-import androidx.compose.material3.adaptive.WindowWidthSizeClass
-import androidx.compose.material3.adaptive.currentWindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -36,7 +37,7 @@ fun LineageScreen(
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    val isExpanded = windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.EXPANDED
+    val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     Scaffold(
         topBar = {
@@ -179,12 +180,19 @@ private fun LineageContent(
     }
 }
 
+@OptIn(androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi::class)
 @Preview(showBackground = true)
 @Composable
 fun LineageScreenPreview() {
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    val windowSizeClass = if (activity != null) calculateWindowSizeClass(activity) else {
+        // Fallback for preview if activity is null
+        WindowSizeClass.calculateFromSize(androidx.compose.ui.unit.DpSize(400.dp, 800.dp))
+    }
     BranchDamTheme {
         LineageScreen(
-            windowSizeClass = currentWindowSizeClass(),
+            windowSizeClass = windowSizeClass,
             onNavigateToSafeSpace = {}
         )
     }

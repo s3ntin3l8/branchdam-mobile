@@ -11,8 +11,8 @@ import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.*
-import androidx.compose.material3.adaptive.WindowSizeClass
-import androidx.compose.material3.adaptive.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,10 +40,10 @@ fun NavigationSuiteScaffold(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val layoutType = when (windowSizeClass.windowWidthSizeClass) {
-        WindowWidthSizeClass.COMPACT -> NavigationLayoutType.BottomBar
-        WindowWidthSizeClass.MEDIUM -> NavigationLayoutType.Rail
-        WindowWidthSizeClass.EXPANDED -> NavigationLayoutType.Drawer
+    val layoutType = when (windowSizeClass.widthSizeClass) {
+        WindowWidthSizeClass.Compact -> NavigationLayoutType.BottomBar
+        WindowWidthSizeClass.Medium -> NavigationLayoutType.Rail
+        WindowWidthSizeClass.Expanded -> NavigationLayoutType.Drawer
         else -> NavigationLayoutType.BottomBar
     }
 
