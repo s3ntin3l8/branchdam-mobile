@@ -31,7 +31,7 @@ fun SyncStatusScreen(
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Sync Status") }) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
         modifier = modifier,
     ) { padding ->
         Column(

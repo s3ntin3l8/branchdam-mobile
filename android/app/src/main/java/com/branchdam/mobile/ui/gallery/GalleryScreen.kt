@@ -37,7 +37,7 @@ fun GalleryScreen(
 
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("Gallery") }) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
         modifier = modifier,
     ) { padding ->
         PullToRefreshBox(

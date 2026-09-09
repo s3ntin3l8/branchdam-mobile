@@ -56,7 +56,7 @@ fun LineageScreen(
                 )
             }
         },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
     ) { padding ->
         val contentModifier = Modifier.padding(padding)

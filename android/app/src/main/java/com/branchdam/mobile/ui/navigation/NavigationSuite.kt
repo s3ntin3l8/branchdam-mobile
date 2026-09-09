@@ -79,11 +79,15 @@ fun NavigationSuiteScaffold(
                     }
                 }
             ) { padding ->
-                Surface(modifier = Modifier.padding(padding)) { content() }
+                Surface(modifier = Modifier.fillMaxSize()) { content() }
             }
         }
         NavigationLayoutType.Rail -> {
-            Row(modifier = modifier.fillMaxSize()) {
+            Row(
+                modifier = modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical))
+            ) {
                 NavigationRail {
                     Spacer(Modifier.weight(1f))
                     NavigationItems.forEach { item ->
@@ -108,7 +112,7 @@ fun NavigationSuiteScaffold(
         }
         NavigationLayoutType.Drawer -> {
             PermanentNavigationDrawer(
-                modifier = modifier,
+                modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical)),
                 drawerContent = {
                     PermanentDrawerSheet(modifier = Modifier.width(240.dp)) {
                         Spacer(Modifier.height(12.dp))
