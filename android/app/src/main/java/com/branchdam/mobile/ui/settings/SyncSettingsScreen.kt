@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -30,7 +31,7 @@ fun SyncSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("Sync") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -48,82 +49,106 @@ fun SyncSettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            ListItem(
-                headlineContent = { Text("Network") },
-                overlineContent = { Text("Connectivity", color = MaterialTheme.colorScheme.primary) }
-            )
+            Spacer(Modifier.height(16.dp))
 
-            ListItem(
-                headlineContent = { Text("Sync on Mobile Data") },
-                supportingContent = { Text("Allow uploads over cellular connection") },
-                trailingContent = {
-                    Switch(
-                        checked = syncOnMobileData,
-                        onCheckedChange = { viewModel.setSyncOnMobileData(it) }
-                    )
-                },
-                modifier = Modifier.clickable { viewModel.setSyncOnMobileData(!syncOnMobileData) }
-            )
+            SettingsSubHeader("Network")
+            SettingsCard {
+                ListItem(
+                    headlineContent = { Text("Sync on Mobile Data") },
+                    supportingContent = { Text("Allow uploads over cellular connection") },
+                    trailingContent = {
+                        Switch(
+                            checked = syncOnMobileData,
+                            onCheckedChange = { viewModel.setSyncOnMobileData(it) }
+                        )
+                    },
+                    modifier = Modifier.clickable { viewModel.setSyncOnMobileData(!syncOnMobileData) },
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            Spacer(Modifier.height(24.dp))
 
-            ListItem(
-                headlineContent = { Text("Schedule") },
-                overlineContent = { Text("Background Work", color = MaterialTheme.colorScheme.primary) }
-            )
-
-            Box(modifier = Modifier.padding(16.dp)) {
-                ExposedDropdownMenuBox(
-                    expanded = intervalExpanded,
-                    onExpandedChange = { intervalExpanded = it },
-                ) {
-                    val intervalIndex = INTERVAL_OPTIONS.indexOf(syncIntervalMinutes).coerceAtLeast(0)
-                    OutlinedTextField(
-                        value = INTERVAL_LABELS[intervalIndex],
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Sync Interval") },
-                        supportingText = { Text("How often to check for new media") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                    )
-                    ExposedDropdownMenu(
+            SettingsSubHeader("Schedule")
+            SettingsCard {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    ExposedDropdownMenuBox(
                         expanded = intervalExpanded,
-                        onDismissRequest = { intervalExpanded = false },
+                        onExpandedChange = { intervalExpanded = it },
                     ) {
-                        INTERVAL_LABELS.forEachIndexed { index, label ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    viewModel.setSyncIntervalMinutes(INTERVAL_OPTIONS[index])
-                                    intervalExpanded = false
-                                },
-                            )
+                        val intervalIndex = INTERVAL_OPTIONS.indexOf(syncIntervalMinutes).coerceAtLeast(0)
+                        OutlinedTextField(
+                            value = INTERVAL_LABELS[intervalIndex],
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Sync Interval") },
+                            supportingText = { Text("How often to check for new media") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = intervalExpanded,
+                            onDismissRequest = { intervalExpanded = false },
+                        ) {
+                            INTERVAL_LABELS.forEachIndexed { index, label ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        viewModel.setSyncIntervalMinutes(INTERVAL_OPTIONS[index])
+                                        intervalExpanded = false
+                                    },
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            Spacer(Modifier.height(24.dp))
 
-            ListItem(
-                headlineContent = { Text("Battery") },
-                overlineContent = { Text("Power Management", color = MaterialTheme.colorScheme.primary) }
-            )
-
-            ListItem(
-                headlineContent = { Text("Sync on Low Battery") },
-                supportingContent = { Text("Allow background sync even when battery is low") },
-                trailingContent = {
-                    Switch(
-                        checked = syncOnBatteryOnly,
-                        onCheckedChange = { viewModel.setSyncOnBatteryOnly(it) }
-                    )
-                },
-                modifier = Modifier.clickable { viewModel.setSyncOnBatteryOnly(!syncOnBatteryOnly) }
-            )
+            SettingsSubHeader("Battery")
+            SettingsCard {
+                ListItem(
+                    headlineContent = { Text("Sync on Low Battery") },
+                    supportingContent = { Text("Allow background sync even when battery is low") },
+                    trailingContent = {
+                        Switch(
+                            checked = syncOnBatteryOnly,
+                            onCheckedChange = { viewModel.setSyncOnBatteryOnly(it) }
+                        )
+                    },
+                    modifier = Modifier.clickable { viewModel.setSyncOnBatteryOnly(!syncOnBatteryOnly) },
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(content = content)
+    }
+}
+
+@Composable
+private fun SettingsSubHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+    )
 }

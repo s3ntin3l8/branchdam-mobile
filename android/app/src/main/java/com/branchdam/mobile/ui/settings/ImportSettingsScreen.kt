@@ -1,10 +1,7 @@
 package com.branchdam.mobile.ui.settings
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +24,7 @@ fun ImportSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("Import") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -44,17 +42,30 @@ fun ImportSettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            ListItem(
-                headlineContent = { Text("Auto-import Camera Roll") },
-                supportingContent = { Text("Automatically enqueue new photos for upload") },
-                trailingContent = {
-                    Switch(
-                        checked = autoImportEnabled,
-                        onCheckedChange = { viewModel.setAutoImportEnabled(it) },
-                    )
-                },
-                modifier = Modifier.clickable { viewModel.setAutoImportEnabled(!autoImportEnabled) }
-            )
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                shape = MaterialTheme.shapes.large
+            ) {
+                ListItem(
+                    headlineContent = { Text("Auto-import Camera Roll") },
+                    supportingContent = { Text("Automatically enqueue new photos for upload") },
+                    trailingContent = {
+                        Switch(
+                            checked = autoImportEnabled,
+                            onCheckedChange = { viewModel.setAutoImportEnabled(it) },
+                        )
+                    },
+                    modifier = Modifier.clickable { viewModel.setAutoImportEnabled(!autoImportEnabled) },
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     }
 }

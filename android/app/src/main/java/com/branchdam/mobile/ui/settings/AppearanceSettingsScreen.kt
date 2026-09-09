@@ -1,10 +1,7 @@
 package com.branchdam.mobile.ui.settings
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
@@ -29,7 +26,7 @@ fun AppearanceSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("Appearance") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -47,30 +44,50 @@ fun AppearanceSettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            ListItem(
-                headlineContent = { Text("Theme") },
-                supportingContent = {
-                    Text("Choose how the app appears. Material You colors are used automatically on Android 12+.")
-                }
-            )
+            Spacer(Modifier.height(16.dp))
 
-            Column(modifier = Modifier.selectableGroup()) {
-                ThemeMode.entries.forEach { option ->
-                    val selected = mode == option
-                    ListItem(
-                        headlineContent = { Text(option.label()) },
-                        leadingContent = {
-                            RadioButton(
-                                selected = selected,
-                                onClick = null // Handled by ListItem click
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Column(modifier = Modifier.selectableGroup()) {
+                    ThemeMode.entries.forEachIndexed { index, option ->
+                        val selected = mode == option
+                        ListItem(
+                            headlineContent = { Text(option.label()) },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = null
+                                )
+                            },
+                            modifier = Modifier
+                                .clickable { viewModel.setThemeMode(option) },
+                            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                        )
+                        if (index < ThemeMode.entries.size - 1) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             )
-                        },
-                        modifier = Modifier
-                            .padding(horizontal = 8.dp)
-                            .clickable { viewModel.setThemeMode(option) }
-                    )
+                        }
+                    }
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Material You colors are used automatically on Android 12+.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
         }
     }
 }

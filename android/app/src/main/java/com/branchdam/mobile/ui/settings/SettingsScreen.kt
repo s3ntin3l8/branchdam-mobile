@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -74,67 +75,103 @@ fun SettingsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(bottom = 24.dp),
                 ) {
-                    // Status Row
-                    ListItem(
-                        headlineContent = {
-                            Text(
-                                if (isConnected) "Connected to server" else "Disconnected",
-                                color = if (isConnected) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.error
-                            )
-                        },
-                        leadingContent = {
-                            Surface(
-                                modifier = Modifier.size(12.dp),
-                                shape = CircleShape,
-                                color = if (isConnected) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.error,
-                            ) {}
-                        }
-                    )
+                    Spacer(Modifier.height(16.dp))
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    // Status Card
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    if (isConnected) "Connected to server" else "Disconnected",
+                                    color = if (isConnected) MaterialTheme.colorScheme.primary
+                                           else MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            leadingContent = {
+                                Surface(
+                                    modifier = Modifier.size(12.dp),
+                                    shape = CircleShape,
+                                    color = if (isConnected) MaterialTheme.colorScheme.primary
+                                           else MaterialTheme.colorScheme.error,
+                                ) {}
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                    }
 
                     SettingsCategoryHeader("General")
-                    SettingsCategoryRow(
-                        title = "Connection",
-                        subtitle = "Server URL, API key, and pairing",
-                        icon = Icons.Default.Link,
-                        onClick = { currentPage = SettingsPage.Connection },
-                    )
-                    SettingsCategoryRow(
-                        title = "Sync",
-                        subtitle = "Network, schedule, and battery",
-                        icon = Icons.Default.Sync,
-                        onClick = { currentPage = SettingsPage.Sync },
-                    )
-                    SettingsCategoryRow(
-                        title = "Import",
-                        subtitle = "Camera roll auto-import",
-                        icon = Icons.Default.CloudUpload,
-                        onClick = { currentPage = SettingsPage.Import },
-                    )
+                    SettingsGroup {
+                        SettingsCategoryRow(
+                            title = "Connection",
+                            subtitle = "Server URL, API key, and pairing",
+                            icon = Icons.Default.Link,
+                            iconColor = MaterialTheme.colorScheme.primary,
+                            onClick = { currentPage = SettingsPage.Connection },
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 64.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        SettingsCategoryRow(
+                            title = "Sync",
+                            subtitle = "Network, schedule, and battery",
+                            icon = Icons.Default.Sync,
+                            iconColor = MaterialTheme.colorScheme.secondary,
+                            onClick = { currentPage = SettingsPage.Sync },
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 64.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        SettingsCategoryRow(
+                            title = "Import",
+                            subtitle = "Camera roll auto-import",
+                            icon = Icons.Default.CloudUpload,
+                            iconColor = MaterialTheme.colorScheme.tertiary,
+                            onClick = { currentPage = SettingsPage.Import },
+                        )
+                    }
 
                     SettingsCategoryHeader("System")
-                    SettingsCategoryRow(
-                        title = "Appearance",
-                        subtitle = "Theme and dynamic color",
-                        icon = Icons.Default.Palette,
-                        onClick = { currentPage = SettingsPage.Appearance },
-                    )
-                    SettingsCategoryRow(
-                        title = "Advanced",
-                        subtitle = "Batch size, timeout, debounce",
-                        icon = Icons.Default.Tune,
-                        onClick = { currentPage = SettingsPage.Advanced },
-                    )
+                    SettingsGroup {
+                        SettingsCategoryRow(
+                            title = "Appearance",
+                            subtitle = "Theme and dynamic color",
+                            icon = Icons.Default.Palette,
+                            iconColor = MaterialTheme.colorScheme.secondary,
+                            onClick = { currentPage = SettingsPage.Appearance },
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 64.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        SettingsCategoryRow(
+                            title = "Advanced",
+                            subtitle = "Batch size, timeout, debounce",
+                            icon = Icons.Default.Tune,
+                            iconColor = MaterialTheme.colorScheme.primary,
+                            onClick = { currentPage = SettingsPage.Advanced },
+                        )
+                    }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(24.dp))
 
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val hasLog = viewModel.hasDiagnosticLog()
 
-                    Box(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
                         Button(
                             onClick = { viewModel.shareDiagnosticLog(context) },
                             modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -202,6 +239,21 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(content = content)
+    }
+}
+
+@Composable
 private fun SettingsCategoryHeader(title: String) {
     Text(
         text = title,
@@ -210,7 +262,7 @@ private fun SettingsCategoryHeader(title: String) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(horizontal = 32.dp, vertical = 16.dp)
     )
 }
 
@@ -219,17 +271,27 @@ private fun SettingsCategoryRow(
     title: String,
     subtitle: String,
     icon: ImageVector,
+    iconColor: Color,
     onClick: () -> Unit,
 ) {
     ListItem(
-        headlineContent = { Text(title) },
+        headlineContent = { Text(title, fontWeight = FontWeight.Medium) },
         supportingContent = { Text(subtitle) },
         leadingContent = {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = iconColor.copy(alpha = 0.12f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = iconColor
+                    )
+                }
+            }
         },
         trailingContent = {
             Icon(
@@ -240,7 +302,8 @@ private fun SettingsCategoryRow(
         },
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
 }
 
