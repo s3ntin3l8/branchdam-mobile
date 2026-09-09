@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -211,6 +212,7 @@ internal fun DrivePermissionFlow(
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -282,13 +284,30 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
-                val showBottomBar = currentRoute in bottomNavRoutes
+                val showBottomBar = currentRoute in bottomNavRoutes && currentRoute != Screen.Onboarding.route
+
+                val isOnboardingCompleted = remember {
+                    applicationContext.getSharedPreferences(
+                        BranchDamKeys.PREFS_NAME,
+                        android.content.Context.MODE_PRIVATE,
+                    ).getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, false)
+                }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Box(modifier = Modifier.weight(1f)) {
                             AppNavGraph(
                                 navController = navController,
+                                startDestination = if (isOnboardingCompleted) Screen.Lineage.route else Screen.Onboarding.route,
+                                onRequestPermissions = {
+                                    // Trigger the permission flow batch manually if needed,
+                                    // but DrivePermissionFlow is already active and
+                                    // will fire once the Onboarding page asks for it.
+                                    // For now, we just advance the batch from NONE.
+                                    if (permissionFlow.batch.value == PermissionBatch.NONE) {
+                                        permissionFlow.nextBatch()
+                                    }
+                                }
                             )
                         }
                         if (showBottomBar) {
@@ -305,6 +324,16 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                             )
+                        }
+                    }
+
+                    // Handle onboarding completion persistence
+                    LaunchedEffect(currentRoute) {
+                        if (currentRoute == Screen.Lineage.route && !isOnboardingCompleted) {
+                            applicationContext.getSharedPreferences(
+                                BranchDamKeys.PREFS_NAME,
+                                android.content.Context.MODE_PRIVATE,
+                            ).edit().putBoolean(BranchDamKeys.ONBOARDING_COMPLETED, true).apply()
                         }
                     }
 

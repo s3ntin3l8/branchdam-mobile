@@ -1,37 +1,20 @@
 package com.branchdam.mobile.ui.settings
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -78,59 +61,83 @@ fun SettingsScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
                         .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            modifier = Modifier.size(12.dp),
-                            shape = MaterialTheme.shapes.small,
-                            color = if (isConnected) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.error,
-                        ) {}
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (isConnected) "Connected" else "Disconnected",
-                            style = MaterialTheme.typography.bodyMedium,
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(12.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = if (isConnected) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.error,
+                            ) {}
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                if (isConnected) "Connected" else "Disconnected",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsCategoryRow(
+                            title = "Connection",
+                            subtitle = "Server URL, API key, and pairing",
+                            icon = Icons.Default.Link,
+                            onClick = { currentPage = SettingsPage.Connection },
+                        )
+                        SettingsCategoryRow(
+                            title = "Sync",
+                            subtitle = "Network, schedule, and battery",
+                            icon = Icons.Default.Sync,
+                            onClick = { currentPage = SettingsPage.Sync },
+                        )
+                        SettingsCategoryRow(
+                            title = "Import",
+                            subtitle = "Camera roll auto-import",
+                            icon = Icons.Default.CloudUpload,
+                            onClick = { currentPage = SettingsPage.Import },
+                        )
+                        SettingsCategoryRow(
+                            title = "Appearance",
+                            subtitle = "Theme and dynamic color",
+                            icon = Icons.Default.Palette,
+                            onClick = { currentPage = SettingsPage.Appearance },
+                        )
+                        SettingsCategoryRow(
+                            title = "Advanced",
+                            subtitle = "Batch size, timeout, debounce",
+                            icon = Icons.Default.Tune,
+                            onClick = { currentPage = SettingsPage.Advanced },
                         )
                     }
 
-                    Spacer(Modifier.size(12.dp))
-
-                    SettingsCategoryRow(
-                        title = "Connection",
-                        subtitle = "Server URL, API key, and pairing",
-                        onClick = { currentPage = SettingsPage.Connection },
-                    )
-                    SettingsCategoryRow(
-                        title = "Sync",
-                        subtitle = "Network, schedule, and battery",
-                        onClick = { currentPage = SettingsPage.Sync },
-                    )
-                    SettingsCategoryRow(
-                        title = "Import",
-                        subtitle = "Camera roll auto-import",
-                        onClick = { currentPage = SettingsPage.Import },
-                    )
-                    SettingsCategoryRow(
-                        title = "Appearance",
-                        subtitle = "Theme and dynamic color",
-                        onClick = { currentPage = SettingsPage.Appearance },
-                    )
-                    SettingsCategoryRow(
-                        title = "Advanced",
-                        subtitle = "Batch size, timeout, debounce",
-                        onClick = { currentPage = SettingsPage.Advanced },
-                    )
-
-                    Spacer(Modifier.size(12.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val hasLog = viewModel.hasDiagnosticLog()
-                    androidx.compose.material3.OutlinedButton(
+                    Button(
                         onClick = { viewModel.shareDiagnosticLog(context) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
                         enabled = hasLog,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     ) {
+                        Icon(Icons.Default.Share, contentDescription = null)
+                        Spacer(Modifier.width(12.dp))
                         Text("Share Diagnostic Log")
                     }
 
@@ -143,6 +150,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 24.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
@@ -190,29 +198,59 @@ fun SettingsScreen(
 private fun SettingsCategoryRow(
     title: String,
     subtitle: String,
+    icon: ImageVector,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForwardIos,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Icon(
-            Icons.AutoMirrored.Filled.ArrowForwardIos,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

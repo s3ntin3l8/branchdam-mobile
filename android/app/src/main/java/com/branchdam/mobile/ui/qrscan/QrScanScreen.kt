@@ -49,9 +49,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -95,8 +103,11 @@ fun QrScanScreen(
         }
     }
 
+    val haptic = LocalHapticFeedback.current
+
     LaunchedEffect(applyResult) {
         if (applyResult is QrScanViewModel.ApplyResult.Applied) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             val config = (applyResult as QrScanViewModel.ApplyResult.Applied).config
             viewModel.consumeApplyResult()
             onConfigApplied(config)
@@ -127,27 +138,7 @@ fun QrScanScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(250.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .border(2.dp, Color.White, RoundedCornerShape(16.dp)),
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            "Point camera at QR code",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                    }
-                }
+                QrScanOverlay()
             }
         } else {
             PermissionDeniedPanel(
@@ -165,6 +156,86 @@ fun QrScanScreen(
             config = parsedConfig!!,
             onConfirm = { viewModel.onConfirm() },
             onDismiss = { viewModel.onDismiss() },
+        )
+    }
+}
+
+@Composable
+private fun QrScanOverlay() {
+    val infiniteTransition = rememberInfiniteTransition(label = "laser")
+    val laserY by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "laser_y"
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width
+            val height = size.height
+            val cutoutSize = 250.dp.toPx()
+            val left = (width - cutoutSize) / 2
+            val top = (height - cutoutSize) / 2
+
+            // Background with hole
+            val path = Path().apply {
+                moveTo(0f, 0f)
+                lineTo(width, 0f)
+                lineTo(width, height)
+                lineTo(0f, height)
+                close()
+
+                moveTo(left, top)
+                lineTo(left, top + cutoutSize)
+                lineTo(left + cutoutSize, top + cutoutSize)
+                lineTo(left + cutoutSize, top)
+                close()
+            }
+            drawPath(path, color = Color.Black.copy(alpha = 0.6f))
+
+            // Corners
+            val cornerLen = 24.dp.toPx()
+            val strokeWidth = 4.dp.toPx()
+            val color = Color.White
+
+            // Top Left
+            drawLine(color, Offset(left, top), Offset(left + cornerLen, top), strokeWidth)
+            drawLine(color, Offset(left, top), Offset(left, top + cornerLen), strokeWidth)
+
+            // Top Right
+            drawLine(color, Offset(left + cutoutSize, top), Offset(left + cutoutSize - cornerLen, top), strokeWidth)
+            drawLine(color, Offset(left + cutoutSize, top), Offset(left + cutoutSize, top + cornerLen), strokeWidth)
+
+            // Bottom Left
+            drawLine(color, Offset(left, top + cutoutSize), Offset(left + cornerLen, top + cutoutSize), strokeWidth)
+            drawLine(color, Offset(left, top + cutoutSize), Offset(left, top + cutoutSize - cornerLen), strokeWidth)
+
+            // Bottom Right
+            drawLine(color, Offset(left + cutoutSize, top + cutoutSize), Offset(left + cutoutSize - cornerLen, top + cutoutSize), strokeWidth)
+            drawLine(color, Offset(left + cutoutSize, top + cutoutSize), Offset(left + cutoutSize, top + cutoutSize - cornerLen), strokeWidth)
+
+            // Laser Line
+            val laserPosY = top + (cutoutSize * laserY)
+            drawLine(
+                color = Color.Cyan.copy(alpha = 0.8f),
+                start = Offset(left + 8.dp.toPx(), laserPosY),
+                end = Offset(left + cutoutSize - 8.dp.toPx(), laserPosY),
+                strokeWidth = 2.dp.toPx()
+            )
+        }
+
+        Text(
+            "Center the QR code in the frame",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(top = 320.dp)
         )
     }
 }
