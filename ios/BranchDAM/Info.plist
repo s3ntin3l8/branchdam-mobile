@@ -29,5 +29,7 @@
     </array>
     <key>NSLocalNetworkUsageDescription</key>
     <string>branchDAM connects to your self-hosted server to upload lossless photo masters and sync the archive queue.</string>
+    <key>UILaunchScreen</key>
+    <dict/>
 </dict>
 </plist>
