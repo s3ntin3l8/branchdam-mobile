@@ -14,9 +14,11 @@ jobs:
   # can still explicitly ask for a second opinion via
   # `@s3ntin3l8-hermes Review`.
   auto-review:
+    # The fork guard (head.repo.full_name != github.repository -> skip) is enforced
+    # inside the reusable workflow itself (s3ntin3l8/.github#53) as defense-in-depth;
+    # callers don't need their own copy.
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 's3ntin3l8-hermes[bot]' &&
       github.actor != 'dependabot[bot]' &&
       github.actor != 'github-actions[bot]' &&
