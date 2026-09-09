@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 @Composable
@@ -146,34 +147,36 @@ private fun OnboardingPageContent(
     ) {
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(32.dp),
-            modifier = Modifier.size(120.dp)
+            shape = RoundedCornerShape(40.dp), // More expressive radius
+            modifier = Modifier.size(140.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     icon,
                     contentDescription = null,
-                    modifier = Modifier.size(64.dp),
+                    modifier = Modifier.size(72.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(64.dp))
         Text(
             title,
-            style = MaterialTheme.typography.headlineLarge,
+            style = MaterialTheme.typography.displayMedium, // Using larger typography
             fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            lineHeight = 48.sp
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
         Text(
             description,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleLarge, // Using larger typography
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 32.sp
         )
         if (cta != null) {
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(64.dp))
             cta()
         }
     }

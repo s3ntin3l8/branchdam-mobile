@@ -103,7 +103,7 @@ fun GalleryScreen(
 private fun GalleryItemCard(galleryItem: GalleryItem) {
     Card(
         modifier = Modifier.aspectRatio(1f),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(24.dp) // More expressive rounded corners
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -116,28 +116,28 @@ private fun GalleryItemCard(galleryItem: GalleryItem) {
                 modifier = Modifier.fillMaxSize(),
             )
             Surface(
-                modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
-                shape = MaterialTheme.shapes.extraSmall,
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                shape = RoundedCornerShape(12.dp),
             ) {
                 Text(
                     galleryItem.lineageStatus,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold
                 )
             }
             if (galleryItem.mediaItem.isDng) {
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f),
-                    shape = MaterialTheme.shapes.extraSmall,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(12.dp),
                 ) {
                     Text(
                         "RAW",
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.ExtraBold
                     )
                 }
             }
