@@ -32,21 +32,61 @@ fun AppNavGraph(
     // viewModel() call) so that fields populated by the QR scan
     // flow are visible on the Settings screen after pop.
     val settingsViewModel: SettingsViewModel = viewModel()
+
+    val routes = listOf(
+        Screen.Lineage.route,
+        Screen.Gallery.route,
+        Screen.Sync.route,
+        Screen.Settings.route
+    )
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier.fillMaxSize(),
         enterTransition = {
-            slideIntoContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300)
-            ) + fadeIn(animationSpec = tween(300))
+            val initialRoute = initialState.destination.route
+            val targetRoute = targetState.destination.route
+            val initialIndex = routes.indexOf(initialRoute)
+            val targetIndex = routes.indexOf(targetRoute)
+
+            if (initialIndex != -1 && targetIndex != -1) {
+                if (targetIndex > initialIndex) {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(300)
+                    ) + fadeIn(animationSpec = tween(300))
+                } else {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(300)
+                    ) + fadeIn(animationSpec = tween(300))
+                }
+            } else {
+                fadeIn(animationSpec = tween(300))
+            }
         },
         exitTransition = {
-            slideOutOfContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300)
-            ) + fadeOut(animationSpec = tween(300))
+            val initialRoute = initialState.destination.route
+            val targetRoute = targetState.destination.route
+            val initialIndex = routes.indexOf(initialRoute)
+            val targetIndex = routes.indexOf(targetRoute)
+
+            if (initialIndex != -1 && targetIndex != -1) {
+                if (targetIndex > initialIndex) {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(300)
+                    ) + fadeOut(animationSpec = tween(300))
+                } else {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(300)
+                    ) + fadeOut(animationSpec = tween(300))
+                }
+            } else {
+                fadeOut(animationSpec = tween(300))
+            }
         },
         popEnterTransition = {
             slideIntoContainer(

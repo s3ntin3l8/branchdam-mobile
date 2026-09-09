@@ -63,30 +63,24 @@ fun SettingsScreen(
                         .padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(12.dp),
-                                shape = MaterialTheme.shapes.small,
-                                color = if (isConnected) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.error,
-                            ) {}
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                if (isConnected) "Connected" else "Disconnected",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Surface(
+                            modifier = Modifier.size(12.dp),
+                            shape = MaterialTheme.shapes.small,
+                            color = if (isConnected) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.error,
+                        ) {}
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            if (isConnected) "Connected" else "Disconnected",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
