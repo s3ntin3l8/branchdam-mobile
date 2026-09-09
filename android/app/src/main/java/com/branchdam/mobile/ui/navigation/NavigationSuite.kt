@@ -1,9 +1,6 @@
 package com.branchdam.mobile.ui.navigation
 
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -70,7 +67,7 @@ fun NavigationSuiteScaffold(
                                 icon = {
                                     Icon(
                                         imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                                        contentDescription = null // Label is provided
+                                        contentDescription = null
                                     )
                                 },
                                 label = { Text(item.label) },
@@ -87,11 +84,8 @@ fun NavigationSuiteScaffold(
         }
         NavigationLayoutType.Rail -> {
             Row(modifier = modifier.fillMaxSize()) {
-                NavigationRail(
-                    header = {
-                        // Optional header: branding or FAB could go here
-                    }
-                ) {
+                NavigationRail {
+                    Spacer(Modifier.weight(1f))
                     NavigationItems.forEach { item ->
                         val isSelected = currentRoute == item.route
                         NavigationRailItem(
@@ -107,6 +101,7 @@ fun NavigationSuiteScaffold(
                             alwaysShowLabel = true
                         )
                     }
+                    Spacer(Modifier.weight(1f))
                 }
                 Surface(modifier = Modifier.weight(1f)) { content() }
             }

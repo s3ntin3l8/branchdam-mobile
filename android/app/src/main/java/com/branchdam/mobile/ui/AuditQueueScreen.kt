@@ -177,6 +177,23 @@ private fun AuditCard(
     }
 }
 
+@Composable
+private fun AssetInfoRow(label: String, filename: String) {
+    Column {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            filename,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1
+        )
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun AuditCardPreview() {
@@ -191,20 +208,6 @@ fun AuditCardPreview() {
             ),
             onConfirm = {},
             onReject = {}
-        )
-    }
-}
-    Column {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            filename,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1
         )
     }
 }

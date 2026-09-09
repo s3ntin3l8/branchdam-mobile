@@ -1,5 +1,6 @@
 package com.branchdam.mobile.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -61,7 +62,7 @@ fun SyncSettingsScreen(
                         onCheckedChange = { viewModel.setSyncOnMobileData(it) }
                     )
                 },
-                onClick = { viewModel.setSyncOnMobileData(!syncOnMobileData) }
+                modifier = Modifier.clickable { viewModel.setSyncOnMobileData(!syncOnMobileData) }
             )
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -121,7 +122,7 @@ fun SyncSettingsScreen(
                         onCheckedChange = { viewModel.setSyncOnBatteryOnly(it) }
                     )
                 },
-                onClick = { viewModel.setSyncOnBatteryOnly(!syncOnBatteryOnly) }
+                modifier = Modifier.clickable { viewModel.setSyncOnBatteryOnly(!syncOnBatteryOnly) }
             )
         }
     }

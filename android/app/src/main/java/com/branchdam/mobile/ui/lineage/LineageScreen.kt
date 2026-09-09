@@ -1,5 +1,6 @@
 package com.branchdam.mobile.ui.lineage
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -7,10 +8,12 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.WindowSizeClass
 import androidx.compose.material3.adaptive.WindowWidthSizeClass
+import androidx.compose.material3.adaptive.currentWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -123,16 +126,8 @@ fun LineageScreen(
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun LineageScreenPreview() {
-    BranchDamTheme {
-        LineageScreen(
-            windowSizeClass = androidx.compose.material3.adaptive.currentWindowSizeClass(),
-            onNavigateToSafeSpace = {}
-        )
-    }
-}
+private fun LineageContent(
     isLoading: Boolean,
     loadError: String?,
     candidates: List<com.branchdam.mobile.ui.AuditCandidate>,
@@ -181,5 +176,16 @@ fun LineageScreenPreview() {
                 modifier = modifier,
             )
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun LineageScreenPreview() {
+    BranchDamTheme {
+        LineageScreen(
+            windowSizeClass = currentWindowSizeClass(),
+            onNavigateToSafeSpace = {}
+        )
     }
 }

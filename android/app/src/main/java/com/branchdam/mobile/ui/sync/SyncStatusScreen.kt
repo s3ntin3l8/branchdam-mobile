@@ -13,7 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -67,7 +67,7 @@ fun SyncStatusScreen(
                     leadingContent = {
                         PulsingConnectionDot(isReachable = uiState.isServerReachable)
                     },
-                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
             }
 
@@ -79,7 +79,7 @@ fun SyncStatusScreen(
                     ListItem(
                         headlineContent = { Text(uiState.workerState) },
                         overlineContent = { Text("Worker State") },
-                        colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     ListItem(
@@ -97,7 +97,7 @@ fun SyncStatusScreen(
                             )
                         },
                         overlineContent = { Text("Last Sync") },
-                        colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
             }

@@ -1,10 +1,12 @@
 package com.branchdam.mobile.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ChevronRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +21,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 private enum class SettingsPage {
@@ -198,13 +201,8 @@ fun SettingsScreen(
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun SettingsScreenPreview() {
-    BranchDamTheme {
-        SettingsScreen(viewModel = viewModel())
-    }
-}
+private fun SettingsCategoryHeader(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.labelLarge,
@@ -235,12 +233,21 @@ private fun SettingsCategoryRow(
         },
         trailingContent = {
             Icon(
-                Icons.Default.ChevronRight,
+                Icons.AutoMirrored.Filled.ChevronRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.outline
             )
         },
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun SettingsScreenPreview() {
+    BranchDamTheme {
+        SettingsScreen(viewModel = viewModel())
+    }
 }

@@ -61,13 +61,8 @@ fun OnboardingScreen(
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun OnboardingPreview() {
-    BranchDamTheme {
-        OnboardingScreen(onOnboardingComplete = {}, onRequestPermissions = {})
-    }
-}
+private fun WelcomePage() {
     OnboardingPageContent(
         title = "Welcome to branchDAM",
         description = "Your secure, offline-first media companion for professional workflows.",
@@ -225,5 +220,13 @@ private fun OnboardingBottomBar(
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next")
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun OnboardingPreview() {
+    BranchDamTheme {
+        OnboardingScreen(onOnboardingComplete = {}, onRequestPermissions = {})
     }
 }
