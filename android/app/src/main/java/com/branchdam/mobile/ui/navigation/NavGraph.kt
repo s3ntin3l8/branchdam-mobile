@@ -1,5 +1,6 @@
 package com.branchdam.mobile.ui.navigation
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -27,7 +28,7 @@ fun AppNavGraph(
     NavHost(
         navController = navController,
         startDestination = Screen.Lineage.route,
-        modifier = modifier,
+        modifier = modifier.fillMaxSize(),
     ) {
         composable(Screen.Lineage.route) {
             LineageScreen(

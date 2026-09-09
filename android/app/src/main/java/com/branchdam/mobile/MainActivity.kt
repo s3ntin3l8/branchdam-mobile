@@ -6,9 +6,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -210,6 +214,7 @@ internal fun DrivePermissionFlow(
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         val otgManager = OtgIngestManager.getInstance(this)
@@ -229,15 +234,6 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> systemDark
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
-            }
-            val view = LocalView.current
-            if (!view.isInEditMode) {
-                SideEffect {
-                    WindowCompat.getInsetsController(window, view).apply {
-                        isAppearanceLightStatusBars = !darkTheme
-                        isAppearanceLightNavigationBars = !darkTheme
-                    }
-                }
             }
             BranchDamTheme(themeMode = themeMode) {
                 val permissionFlow = remember { PermissionFlowState() }
@@ -283,29 +279,27 @@ class MainActivity : ComponentActivity() {
                 val showBottomBar = currentRoute in bottomNavRoutes
 
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Scaffold(
-                        bottomBar = {
-                            if (showBottomBar) {
-                                BottomNavBar(
-                                    currentRoute = currentRoute,
-                                    onNavigate = { route: String ->
-                                        if (route == Screen.Settings.route) {
-                                            settingsViewModel.triggerNavigationReset()
-                                        }
-                                        navController.navigate(route) {
-                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                )
-                            }
-                        },
-                    ) { padding ->
-                        AppNavGraph(
-                            navController = navController,
-                            modifier = Modifier.padding(padding),
-                        )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            AppNavGraph(
+                                navController = navController,
+                            )
+                        }
+                        if (showBottomBar) {
+                            BottomNavBar(
+                                currentRoute = currentRoute,
+                                onNavigate = { route: String ->
+                                    if (route == Screen.Settings.route) {
+                                        settingsViewModel.triggerNavigationReset()
+                                    }
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                            )
+                        }
                     }
 
                     val otgState by otgManager.state.collectAsState()
