@@ -4,26 +4,45 @@ import Photos
 public struct ContentView: View {
     @ObservedObject private var otgManager = AppleOtgIngestManager.shared
     @State private var authorizationStatus: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    @State private var selectedTab = 0
 
     public init() {}
 
     public var body: some View {
         ZStack {
-            TabView {
+            TabView(selection: $selectedTab) {
                 AuditTriageView()
                     .tabItem {
                         Label("Lineage", systemImage: "point.3.filled.connected.trianglepath.dotted")
                     }
+                    .tag(0)
+
+                GalleryView()
+                    .tabItem {
+                        Label("Gallery", systemImage: "photo.stack")
+                    }
+                    .tag(1)
+
+                SyncStatusView()
+                    .tabItem {
+                        Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .tag(2)
 
                 SafeSpaceView()
                     .tabItem {
                         Label("Safe Space", systemImage: "sparkles.rectangle.stack")
                     }
+                    .tag(3)
 
                 QrPairingView()
                     .tabItem {
                         Label("Settings", systemImage: "gearshape")
                     }
+                    .tag(4)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .branchdamSwitchToSettings)) { _ in
+                selectedTab = 4
             }
 
             // E.5: Photo authorization banner when access is not yet granted.

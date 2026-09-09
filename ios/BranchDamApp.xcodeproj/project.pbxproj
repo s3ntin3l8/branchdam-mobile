@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		11ADCA413051CD3A00D4BB7D /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11ADCA403051CD3A00D4BB7D /* GalleryView.swift */; };
+		11ADCA433051CD4700D4BB7D /* SyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11ADCA423051CD4700D4BB7D /* SyncStatusView.swift */; };
+		11ADCA453051CF0100D4BB7D /* QrScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11ADCA443051CF0100D4BB7D /* QrScanView.swift */; };
+		11ADCA473051D1BC00D4BB7D /* AppleSyncLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11ADCA463051D1BC00D4BB7D /* AppleSyncLogger.swift */; };
 		A1000001 /* BranchDAMApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* BranchDAMApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* BranchDamCoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* BranchDamCoreBridge.swift */; };
@@ -80,6 +84,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		11ADCA403051CD3A00D4BB7D /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
+		11ADCA423051CD4700D4BB7D /* SyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusView.swift; sourceTree = "<group>"; };
+		11ADCA443051CF0100D4BB7D /* QrScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrScanView.swift; sourceTree = "<group>"; };
+		11ADCA463051D1BC00D4BB7D /* AppleSyncLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSyncLogger.swift; sourceTree = "<group>"; };
 		A2000000 /* BranchDAM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BranchDAM.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001 /* BranchDAMApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDAMApp.swift; sourceTree = "<group>"; };
 		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -182,6 +190,7 @@
 				A2000003 /* BranchDamCoreBridge.swift */,
 				A2000019 /* AppleKeychain.swift */,
 				A2000022 /* BranchDamKeys.swift */,
+				11ADCA463051D1BC00D4BB7D /* AppleSyncLogger.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -236,6 +245,9 @@
 				A2000014 /* AppleOtgImportConfirmationView.swift */,
 				A2000016 /* WelcomeView.swift */,
 				A2000018 /* PhotoAuthorizationBanner.swift */,
+				11ADCA403051CD3A00D4BB7D /* GalleryView.swift */,
+				11ADCA423051CD4700D4BB7D /* SyncStatusView.swift */,
+				11ADCA443051CF0100D4BB7D /* QrScanView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -371,6 +383,7 @@
 				A1000001 /* BranchDAMApp.swift in Sources */,
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* BranchDamCoreBridge.swift in Sources */,
+				11ADCA453051CF0100D4BB7D /* QrScanView.swift in Sources */,
 				A1000019 /* AppleKeychain.swift in Sources */,
 				A1000022 /* BranchDamKeys.swift in Sources */,
 				A1000004 /* PhotoKitObserver.swift in Sources */,
@@ -384,8 +397,11 @@
 				A100000C /* BrandMonogramView.swift in Sources */,
 				A100000D /* QrPairingView.swift in Sources */,
 				A100000E /* SafeSpaceView.swift in Sources */,
+				11ADCA413051CD3A00D4BB7D /* GalleryView.swift in Sources */,
 				A1000012 /* AppleOtgCardScanner.swift in Sources */,
+				11ADCA473051D1BC00D4BB7D /* AppleSyncLogger.swift in Sources */,
 				A1000013 /* AppleOtgIngestManager.swift in Sources */,
+				11ADCA433051CD4700D4BB7D /* SyncStatusView.swift in Sources */,
 				A1000014 /* AppleOtgImportConfirmationView.swift in Sources */,
 				A1000015 /* AppleCameraRollImportNotifier.swift in Sources */,
 				A1000016 /* WelcomeView.swift in Sources */,

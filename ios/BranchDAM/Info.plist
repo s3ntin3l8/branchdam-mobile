@@ -27,6 +27,8 @@
     <array>
         <string>com.branchdam.mobile.sync</string>
     </array>
+    <key>NSCameraUsageDescription</key>
+    <string>branchDAM uses the camera to scan QR codes for server pairing.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>branchDAM connects to your self-hosted server to upload lossless photo masters and sync the archive queue.</string>
     <key>UILaunchScreen</key>

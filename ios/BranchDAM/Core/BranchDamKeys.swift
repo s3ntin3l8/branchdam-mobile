@@ -61,6 +61,19 @@ public enum BranchDamKeys: String {
     /// Maximum seconds to wait for a sync batch to complete. Passed to
     /// `BranchDamCoreBridge.syncBatch` by `BackgroundSyncManager`.
     case syncTimeoutSecs = "branchdam_sync_timeout_secs"
+
+    /// Debounce window (milliseconds) for PhotoKit change callbacks.
+    /// Read by `PhotoKitObserver` when coalescing rapid library changes.
+    case observerDebounceMs = "branchdam_observer_debounce_ms"
+
+    /// User-selected color-scheme mode. Stored as "system", "light", or
+    /// "dark" to match the Android `ThemeMode` enum name convention so a
+    /// cross-platform inspection tool can target one key string.
+    case themeMode = "branchdam_theme_mode"
+
+    /// Timestamp (seconds since epoch) of the last completed sync cycle.
+    /// Written by `SyncStatusView` after a successful manual or background sync.
+    case lastSyncTime = "branchdam_last_sync_time"
 }
 
 extension BranchDamKeys {
@@ -75,5 +88,7 @@ extension BranchDamKeys {
         public static let UPLOAD_BATCH_SIZE = "branchdam_upload_batch_size"
         public static let SYNC_TIMEOUT_SECS = "branchdam_sync_timeout_secs"
         public static let OBSERVER_DEBOUNCE_MS = "branchdam_observer_debounce_ms"
+        public static let THEME_MODE = "branchdam_theme_mode"
+        public static let LAST_SYNC_TIME = "branchdam_last_sync_time"
     }
 }

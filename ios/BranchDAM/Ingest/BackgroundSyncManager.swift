@@ -75,6 +75,7 @@ public class BackgroundSyncManager {
         let batch = Int32(readBatchSize())
         DispatchQueue.global(qos: .userInitiated).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
+            AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
             completion?(result.uploaded > 0 || result.eventsSent > 0)
         }
     }
@@ -120,6 +121,7 @@ public class BackgroundSyncManager {
         let batch = Int32(readBatchSize())
         DispatchQueue.global(qos: .background).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
+            AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
             completionLock.lock()
             defer { completionLock.unlock() }
             guard !completed else { return }

@@ -37,17 +37,42 @@ public struct AuditTriageView: View {
 
                         RoundedRectangle(cornerRadius: 16)
                             .fill(Color(.secondarySystemBackground))
-                            .frame(height: 240)
+                            .frame(height: 200)
                             .overlay(
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Master: \(current.masterFilename)")
-                                        .font(.headline)
-                                    Text("Derivative: \(current.derivativeFilename)")
-                                        .font(.subheadline)
-                                    Text("Confidence: \(Int(current.confidence * 100))%")
-                                        .foregroundColor(.accentColor)
-                                    Text("Resolver: \(current.resolver)")
-                                        .font(.caption)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "camera.fill")
+                                            .foregroundColor(.accentColor)
+                                            .font(.subheadline)
+                                        Text("RAW + JPEG Pair")
+                                            .font(.caption.bold())
+                                            .foregroundColor(.accentColor)
+                                        Spacer()
+                                        Text("\(Int(current.confidence * 100))%")
+                                            .font(.caption.bold())
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(confidenceColor(current.confidence))
+                                            .foregroundColor(.white)
+                                            .clipShape(Capsule())
+                                    }
+
+                                    Divider()
+
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Label(current.masterFilename, systemImage: "doc.fill")
+                                            .font(.subheadline.bold())
+                                            .lineLimit(1)
+                                        Label(current.derivativeFilename, systemImage: "photo.fill")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    }
+
+                                    Spacer()
+
+                                    Text("via \(current.resolver)")
+                                        .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
                                 .padding()
@@ -88,5 +113,11 @@ public struct AuditTriageView: View {
             }
             .navigationTitle("Lineage Audit")
         }
+    }
+
+    private func confidenceColor(_ value: Double) -> Color {
+        if value >= 0.95 { return .green }
+        if value >= 0.80 { return .orange }
+        return .red
     }
 }

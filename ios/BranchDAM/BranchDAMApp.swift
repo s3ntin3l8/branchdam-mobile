@@ -24,9 +24,20 @@ struct BranchDAMApp: App {
         }
     }
 
+    @AppStorage(BranchDamKeys.themeMode.rawValue) private var themeMode = "system"
+
     var body: some Scene {
         WindowGroup {
             WelcomeView()
+                .preferredColorScheme(resolvedColorScheme)
+        }
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        switch themeMode {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
         }
     }
 }
