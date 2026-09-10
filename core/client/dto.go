@@ -57,6 +57,29 @@ type MobileTelemetry struct {
 	TimestampUnix     int64  `json:"timestampUnix"`
 }
 
+// DefaultMobileMountPath is the standardized mobile mount path label reported in telemetry.
+const DefaultMobileMountPath = "/storage/emulated/0"
+
+// ScratchStorageDTO mirrors the scratchStorage sub-object of POST /api/v1/agent/telemetry.
+type ScratchStorageDTO struct {
+	MountPath            string `json:"mountPath"`
+	TotalBytes           int64  `json:"totalBytes"`
+	FreeBytes            int64  `json:"freeBytes"`
+	UsedBytes            int64  `json:"usedBytes"`
+	MirrorsSizeBytes     int64  `json:"mirrorsSizeBytes"`
+	RenderCacheSizeBytes int64  `json:"renderCacheSizeBytes"`
+	ProxiesSizeBytes     int64  `json:"proxiesSizeBytes"`
+	PrunableBytes        int64  `json:"prunableBytes"`
+}
+
+// TelemetryInput is the request body sent to POST /api/v1/agent/telemetry.
+type TelemetryInput struct {
+	AgentID        string            `json:"agentId"`
+	ClientVersion  string            `json:"clientVersion,omitempty"`
+	TimestampUnix  int64             `json:"timestampUnix"`
+	ScratchStorage ScratchStorageDTO `json:"scratchStorage"`
+}
+
 type UploadResponse struct {
 	OK           bool   `json:"ok,omitempty"`
 	NodeUUID     string `json:"nodeUuid"`

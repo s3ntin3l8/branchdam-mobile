@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -134,12 +136,21 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		cam = e.c.AgentID()
 	}
 
+	srcPathHash := ""
+	if len(cameraModel) > 1 && cameraModel[1] != "" {
+		srcPathHash = cameraModel[1]
+	} else if localPath != "" {
+		h := sha256.Sum256([]byte(localPath))
+		srcPathHash = hex.EncodeToString(h[:])
+	}
+
 	item := &queue.UploadItem{
 		LocalPath:      localPath,
 		TargetFilename: filename,
 		FastHash:       fastHash,
 		Blake3Hash:     fullHash,
 		CameraModel:    cam,
+		SourcePathHash: srcPathHash,
 		SizeBytes:      sizeBytes,
 		CapturedAtUnix: capturedAtUnix,
 	}
@@ -211,6 +222,7 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 			CameraModel:    cam,
 			FastHash:       item.FastHash,
 			Blake3Hash:     item.Blake3Hash,
+			SourcePathHash: item.SourcePathHash,
 			CapturedAtUnix: item.CapturedAtUnix,
 		}
 

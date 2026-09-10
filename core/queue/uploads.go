@@ -18,13 +18,13 @@ func (q *Queue) EnqueueUpload(item *UploadItem) (int64, error) {
 	query := `
 	INSERT INTO upload_queue (
 		local_path, target_filename, target_dir, fast_hash, blake3_hash,
-		camera_model, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
+		camera_model, source_path_hash, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
 		error_msg, node_uuid, created_at_unix, updated_at_unix
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	res, err := q.db.Exec(query,
 		item.LocalPath, item.TargetFilename, item.TargetDir, item.FastHash, item.Blake3Hash,
-		item.CameraModel, item.SizeBytes, item.CapturedAtUnix, string(item.Status), item.RetryCount, item.LastAttemptUnix,
+		item.CameraModel, item.SourcePathHash, item.SizeBytes, item.CapturedAtUnix, string(item.Status), item.RetryCount, item.LastAttemptUnix,
 		item.ErrorMsg, item.NodeUUID, item.CreatedAtUnix, item.UpdatedAtUnix,
 	)
 	if err != nil {
@@ -49,7 +49,7 @@ func (q *Queue) GetUploadItemByBlake3Hash(hash string) (*UploadItem, error) {
 
 	query := `
 	SELECT id, local_path, target_filename, target_dir, fast_hash, blake3_hash,
-	       camera_model, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
+	       camera_model, source_path_hash, size_bytes, captured_at_unix, status, retry_count, last_attempt_unix,
 	       error_msg, node_uuid, created_at_unix, updated_at_unix
 	FROM upload_queue
 	WHERE blake3_hash = ?
@@ -61,7 +61,7 @@ func (q *Queue) GetUploadItemByBlake3Hash(hash string) (*UploadItem, error) {
 	var statusStr string
 	err := q.db.QueryRow(query, hash).Scan(
 		&item.ID, &item.LocalPath, &item.TargetFilename, &item.TargetDir, &item.FastHash, &item.Blake3Hash,
-		&item.CameraModel, &item.SizeBytes, &item.CapturedAtUnix, &statusStr, &item.RetryCount, &item.LastAttemptUnix,
+		&item.CameraModel, &item.SourcePathHash, &item.SizeBytes, &item.CapturedAtUnix, &statusStr, &item.RetryCount, &item.LastAttemptUnix,
 		&item.ErrorMsg, &item.NodeUUID, &item.CreatedAtUnix, &item.UpdatedAtUnix,
 	)
 	if err != nil {
@@ -103,7 +103,7 @@ func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetrie
 	  LIMIT ?
 	)
 	RETURNING id, local_path, target_filename, target_dir, fast_hash, blake3_hash,
-	          camera_model, size_bytes, captured_at_unix, status, retry_count,
+	          camera_model, source_path_hash, size_bytes, captured_at_unix, status, retry_count,
 	          last_attempt_unix, error_msg, node_uuid, created_at_unix, updated_at_unix
 	`
 	rows, err := q.db.Query(query, now, now, maxRetries, cutoff, limit)
@@ -118,7 +118,7 @@ func (q *Queue) ClaimPendingUploads(limit int, retryBackoffSecs int64, maxRetrie
 		var statusStr string
 		err := rows.Scan(
 			&item.ID, &item.LocalPath, &item.TargetFilename, &item.TargetDir, &item.FastHash, &item.Blake3Hash,
-			&item.CameraModel, &item.SizeBytes, &item.CapturedAtUnix, &statusStr, &item.RetryCount, &item.LastAttemptUnix,
+			&item.CameraModel, &item.SourcePathHash, &item.SizeBytes, &item.CapturedAtUnix, &statusStr, &item.RetryCount, &item.LastAttemptUnix,
 			&item.ErrorMsg, &item.NodeUUID, &item.CreatedAtUnix, &item.UpdatedAtUnix,
 		)
 		if err != nil {

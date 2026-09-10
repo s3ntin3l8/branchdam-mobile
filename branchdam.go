@@ -215,6 +215,7 @@ type EnqueueMediaOptions struct {
 	Filename       string
 	LocalID        string
 	CameraModel    string
+	SourcePathHash string
 	CapturedAtUnix int64
 	SizeBytes      int64
 }
@@ -238,7 +239,7 @@ func (e *Engine) EnqueueMedia(opts EnqueueMediaOptions) (int64, error) {
 
 	eng := e.engine
 	item, err := eng.EnqueueLocalCapture(
-		opts.LocalPath, opts.Filename, opts.CapturedAtUnix, opts.LocalID, opts.CameraModel,
+		opts.LocalPath, opts.Filename, opts.CapturedAtUnix, opts.LocalID, opts.CameraModel, opts.SourcePathHash,
 	)
 	if err != nil {
 		return 0, newError(CodeIOError, "enqueue media: %v", err)

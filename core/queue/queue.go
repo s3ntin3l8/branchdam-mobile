@@ -30,6 +30,9 @@ func Open(dbPath string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to execute queue schema: %w", err)
 	}
 
+	// Schema evolution: ensure source_path_hash column exists on existing DBs
+	_, _ = db.Exec(`ALTER TABLE upload_queue ADD COLUMN source_path_hash TEXT NOT NULL DEFAULT ''`)
+
 	// Reset any orphaned IN_PROGRESS items from a previous crashed/killed session back to PENDING
 	now := time.Now().Unix()
 	_, _ = db.Exec(`UPDATE upload_queue SET status = 'PENDING', updated_at_unix = ? WHERE status = 'IN_PROGRESS'`, now)

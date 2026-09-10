@@ -57,38 +57,25 @@ func (c *Client) GetNodeStatuses(ctx context.Context, nodeUUIDs []string) ([]Nod
 
 // SendTelemetry dispatches mobile storage telemetry via POST /api/v1/agent/telemetry.
 func (c *Client) SendTelemetry(ctx context.Context, telemetry MobileTelemetry) error {
-	agentID := telemetry.DeviceID
+	agentID := c.agentID
 	if agentID == "" {
-		agentID = c.agentID
+		agentID = telemetry.DeviceID
+	}
+	clientVersion := telemetry.ClientVersion
+	if clientVersion == "" {
+		clientVersion = c.clientVersion
 	}
 	ts := telemetry.TimestampUnix
 	if ts <= 0 {
 		ts = time.Now().Unix()
 	}
 
-	payload := struct {
-		AgentID        string `json:"agentId"`
-		ClientVersion  string `json:"clientVersion,omitempty"`
-		TimestampUnix  int64  `json:"timestampUnix"`
-		ScratchStorage struct {
-			MountPath     string `json:"mountPath"`
-			TotalBytes    int64  `json:"totalBytes"`
-			FreeBytes     int64  `json:"freeBytes"`
-			UsedBytes     int64  `json:"usedBytes"`
-			PrunableBytes int64  `json:"prunableBytes"`
-		} `json:"scratchStorage"`
-	}{
+	payload := TelemetryInput{
 		AgentID:       agentID,
-		ClientVersion: telemetry.ClientVersion,
+		ClientVersion: clientVersion,
 		TimestampUnix: ts,
-		ScratchStorage: struct {
-			MountPath     string `json:"mountPath"`
-			TotalBytes    int64  `json:"totalBytes"`
-			FreeBytes     int64  `json:"freeBytes"`
-			UsedBytes     int64  `json:"usedBytes"`
-			PrunableBytes int64  `json:"prunableBytes"`
-		}{
-			MountPath:     "Internal Storage",
+		ScratchStorage: ScratchStorageDTO{
+			MountPath:     DefaultMobileMountPath,
 			TotalBytes:    telemetry.TotalBytes,
 			FreeBytes:     telemetry.FreeBytes,
 			UsedBytes:     telemetry.UsedBytes,

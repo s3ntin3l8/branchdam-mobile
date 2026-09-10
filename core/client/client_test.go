@@ -133,7 +133,7 @@ func TestSendTelemetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1", ClientVersion: "1.2.3"})
 	err := c.SendTelemetry(context.Background(), MobileTelemetry{
 		DeviceID:        "pixel-10-fold",
 		TotalBytes:      256000000000,
@@ -150,12 +150,76 @@ func TestSendTelemetry(t *testing.T) {
 	if !received {
 		t.Fatal("expected telemetry to be received")
 	}
-	if receivedBody["agentId"] != "pixel-10-fold" {
-		t.Errorf("agentId = %v, want pixel-10-fold", receivedBody["agentId"])
+	if receivedBody["agentId"] != "agent-1" {
+		t.Errorf("agentId = %v, want agent-1", receivedBody["agentId"])
+	}
+	if receivedBody["clientVersion"] != "1.2.3" {
+		t.Errorf("clientVersion = %v, want 1.2.3", receivedBody["clientVersion"])
 	}
 	scratch, ok := receivedBody["scratchStorage"].(map[string]any)
-	if !ok || scratch["mountPath"] != "Internal Storage" {
-		t.Errorf("expected scratchStorage with mountPath 'Internal Storage', got %v", receivedBody["scratchStorage"])
+	if !ok || scratch["mountPath"] != DefaultMobileMountPath {
+		t.Errorf("expected scratchStorage with mountPath '%s', got %v", DefaultMobileMountPath, receivedBody["scratchStorage"])
+	}
+	if scratch["totalBytes"] != float64(256000000000) {
+		t.Errorf("totalBytes = %v, want 256000000000", scratch["totalBytes"])
+	}
+	if scratch["freeBytes"] != float64(128000000000) {
+		t.Errorf("freeBytes = %v, want 128000000000", scratch["freeBytes"])
+	}
+	if scratch["usedBytes"] != float64(128000000000) {
+		t.Errorf("usedBytes = %v, want 128000000000", scratch["usedBytes"])
+	}
+	if scratch["prunableBytes"] != float64(32000000000) {
+		t.Errorf("prunableBytes = %v, want 32000000000", scratch["prunableBytes"])
+	}
+}
+
+func TestSendTelemetry_DeviceIDAndVersionFallback(t *testing.T) {
+	var receivedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/agent/telemetry" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "acknowledgedAtUnix": 1724000001})
+	}))
+	defer server.Close()
+
+	// When c.AgentID is empty, fall back to telemetry.DeviceID; when telemetry.ClientVersion is set, use it
+	c := New(Config{BaseURL: server.URL, APIKey: "key"})
+	err := c.SendTelemetry(context.Background(), MobileTelemetry{
+		DeviceID:      "pixel-fallback",
+		ClientVersion: "2.0.0-custom",
+		TimestampUnix: 1724000000,
+	})
+	if err != nil {
+		t.Fatalf("SendTelemetry failed: %v", err)
+	}
+	if receivedBody["agentId"] != "pixel-fallback" {
+		t.Errorf("agentId = %v, want pixel-fallback", receivedBody["agentId"])
+	}
+	if receivedBody["clientVersion"] != "2.0.0-custom" {
+		t.Errorf("clientVersion = %v, want 2.0.0-custom", receivedBody["clientVersion"])
+	}
+}
+
+func TestUploadStream_InvalidSourcePathHash(t *testing.T) {
+	c := New(Config{BaseURL: "http://example.com", APIKey: "key"})
+	// Test short hash
+	_, err := c.UploadStream(context.Background(), bytes.NewReader([]byte("test")), 4, "test.dng", UploadOptions{
+		SourcePathHash: "invalid_hash",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid SourcePathHash, got nil")
+	}
+
+	// Test non-hex characters
+	_, err = c.UploadStream(context.Background(), bytes.NewReader([]byte("test")), 4, "test.dng", UploadOptions{
+		SourcePathHash: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-hex SourcePathHash, got nil")
 	}
 }
 

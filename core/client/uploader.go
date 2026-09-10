@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type ProgressCallback func(bytesSent int64, totalBytes int64)
@@ -71,7 +72,11 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 		req.Header.Set("X-Fast-Hash", opts.FastHash)
 	}
 	if opts.SourcePathHash != "" {
-		req.Header.Set("X-Source-Path-Hash", opts.SourcePathHash)
+		h := strings.ToLower(strings.TrimSpace(opts.SourcePathHash))
+		if len(h) != 64 || !isHex(h) {
+			return nil, fmt.Errorf("invalid SourcePathHash: must be 64 lowercase hex characters")
+		}
+		req.Header.Set("X-Source-Path-Hash", h)
 	}
 	if opts.CapturedAtUnix > 0 {
 		req.Header.Set("X-Capture-Timestamp", strconv.FormatInt(opts.CapturedAtUnix, 10))
@@ -147,4 +152,14 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 
 	return &uploadResp, nil
+}
+
+func isHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
