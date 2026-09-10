@@ -129,4 +129,42 @@ object MotionPhotoExtractor {
         val match = pattern.find(xmpText)
         return match?.groupValues?.get(1)?.toLongOrNull() ?: 0L
     }
+
+    fun extractMicroVideo(file: File, outputFile: File): Boolean {
+        val info = detectMotionPhoto(file)
+        if (!info.isMotionPhoto || info.microVideoOffset <= 0) return false
+        return try {
+            file.inputStream().use { input ->
+                val skipped = input.skip(info.microVideoOffset)
+                if (skipped < info.microVideoOffset) return false
+                outputFile.parentFile?.mkdirs()
+                outputFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            outputFile.exists() && outputFile.length() > 0
+        } catch (e: Exception) {
+            Log.w(TAG, "extractMicroVideo failed for ${file.absolutePath}", e)
+            false
+        }
+    }
+
+    fun extractMicroVideo(context: Context, uri: Uri, outputFile: File): Boolean {
+        val info = detectMotionPhoto(context, uri)
+        if (!info.isMotionPhoto || info.microVideoOffset <= 0) return false
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val skipped = input.skip(info.microVideoOffset)
+                if (skipped < info.microVideoOffset) return false
+                outputFile.parentFile?.mkdirs()
+                outputFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return false
+            outputFile.exists() && outputFile.length() > 0
+        } catch (e: Exception) {
+            Log.w(TAG, "extractMicroVideo failed for $uri", e)
+            false
+        }
+    }
 }

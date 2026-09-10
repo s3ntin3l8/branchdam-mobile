@@ -217,13 +217,30 @@ class MediaStoreObserver(
             EditCorrelator.registerEditLineage(edits)
         }
 
-        // Motion photo detection -- DNG/HEIF motion photos with embedded micro video.
+        // Motion photo detection -- DNG/HEIF/JPEG motion photos with embedded micro video.
+        val motionPhotoDir = File(context.cacheDir, "motion_photos")
         for (item in newItems.filter { !it.isVideo }) {
             val uri = Uri.parse(item.contentUri)
-            if (MotionPhotoExtractor.detectMotionPhoto(context, uri).isMotionPhoto) {
+            val info = MotionPhotoExtractor.detectMotionPhoto(context, uri)
+            if (info.isMotionPhoto) {
+                val childLocalID = "${item.contentUri}/microvideo"
+                val stem = item.displayName.substringBeforeLast('.')
+                val videoFilename = "${stem}_microvideo.mp4"
+                val videoFile = File(motionPhotoDir, videoFilename)
+
+                val extracted = MotionPhotoExtractor.extractMicroVideo(context, uri, videoFile)
+                if (extracted && com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)) {
+                    EngineHolder.enqueueMedia(
+                        localPath = videoFile.absolutePath,
+                        filename = videoFilename,
+                        capturedAtUnix = item.dateTakenUnix,
+                        localId = childLocalID
+                    )
+                }
+
                 EngineHolder.enqueueLineageEvent(
                     parentLocalID = item.contentUri,
-                    childLocalID = item.contentUri,
+                    childLocalID = childLocalID,
                     relationshipType = "MOTION_PHOTO_CONTAINS",
                     resolver = "android_motion_photo_xmp",
                     confidence = 1.00

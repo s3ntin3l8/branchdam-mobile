@@ -105,4 +105,24 @@ class MotionPhotoExtractorTest {
         assertEquals(123_456L, info.microVideoLength)
         assertEquals(0L, info.microVideoOffset)
     }
+
+    @Test
+    fun testExtractMicroVideo_happyPath() {
+        val tempDir = java.nio.file.Files.createTempDirectory("motion_photo_test").toFile()
+        try {
+            val motionFile = java.io.File(tempDir, "test_motion.jpg")
+            val padding = ByteArray(2048) { 0x20 }
+            val xmpBytes = xmpWithOffset(offset = 12L).toByteArray(Charsets.ISO_8859_1)
+            val videoPayload = "VIDEO_STREAM".toByteArray(Charsets.ISO_8859_1)
+            motionFile.writeBytes(xmpBytes + padding + videoPayload)
+
+            val outputFile = java.io.File(tempDir, "extracted.mp4")
+            val success = MotionPhotoExtractor.extractMicroVideo(motionFile, outputFile)
+            assertTrue(success)
+            assertTrue(outputFile.exists())
+            assertEquals("VIDEO_STREAM", outputFile.readText(Charsets.ISO_8859_1))
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }
