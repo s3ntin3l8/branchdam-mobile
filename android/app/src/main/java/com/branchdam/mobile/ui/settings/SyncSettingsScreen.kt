@@ -1,35 +1,15 @@
 package com.branchdam.mobile.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -51,7 +31,7 @@ fun SyncSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("Sync") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -67,79 +47,108 @@ fun SyncSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .verticalScroll(rememberScrollState()),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Sync on Mobile Data")
-                    Text(
-                        "Allow uploads over cellular connection",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = syncOnMobileData,
-                    onCheckedChange = { viewModel.setSyncOnMobileData(it) },
+            Spacer(Modifier.height(16.dp))
+
+            SettingsSubHeader("Network")
+            SettingsCard {
+                ListItem(
+                    headlineContent = { Text("Sync on Mobile Data") },
+                    supportingContent = { Text("Allow uploads over cellular connection") },
+                    trailingContent = {
+                        Switch(
+                            checked = syncOnMobileData,
+                            onCheckedChange = { viewModel.setSyncOnMobileData(it) }
+                        )
+                    },
+                    modifier = Modifier.clickable { viewModel.setSyncOnMobileData(!syncOnMobileData) },
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
                 )
             }
 
-            ExposedDropdownMenuBox(
-                expanded = intervalExpanded,
-                onExpandedChange = { intervalExpanded = it },
-            ) {
-                val intervalIndex = INTERVAL_OPTIONS.indexOf(syncIntervalMinutes).coerceAtLeast(0)
-                OutlinedTextField(
-                    value = INTERVAL_LABELS[intervalIndex],
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Background Sync Interval") },
-                    supportingText = { Text("How often to check for new media") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalExpanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(),
-                )
-                ExposedDropdownMenu(
-                    expanded = intervalExpanded,
-                    onDismissRequest = { intervalExpanded = false },
-                ) {
-                    INTERVAL_LABELS.forEachIndexed { index, label ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                viewModel.setSyncIntervalMinutes(INTERVAL_OPTIONS[index])
-                                intervalExpanded = false
-                            },
+            Spacer(Modifier.height(24.dp))
+
+            SettingsSubHeader("Schedule")
+            SettingsCard {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    ExposedDropdownMenuBox(
+                        expanded = intervalExpanded,
+                        onExpandedChange = { intervalExpanded = it },
+                    ) {
+                        val intervalIndex = INTERVAL_OPTIONS.indexOf(syncIntervalMinutes).coerceAtLeast(0)
+                        OutlinedTextField(
+                            value = INTERVAL_LABELS[intervalIndex],
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Sync Interval") },
+                            supportingText = { Text("How often to check for new media") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
                         )
+                        ExposedDropdownMenu(
+                            expanded = intervalExpanded,
+                            onDismissRequest = { intervalExpanded = false },
+                        ) {
+                            INTERVAL_LABELS.forEachIndexed { index, label ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        viewModel.setSyncIntervalMinutes(INTERVAL_OPTIONS[index])
+                                        intervalExpanded = false
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Sync on Low Battery")
-                    Text(
-                        "Allow background sync even when battery is low",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = syncOnBatteryOnly,
-                    onCheckedChange = { viewModel.setSyncOnBatteryOnly(it) },
+            Spacer(Modifier.height(24.dp))
+
+            SettingsSubHeader("Battery")
+            SettingsCard {
+                ListItem(
+                    headlineContent = { Text("Sync on Low Battery") },
+                    supportingContent = { Text("Allow background sync even when battery is low") },
+                    trailingContent = {
+                        Switch(
+                            checked = syncOnBatteryOnly,
+                            onCheckedChange = { viewModel.setSyncOnBatteryOnly(it) }
+                        )
+                    },
+                    modifier = Modifier.clickable { viewModel.setSyncOnBatteryOnly(!syncOnBatteryOnly) },
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
                 )
             }
         }
     }
+}
+
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(content = content)
+    }
+}
+
+@Composable
+private fun SettingsSubHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+    )
 }
