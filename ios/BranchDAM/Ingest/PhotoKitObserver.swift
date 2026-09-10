@@ -162,12 +162,23 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
                 if let phAsset = phAssets.firstObject {
                     let resources = PHAssetResource.assetResources(for: phAsset)
                     if let pairedVideoRes = resources.first(where: { $0.type == .pairedVideo }) {
-                        _ = LivePhotoExtractor.linkLivePhoto(
-                            stillId: "ph://\(item.localIdentifier)",
-                            videoId: "ph://\(item.localIdentifier)/pairedVideo",
-                            stillFilename: item.filename,
-                            videoFilename: pairedVideoRes.originalFilename
-                        )
+                        let videoLocalId = "ph://\(item.localIdentifier)/pairedVideo"
+                        if AppleCameraRollImportNotifier.shared.autoImportEnabled {
+                            let queueId = BranchDamCoreBridge.shared.enqueueMedia(
+                                localPath: videoLocalId,
+                                filename: pairedVideoRes.originalFilename,
+                                capturedAtUnix: item.creationDateUnix,
+                                localID: videoLocalId
+                            )
+                            if queueId > 0 {
+                                _ = LivePhotoExtractor.linkLivePhoto(
+                                    stillId: "ph://\(item.localIdentifier)",
+                                    videoId: videoLocalId,
+                                    stillFilename: item.filename,
+                                    videoFilename: pairedVideoRes.originalFilename
+                                )
+                            }
+                        }
                     }
                 }
             }

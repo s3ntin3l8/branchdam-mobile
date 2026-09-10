@@ -230,21 +230,22 @@ class MediaStoreObserver(
 
                 val extracted = MotionPhotoExtractor.extractMicroVideo(context, uri, videoFile)
                 if (extracted && com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)) {
-                    EngineHolder.enqueueMedia(
+                    val queueId = EngineHolder.enqueueMedia(
                         localPath = videoFile.absolutePath,
                         filename = videoFilename,
                         capturedAtUnix = item.dateTakenUnix,
                         localId = childLocalID
                     )
+                    if (queueId > 0L) {
+                        EngineHolder.enqueueLineageEvent(
+                            parentLocalID = item.contentUri,
+                            childLocalID = childLocalID,
+                            relationshipType = "MOTION_PHOTO_CONTAINS",
+                            resolver = "android_motion_photo_xmp",
+                            confidence = 1.00
+                        )
+                    }
                 }
-
-                EngineHolder.enqueueLineageEvent(
-                    parentLocalID = item.contentUri,
-                    childLocalID = childLocalID,
-                    relationshipType = "MOTION_PHOTO_CONTAINS",
-                    resolver = "android_motion_photo_xmp",
-                    confidence = 1.00
-                )
             }
         }
     }
