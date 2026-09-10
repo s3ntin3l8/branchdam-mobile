@@ -189,6 +189,7 @@ private fun OnboardingBottomBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(24.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

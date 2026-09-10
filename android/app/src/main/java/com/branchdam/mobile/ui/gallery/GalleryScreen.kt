@@ -22,6 +22,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.branchdam.mobile.ui.components.shimmer
 import com.branchdam.mobile.ui.theme.BranchDamTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,9 +35,23 @@ fun GalleryScreen(
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
 
     val state = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(loadError) {
+        if (loadError != null && items.isNotEmpty()) {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = loadError!!,
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
 
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("Gallery") }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
@@ -66,7 +81,7 @@ fun GalleryScreen(
                         }
                     }
                 }
-                loadError != null -> {
+                loadError != null && items.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize().padding(16.dp),
                         contentAlignment = Alignment.Center,

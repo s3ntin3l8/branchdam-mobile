@@ -3,6 +3,10 @@
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_brand_monogram</item>
         <item name="windowSplashScreenBackground">@color/brand_dark</item>
-        <item name="postSplashScreenTheme">@android:style/Theme.NoTitleBar</item>
+        <item name="postSplashScreenTheme">@style/Theme.App.Runtime</item>
+    </style>
+
+    <style name="Theme.App.Runtime" parent="android:Theme.Material.NoActionBar">
+        <!-- Add other runtime theme customizations if needed -->
     </style>
 </resources>
