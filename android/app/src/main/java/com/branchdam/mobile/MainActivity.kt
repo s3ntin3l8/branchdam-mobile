@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -43,8 +45,6 @@ import com.branchdam.mobile.ui.theme.ThemePreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import androidx.compose.material3.adaptive.currentWindowSizeClass
-import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 
 /**
  * Tracks which permission batch is currently pending. The flow is:
@@ -213,7 +213,7 @@ internal fun DrivePermissionFlow(
 
 class MainActivity : ComponentActivity() {
 
-    @OptIn(ExperimentalMaterial3AdaptiveApi::class)
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge()
@@ -247,7 +247,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             BranchDamTheme(themeMode = themeMode) {
-                val windowSizeClass = currentWindowSizeClass()
+                val windowSizeClass = calculateWindowSizeClass(this)
                 val permissionFlow = remember { PermissionFlowState() }
 
                 val (notificationsBatch, mediaBatch) = remember { runtimePermissionBatches() }

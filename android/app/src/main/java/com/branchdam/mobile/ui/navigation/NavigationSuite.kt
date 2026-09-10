@@ -2,14 +2,12 @@ package com.branchdam.mobile.ui.navigation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.material3.adaptive.WindowSizeClass
-import androidx.compose.material3.adaptive.WindowWidthSizeClass
-import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun NavigationSuiteScaffold(
     windowSizeClass: WindowSizeClass,
