@@ -68,9 +68,8 @@ fun AdvancedSettingsScreen(
                         expanded = batchExpanded,
                         onExpandedChange = { batchExpanded = it },
                     ) {
-                        val intervalIndex = BATCH_SIZE_OPTIONS.indexOf(uploadBatchSize).coerceAtLeast(0)
                         OutlinedTextField(
-                            value = "${BATCH_SIZE_OPTIONS[intervalIndex]} items",
+                            value = "$uploadBatchSize items",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Upload Batch Size") },
@@ -100,9 +99,8 @@ fun AdvancedSettingsScreen(
                         expanded = timeoutExpanded,
                         onExpandedChange = { timeoutExpanded = it },
                     ) {
-                        val timeoutIndex = TIMEOUT_OPTIONS.indexOf(syncTimeoutSecs).coerceAtLeast(0)
                         OutlinedTextField(
-                            value = TIMEOUT_LABELS[timeoutIndex],
+                            value = "${syncTimeoutSecs}s",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Sync Timeout") },
@@ -132,9 +130,8 @@ fun AdvancedSettingsScreen(
                         expanded = debounceExpanded,
                         onExpandedChange = { debounceExpanded = it },
                     ) {
-                        val debounceIndex = DEBOUNCE_OPTIONS.indexOf(observerDebounceMs).coerceAtLeast(0)
                         OutlinedTextField(
-                            value = DEBOUNCE_LABELS[debounceIndex],
+                            value = "${observerDebounceMs}ms",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Observer Debounce") },

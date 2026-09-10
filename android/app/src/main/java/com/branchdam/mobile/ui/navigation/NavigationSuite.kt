@@ -1,37 +1,13 @@
 package com.branchdam.mobile.ui.navigation
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.outlined.AccountTree
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.*
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.adaptive.WindowSizeClass
+import androidx.compose.material3.adaptive.WindowWidthSizeClass
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-
-data class BranchDamNavigationItem(
-    val label: String,
-    val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector,
-    val route: String,
-)
-
-private val NavigationItems = listOf(
-    BranchDamNavigationItem("Lineage", Icons.Filled.AccountTree, Icons.Outlined.AccountTree, Screen.Lineage.route),
-    BranchDamNavigationItem("Gallery", Icons.Filled.PhotoLibrary, Icons.Outlined.PhotoLibrary, Screen.Gallery.route),
-    BranchDamNavigationItem("Sync", Icons.Filled.Sync, Icons.Outlined.Sync, Screen.Sync.route),
-    BranchDamNavigationItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, Screen.Settings.route),
-)
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -63,7 +39,7 @@ fun NavigationSuiteScaffold(
                 modifier = modifier,
                 bottomBar = {
                     NavigationBar {
-                        NavigationItems.forEach { item ->
+                        navigationItems.forEach { item ->
                             val isSelected = currentRoute == item.route
                             NavigationBarItem(
                                 icon = {
@@ -95,7 +71,7 @@ fun NavigationSuiteScaffold(
             ) {
                 NavigationRail {
                     Spacer(Modifier.weight(1f))
-                    NavigationItems.forEach { item ->
+                    navigationItems.forEach { item ->
                         val isSelected = currentRoute == item.route
                         NavigationRailItem(
                             icon = {
@@ -123,7 +99,7 @@ fun NavigationSuiteScaffold(
                 drawerContent = {
                     PermanentDrawerSheet(modifier = Modifier.width(240.dp)) {
                         Spacer(Modifier.height(12.dp))
-                        NavigationItems.forEach { item ->
+                        navigationItems.forEach { item ->
                             val isSelected = currentRoute == item.route
                             NavigationDrawerItem(
                                 label = { Text(item.label) },

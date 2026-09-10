@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
-import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -45,6 +43,8 @@ import com.branchdam.mobile.ui.theme.ThemePreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import androidx.compose.material3.adaptive.currentWindowSizeClass
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 
 /**
  * Tracks which permission batch is currently pending. The flow is:
@@ -213,7 +213,7 @@ internal fun DrivePermissionFlow(
 
 class MainActivity : ComponentActivity() {
 
-    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
+    @OptIn(ExperimentalMaterial3AdaptiveApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge()
@@ -247,7 +247,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             BranchDamTheme(themeMode = themeMode) {
-                val windowSizeClass = calculateWindowSizeClass(this)
+                val windowSizeClass = currentWindowSizeClass()
                 val permissionFlow = remember { PermissionFlowState() }
 
                 val (notificationsBatch, mediaBatch) = remember { runtimePermissionBatches() }
@@ -288,11 +288,13 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+                val sharedPrefs = applicationContext.getSharedPreferences(
+                    BranchDamKeys.PREFS_NAME,
+                    android.content.Context.MODE_PRIVATE,
+                )
                 val isOnboardingCompleted = remember {
-                    applicationContext.getSharedPreferences(
-                        BranchDamKeys.PREFS_NAME,
-                        android.content.Context.MODE_PRIVATE,
-                    ).getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, false)
+                    val serverUrlSet = sharedPrefs.getString(BranchDamApplication.KEY_SERVER_URL, null) != null
+                    sharedPrefs.getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, serverUrlSet)
                 }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -325,10 +327,7 @@ class MainActivity : ComponentActivity() {
                     // Handle onboarding completion persistence
                     LaunchedEffect(currentRoute) {
                         if (currentRoute == Screen.Lineage.route && !isOnboardingCompleted) {
-                            applicationContext.getSharedPreferences(
-                                BranchDamKeys.PREFS_NAME,
-                                android.content.Context.MODE_PRIVATE,
-                            ).edit().putBoolean(BranchDamKeys.ONBOARDING_COMPLETED, true).apply()
+                            sharedPrefs.edit().putBoolean(BranchDamKeys.ONBOARDING_COMPLETED, true).apply()
                         }
                     }
 
