@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // Handshake performs agent handshake against POST /api/v1/agent/handshake.
@@ -54,10 +55,49 @@ func (c *Client) GetNodeStatuses(ctx context.Context, nodeUUIDs []string) ([]Nod
 	return resp.Statuses, nil
 }
 
-// SendTelemetry dispatches mobile battery/storage telemetry via POST /api/v1/mobile/telemetry.
+// SendTelemetry dispatches mobile storage telemetry via POST /api/v1/agent/telemetry.
 func (c *Client) SendTelemetry(ctx context.Context, telemetry MobileTelemetry) error {
+	agentID := telemetry.DeviceID
+	if agentID == "" {
+		agentID = c.agentID
+	}
+	ts := telemetry.TimestampUnix
+	if ts <= 0 {
+		ts = time.Now().Unix()
+	}
+
+	payload := struct {
+		AgentID        string `json:"agentId"`
+		ClientVersion  string `json:"clientVersion,omitempty"`
+		TimestampUnix  int64  `json:"timestampUnix"`
+		ScratchStorage struct {
+			MountPath     string `json:"mountPath"`
+			TotalBytes    int64  `json:"totalBytes"`
+			FreeBytes     int64  `json:"freeBytes"`
+			UsedBytes     int64  `json:"usedBytes"`
+			PrunableBytes int64  `json:"prunableBytes"`
+		} `json:"scratchStorage"`
+	}{
+		AgentID:       agentID,
+		ClientVersion: telemetry.ClientVersion,
+		TimestampUnix: ts,
+		ScratchStorage: struct {
+			MountPath     string `json:"mountPath"`
+			TotalBytes    int64  `json:"totalBytes"`
+			FreeBytes     int64  `json:"freeBytes"`
+			UsedBytes     int64  `json:"usedBytes"`
+			PrunableBytes int64  `json:"prunableBytes"`
+		}{
+			MountPath:     "Internal Storage",
+			TotalBytes:    telemetry.TotalBytes,
+			FreeBytes:     telemetry.FreeBytes,
+			UsedBytes:     telemetry.UsedBytes,
+			PrunableBytes: telemetry.SafeToFreeBytes,
+		},
+	}
+
 	var resp map[string]any
-	if err := c.postJSON(ctx, "/api/v1/mobile/telemetry", telemetry, &resp); err != nil {
+	if err := c.postJSON(ctx, "/api/v1/agent/telemetry", payload, &resp); err != nil {
 		return wrapCallError("send telemetry failed", err)
 	}
 	return nil

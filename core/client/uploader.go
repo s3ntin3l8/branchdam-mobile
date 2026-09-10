@@ -16,6 +16,7 @@ type UploadOptions struct {
 	CameraModel    string
 	FastHash       string
 	Blake3Hash     string
+	SourcePathHash string
 	CapturedAtUnix int64
 	ProgressFn     ProgressCallback
 }
@@ -68,6 +69,9 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 	if opts.FastHash != "" {
 		req.Header.Set("X-Fast-Hash", opts.FastHash)
+	}
+	if opts.SourcePathHash != "" {
+		req.Header.Set("X-Source-Path-Hash", opts.SourcePathHash)
 	}
 	if opts.CapturedAtUnix > 0 {
 		req.Header.Set("X-Capture-Timestamp", strconv.FormatInt(opts.CapturedAtUnix, 10))

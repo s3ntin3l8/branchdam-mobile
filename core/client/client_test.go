@@ -121,27 +121,41 @@ func TestGetNodeStatuses(t *testing.T) {
 
 func TestSendTelemetry(t *testing.T) {
 	var received bool
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/mobile/telemetry" {
+		if r.URL.Path != "/api/v1/agent/telemetry" {
 			http.NotFound(w, r)
 			return
 		}
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		received = true
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "acknowledgedAtUnix": 1724000001})
 	}))
 	defer server.Close()
 
 	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
 	err := c.SendTelemetry(context.Background(), MobileTelemetry{
-		DeviceID:     "pixel-10-fold",
-		BatteryLevel: 85,
-		IsCharging:   true,
+		DeviceID:        "pixel-10-fold",
+		TotalBytes:      256000000000,
+		FreeBytes:       128000000000,
+		UsedBytes:       128000000000,
+		SafeToFreeBytes: 32000000000,
+		BatteryLevel:    85,
+		IsCharging:      true,
+		TimestampUnix:   1724000000,
 	})
 	if err != nil {
 		t.Fatalf("SendTelemetry failed: %v", err)
 	}
 	if !received {
 		t.Fatal("expected telemetry to be received")
+	}
+	if receivedBody["agentId"] != "pixel-10-fold" {
+		t.Errorf("agentId = %v, want pixel-10-fold", receivedBody["agentId"])
+	}
+	scratch, ok := receivedBody["scratchStorage"].(map[string]any)
+	if !ok || scratch["mountPath"] != "Internal Storage" {
+		t.Errorf("expected scratchStorage with mountPath 'Internal Storage', got %v", receivedBody["scratchStorage"])
 	}
 }
 
@@ -150,6 +164,7 @@ func TestUploadStream(t *testing.T) {
 	var receivedBytes []byte
 	var capturedBlake3 string
 	var capturedCamera string
+	var capturedSourcePathHash string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/agent/upload" {
@@ -158,6 +173,7 @@ func TestUploadStream(t *testing.T) {
 		}
 		capturedBlake3 = r.Header.Get("X-Blake3-Hash")
 		capturedCamera = r.Header.Get("X-Camera-Model")
+		capturedSourcePathHash = r.Header.Get("X-Source-Path-Hash")
 		filename := r.Header.Get("X-Filename")
 		if filename != "PXL_TEST.dng" {
 			t.Errorf("unexpected filename header: %s", filename)
@@ -191,6 +207,7 @@ func TestUploadStream(t *testing.T) {
 		CameraModel:    "Pixel-Fold",
 		Blake3Hash:     "fakeblake3hash",
 		FastHash:       "fast1234",
+		SourcePathHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", // pragma: allowlist secret
 		CapturedAtUnix: 1724000000,
 		ProgressFn: func(bytesSent int64, totalBytes int64) {
 			atomic.AddInt64(&progressCalled, 1)
@@ -219,6 +236,9 @@ func TestUploadStream(t *testing.T) {
 	}
 	if capturedCamera != "Pixel-Fold" {
 		t.Fatalf("camera header mismatch: %s", capturedCamera)
+	}
+	if capturedSourcePathHash != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" { // pragma: allowlist secret
+		t.Fatalf("source path hash header mismatch: %s", capturedSourcePathHash)
 	}
 	if atomic.LoadInt64(&progressCalled) == 0 {
 		t.Fatal("expected progress callback to be called")
