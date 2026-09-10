@@ -17,11 +17,16 @@ jobs:
     # The fork guard (head.repo.full_name != github.repository -> skip) is enforced
     # inside the reusable workflow itself (s3ntin3l8/.github#53) as defense-in-depth;
     # callers don't need their own copy.
+    #
+    # NOTE: excluding by PR *author* (github.event.pull_request.user.login),
+    # not github.actor -- on `ready_for_review`, github.actor is whoever
+    # clicked "Ready for review", which is not necessarily who opened the
+    # PR. Author-based exclusion keeps working on both trigger types.
     if: >-
       github.event_name == 'pull_request' &&
-      github.actor != 's3ntin3l8-hermes[bot]' &&
-      github.actor != 'dependabot[bot]' &&
-      github.actor != 'github-actions[bot]' &&
+      github.event.pull_request.user.login != 's3ntin3l8-hermes[bot]' &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'github-actions[bot]' &&
       github.event.pull_request.draft == false &&
       !startsWith(github.event.pull_request.head.ref, 'mullion/task-')
     permissions:
