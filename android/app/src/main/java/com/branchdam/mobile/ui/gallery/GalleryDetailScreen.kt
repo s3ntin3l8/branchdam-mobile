@@ -61,7 +61,7 @@ fun GalleryDetailScreen(
                     }
                 },
                 actions = {
-                    if (galleryItem != null) {
+                    if (galleryItem != null && !galleryItem.isOffloaded) {
                         IconButton(onClick = {
                             viewModel.uploadItem(context, galleryItem.mediaItem) {
                                 scope.launch {
@@ -79,7 +79,7 @@ fun GalleryDetailScreen(
             )
         },
         floatingActionButton = {
-            if (galleryItem != null) {
+            if (galleryItem != null && !galleryItem.isOffloaded) {
                 ExtendedFloatingActionButton(
                     onClick = {
                         viewModel.uploadItem(context, galleryItem.mediaItem) {
@@ -124,17 +124,9 @@ fun GalleryDetailScreen(
                         .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(Uri.parse(galleryItem.mediaItem.contentUri))
-                            .crossfade(300)
-                            .build(),
-                        contentDescription = galleryItem.mediaItem.displayName,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
                     if (galleryItem.mediaItem.isVideo) {
+                        // Intentional placeholder: video assets display a centered play affordance
+                        // against a dark backdrop without decoding video frames inline.
                         Surface(
                             shape = MaterialTheme.shapes.extraLarge,
                             color = Color.Black.copy(alpha = 0.6f),
@@ -149,6 +141,16 @@ fun GalleryDetailScreen(
                                 )
                             }
                         }
+                    } else {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(Uri.parse(galleryItem.mediaItem.contentUri))
+                                .crossfade(300)
+                                .build(),
+                            contentDescription = galleryItem.mediaItem.displayName,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
 
