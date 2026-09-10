@@ -39,10 +39,11 @@ fun GalleryScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(loadError) {
-        if (loadError != null && items.isNotEmpty()) {
+        val currentError = loadError
+        if (currentError != null && items.isNotEmpty()) {
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    message = loadError!!,
+                    message = currentError,
                     duration = SnackbarDuration.Short
                 )
             }
@@ -61,6 +62,7 @@ fun GalleryScreen(
             state = state,
             modifier = Modifier.padding(padding)
         ) {
+            val currentError = loadError
             when {
                 isLoading && items.isEmpty() -> {
                     LazyVerticalGrid(
@@ -81,13 +83,13 @@ fun GalleryScreen(
                         }
                     }
                 }
-                loadError != null && items.isEmpty() -> {
+                currentError != null && items.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize().padding(16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            loadError!!,
+                            currentError,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                         )
