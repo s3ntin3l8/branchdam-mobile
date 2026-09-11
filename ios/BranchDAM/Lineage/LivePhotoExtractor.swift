@@ -18,6 +18,8 @@ public class LivePhotoExtractor {
 
     /**
      * Resolves companion paired video (.MOV) for Live Photos and generates lineage link.
+     * The paired video uses the synthetic child identifier `ph://<stillId>/pairedVideo`,
+     * matching the carved microvideo pattern on Android.
      */
     public static func linkLivePhoto(stillId: String, videoId: String, stillFilename: String, videoFilename: String) -> String {
         return BranchDamCoreBridge.shared.enqueueLineageEvent(
