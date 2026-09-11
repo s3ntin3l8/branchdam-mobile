@@ -107,7 +107,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             var successCount = 0
             for (item in itemsToUpload) {
                 val mediaId = EngineHolder.enqueueMedia(
@@ -136,7 +136,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val mediaId = EngineHolder.enqueueMedia(
                 localPath = mediaItem.filePath,
                 filename = mediaItem.displayName,
@@ -157,7 +157,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         return _items.value.find { it.mediaItem.id == id }
     }
 
+    @androidx.annotation.VisibleForTesting
+    internal fun setItemsForTesting(testItems: List<GalleryItem>) {
+        _items.value = testItems
+    }
+
     companion object {
         private const val TAG = "GalleryViewModel"
+
+        @androidx.annotation.VisibleForTesting
+        internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
     }
 }

@@ -2,28 +2,60 @@ package com.branchdam.mobile
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
+import androidx.work.testing.WorkManagerTestInitHelper
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.ui.gallery.GalleryItem
 import com.branchdam.mobile.ui.gallery.GalleryViewModel
 import com.branchdam.mobile.ui.gallery.formatDateTaken
 import com.branchdam.mobile.ui.gallery.formatFileSize
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class GalleryViewModelTest {
 
     @get:Rule
     val instantTaskExecutorRule = InstantTaskExecutorRule()
+
+    private val testDispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+        GalleryViewModel.ioDispatcher = testDispatcher
+
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val config = Configuration.Builder()
+            .setMinimumLoggingLevel(android.util.Log.DEBUG)
+            .build()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+        GalleryViewModel.ioDispatcher = Dispatchers.IO
+    }
 
     @Test
     fun testSelectionStateAndToggle() {
@@ -50,44 +82,105 @@ class GalleryViewModelTest {
     @Test
     fun testGetItemById() {
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
-        assertNull("Lookup on empty list should return null", viewModel.getItemById(999L))
+        val localMedia = MediaItem(
+            id = 50L, contentUri = "content://images/50",
+            filePath = "/sdcard/DCIM/PXL_050.jpg", displayName = "PXL_050.jpg",
+            mimeType = "image/jpeg", sizeBytes = 4_000_000L,
+            dateTakenUnix = 1724000000L, isRaw = false,
+        )
+        val item = GalleryItem(localMedia, lineageStatus = "Unpaired", isOffloaded = false)
+        viewModel.setItemsForTesting(listOf(item))
+
+        val result = viewModel.getItemById(50L)
+        assertNotNull("Item 50 should be retrieved", result)
+        assertEquals("PXL_050.jpg", result?.mediaItem?.displayName)
+
+        assertNull("Lookup for non-existent ID should return null", viewModel.getItemById(999L))
     }
 
     @Test
-    fun testUploadSelectedItems_emptySelectionDoesNothing() {
+    fun testSelectAll_excludesOffloadedItems() {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        val localItem = GalleryItem(
+            mediaItem = MediaItem(
+                id = 101L, contentUri = "content://images/101",
+                filePath = "/sdcard/DCIM/PXL_101.jpg", displayName = "PXL_101.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 1724000000L, isRaw = false
+            ),
+            lineageStatus = "Unpaired",
+            isOffloaded = false
+        )
+        val offloadedItem = GalleryItem(
+            mediaItem = MediaItem(
+                id = 102L, contentUri = "content://images/102",
+                filePath = "/sdcard/DCIM/PXL_102.jpg", displayName = "PXL_102.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 1724000000L, isRaw = false
+            ),
+            lineageStatus = "Unpaired",
+            isOffloaded = true
+        )
+
+        viewModel.setItemsForTesting(listOf(localItem, offloadedItem))
+        viewModel.selectAll()
+
+        val selected = viewModel.selectedItemIds.value
+        assertTrue("Local item 101 must be selected by selectAll()", selected.contains(101L))
+        assertFalse("Offloaded item 102 must NOT be selected by selectAll()", selected.contains(102L))
+        assertEquals("Only 1 non-offloaded item should be selected", 1, selected.size)
+    }
+
+    @Test
+    fun testUploadSelectedItems_filtersOutOffloadedItems() = runTest(testDispatcher) {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        val localItem = GalleryItem(
+            mediaItem = MediaItem(
+                id = 201L, contentUri = "content://images/201",
+                filePath = "/sdcard/DCIM/PXL_201.jpg", displayName = "PXL_201.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 1724000000L, isRaw = false
+            ),
+            lineageStatus = "Unpaired",
+            isOffloaded = false
+        )
+        val offloadedItem = GalleryItem(
+            mediaItem = MediaItem(
+                id = 202L, contentUri = "content://images/202",
+                filePath = "/sdcard/DCIM/PXL_202.jpg", displayName = "PXL_202.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 1724000000L, isRaw = false
+            ),
+            lineageStatus = "Unpaired",
+            isOffloaded = true
+        )
+
+        viewModel.setItemsForTesting(listOf(localItem, offloadedItem))
+        viewModel.toggleSelection(201L)
+        viewModel.toggleSelection(202L)
+        assertEquals(2, viewModel.selectedItemIds.value.size)
+
+        var enqueuedCount = -1
+        viewModel.uploadSelectedItems(ApplicationProvider.getApplicationContext()) { count ->
+            enqueuedCount = count
+        }
+        advanceUntilIdle()
+
+        assertEquals("Only non-offloaded item should be enqueued for upload", 1, enqueuedCount)
+        assertTrue("Selection should be cleared after upload", viewModel.selectedItemIds.value.isEmpty())
+    }
+
+    @Test
+    fun testUploadSelectedItems_emptySelectionDoesNothing() = runTest(testDispatcher) {
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
         var callbackCount = -1
         viewModel.uploadSelectedItems(ApplicationProvider.getApplicationContext()) { count ->
             callbackCount = count
         }
+        advanceUntilIdle()
+
         assertEquals("Empty selection should return 0", 0, callbackCount)
         assertTrue("Selection should remain empty", viewModel.selectedItemIds.value.isEmpty())
-    }
-
-    @Test
-    fun testOffloadedItemFiltering() {
-        val localMedia = MediaItem(
-            id = 1L, contentUri = "content://images/1",
-            filePath = "/sdcard/DCIM/PXL_001.jpg", displayName = "PXL_001.jpg",
-            mimeType = "image/jpeg", sizeBytes = 4_000_000L,
-            dateTakenUnix = 1724000000L, isRaw = false,
-        )
-        val offloadedMedia = MediaItem(
-            id = 2L, contentUri = "content://images/2",
-            filePath = "/sdcard/DCIM/PXL_002.jpg", displayName = "PXL_002.jpg",
-            mimeType = "image/jpeg", sizeBytes = 4_000_000L,
-            dateTakenUnix = 1724000000L, isRaw = false,
-        )
-
-        val item1 = GalleryItem(localMedia, lineageStatus = "Unpaired", isOffloaded = false)
-        val item2 = GalleryItem(offloadedMedia, lineageStatus = "Unpaired", isOffloaded = true)
-
-        val items = listOf(item1, item2)
-        val selectable = items.filter { !it.isOffloaded }
-
-        assertEquals(1, selectable.size)
-        assertEquals(1L, selectable[0].mediaItem.id)
-        assertFalse(selectable.any { it.isOffloaded })
     }
 
     @Test
