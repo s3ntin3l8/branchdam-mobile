@@ -65,6 +65,32 @@ class GalleryViewModelTest {
     }
 
     @Test
+    fun testOffloadedItemFiltering() {
+        val localMedia = MediaItem(
+            id = 1L, contentUri = "content://images/1",
+            filePath = "/sdcard/DCIM/PXL_001.jpg", displayName = "PXL_001.jpg",
+            mimeType = "image/jpeg", sizeBytes = 4_000_000L,
+            dateTakenUnix = 1724000000L, isRaw = false,
+        )
+        val offloadedMedia = MediaItem(
+            id = 2L, contentUri = "content://images/2",
+            filePath = "/sdcard/DCIM/PXL_002.jpg", displayName = "PXL_002.jpg",
+            mimeType = "image/jpeg", sizeBytes = 4_000_000L,
+            dateTakenUnix = 1724000000L, isRaw = false,
+        )
+
+        val item1 = GalleryItem(localMedia, lineageStatus = "Unpaired", isOffloaded = false)
+        val item2 = GalleryItem(offloadedMedia, lineageStatus = "Unpaired", isOffloaded = true)
+
+        val items = listOf(item1, item2)
+        val selectable = items.filter { !it.isOffloaded }
+
+        assertEquals(1, selectable.size)
+        assertEquals(1L, selectable[0].mediaItem.id)
+        assertFalse(selectable.any { it.isOffloaded })
+    }
+
+    @Test
     fun testFormatFileSize() {
         assertEquals("0 B", formatFileSize(0L))
         assertEquals("0 B", formatFileSize(-10L))

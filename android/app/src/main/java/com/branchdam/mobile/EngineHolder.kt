@@ -77,7 +77,8 @@ object EngineHolder {
         capturedAtUnix: Long,
         localId: String,
     ): Long {
-        if (!nativeAvailable.get() || !isInitialized) return 1L
+        if (nativeAvailable.get() && !isInitialized) return 0L
+        if (!nativeAvailable.get()) return 1L
         return try {
             executor.submit(Callable {
                 Branchdam.bindingEnqueueMedia(localPath, filename, localId, "", capturedAtUnix, 0L)

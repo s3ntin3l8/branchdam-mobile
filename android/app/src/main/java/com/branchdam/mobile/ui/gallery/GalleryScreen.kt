@@ -29,8 +29,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.branchdam.mobile.ui.components.shimmer
-import com.branchdam.mobile.ui.theme.BranchDamTheme
+import com.branchdam.mobile.ui.components.*
+import com.branchdam.mobile.ui.theme.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,8 +83,10 @@ fun GalleryScreen(
                         }
                     },
                     actions = {
+                        val selectableCount = remember(items) { items.count { !it.isOffloaded } }
+                        val isAllSelectableSelected = selectableCount > 0 && selectedItemIds.size == selectableCount
                         IconButton(onClick = {
-                            if (selectedItemIds.size == items.size) {
+                            if (isAllSelectableSelected) {
                                 viewModel.clearSelection()
                             } else {
                                 viewModel.selectAll()
@@ -92,7 +94,7 @@ fun GalleryScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
-                                contentDescription = "Select all"
+                                contentDescription = if (isAllSelectableSelected) "Deselect all" else "Select all"
                             )
                         }
                         FilledTonalButton(
