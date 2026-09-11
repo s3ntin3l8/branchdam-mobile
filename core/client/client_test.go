@@ -72,6 +72,9 @@ func TestSubmitEvent(t *testing.T) {
 		}
 		var req AgentEventRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.EventUUID == "" {
+			t.Error("expected non-empty EventUUID in request")
+		}
 		if req.EventType != "EVENT_EDGE_ATTACHED" {
 			t.Errorf("unexpected event type: %s", req.EventType)
 		}
