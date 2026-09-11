@@ -82,7 +82,7 @@ func New(q *queue.Queue, c *client.Client) *Engine {
 }
 
 // EnqueueLocalCapture reads a local media file, calculates hashes, records local state, and queues for upload.
-func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix int64, localID string, cameraModel ...string) (*queue.UploadItem, error) {
+func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix int64, localID string, cameraModel, sourcePathHash string) (*queue.UploadItem, error) {
 	// B.2.5: Stat before Open so a missing-file failure surfaces with
 	// the canonical IO_ERROR code at the FFI boundary rather than a
 	// generic open error.
@@ -129,17 +129,13 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		return existing, nil
 	}
 
-	cam := ""
-	if len(cameraModel) > 0 && cameraModel[0] != "" {
-		cam = cameraModel[0]
-	} else if e.c != nil {
+	cam := cameraModel
+	if cam == "" && e.c != nil {
 		cam = e.c.AgentID()
 	}
 
-	srcPathHash := ""
-	if len(cameraModel) > 1 && cameraModel[1] != "" {
-		srcPathHash = cameraModel[1]
-	} else if localPath != "" {
+	srcPathHash := sourcePathHash
+	if srcPathHash == "" && localPath != "" {
 		h := sha256.Sum256([]byte(localPath))
 		srcPathHash = hex.EncodeToString(h[:])
 	}

@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -79,7 +81,7 @@ func TestEngineFullLifecycle(t *testing.T) {
 	}
 
 	// 1. Enqueue capture
-	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_20260829_001.dng", 1724000000, "local_uri_1")
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_20260829_001.dng", 1724000000, "local_uri_1", "", "")
 	if err != nil {
 		t.Fatalf("EnqueueLocalCapture failed: %v", err)
 	}
@@ -149,7 +151,7 @@ func TestEnqueueLocalCapture_Dedup(t *testing.T) {
 	}
 
 	// First enqueue
-	item1, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DUPLICATE.dng", 1724000000, "local_uri_dup_1")
+	item1, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DUPLICATE.dng", 1724000000, "local_uri_dup_1", "", "")
 	if err != nil {
 		t.Fatalf("first EnqueueLocalCapture failed: %v", err)
 	}
@@ -161,7 +163,7 @@ func TestEnqueueLocalCapture_Dedup(t *testing.T) {
 	}
 
 	// Second enqueue with same file content (same BLAKE3 hash)
-	item2, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DUPLICATE.dng", 1724000000, "local_uri_dup_2")
+	item2, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DUPLICATE.dng", 1724000000, "local_uri_dup_2", "", "")
 	if err != nil {
 		t.Fatalf("second EnqueueLocalCapture failed: %v", err)
 	}
@@ -204,7 +206,7 @@ func TestSyncUploads_DedupResponse(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_SERVER_DUP.dng", 1724000000, "local_uri_srv")
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_SERVER_DUP.dng", 1724000000, "local_uri_srv", "", "")
 	if err != nil {
 		t.Fatalf("EnqueueLocalCapture failed: %v", err)
 	}
@@ -251,7 +253,7 @@ func TestEnqueueLocalCapture_FileMissing_SurfacesIOError(t *testing.T) {
 	eng := New(q, nil)
 
 	missingPath := filepath.Join(tempDir, "does_not_exist.dng")
-	_, err = eng.EnqueueLocalCapture(missingPath, "does_not_exist.dng", 1724000000, "local_uri_missing")
+	_, err = eng.EnqueueLocalCapture(missingPath, "does_not_exist.dng", 1724000000, "local_uri_missing", "", "")
 	if err == nil {
 		t.Fatalf("expected error for missing file, got nil")
 	}
@@ -341,7 +343,7 @@ func TestSyncUploads_CancelDoesNotStallNextBatch(t *testing.T) {
 	if err := os.WriteFile(testFilePath, []byte("resume"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if _, err := eng.EnqueueLocalCapture(testFilePath, "PXL_RESUME.dng", 1724000000, "local_uri_resume"); err != nil {
+	if _, err := eng.EnqueueLocalCapture(testFilePath, "PXL_RESUME.dng", 1724000000, "local_uri_resume", "", ""); err != nil {
 		t.Fatalf("EnqueueLocalCapture: %v", err)
 	}
 
@@ -397,7 +399,7 @@ func TestSyncUploads_DedupNoNodeUUID_HardFailure(t *testing.T) {
 	if err := os.WriteFile(testFilePath, []byte("payload"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DEDUP_EMPTY.dng", 1724000000, "local_uri_dup_empty")
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_DEDUP_EMPTY.dng", 1724000000, "local_uri_dup_empty", "", "")
 	if err != nil {
 		t.Fatalf("EnqueueLocalCapture: %v", err)
 	}
@@ -469,3 +471,52 @@ func TestSafeSpaceReclaim_Ineligible(t *testing.T) {
 		t.Fatalf("expected NOT offloaded (server said not verified), but flag is set")
 	}
 }
+
+func TestEnqueueLocalCapture_SourcePathHash(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_srcpath_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	c := client.New(client.Config{AgentID: "fallback-camera-model"})
+	eng := New(q, c)
+
+	f1 := filepath.Join(tempDir, "f1.dng")
+	if err := os.WriteFile(f1, []byte("f1-bytes"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// 1. Explicit source path hash and camera model
+	item1, err := eng.EnqueueLocalCapture(f1, "f1.dng", 1724000000, "local-1", "Sony-A7IV", "custom-source-hash-123")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+	if item1.CameraModel != "Sony-A7IV" {
+		t.Fatalf("CameraModel = %q, want Sony-A7IV", item1.CameraModel)
+	}
+	if item1.SourcePathHash != "custom-source-hash-123" {
+		t.Fatalf("SourcePathHash = %q, want custom-source-hash-123", item1.SourcePathHash)
+	}
+
+	// 2. Fallback source path hash and camera model
+	f2 := filepath.Join(tempDir, "f2.dng")
+	if err := os.WriteFile(f2, []byte("f2-bytes"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	item2, err := eng.EnqueueLocalCapture(f2, "f2.dng", 1724000000, "local-2", "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+	if item2.CameraModel != "fallback-camera-model" {
+		t.Fatalf("CameraModel = %q, want fallback-camera-model", item2.CameraModel)
+	}
+	expectedHash := sha256.Sum256([]byte(f2))
+	expectedHashHex := hex.EncodeToString(expectedHash[:])
+	if item2.SourcePathHash != expectedHashHex {
+		t.Fatalf("SourcePathHash = %q, want %q", item2.SourcePathHash, expectedHashHex)
+	}
+}
+

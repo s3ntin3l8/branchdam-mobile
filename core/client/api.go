@@ -16,7 +16,7 @@ import (
 func (c *Client) Handshake(ctx context.Context, lastProcessedEventUUID string) (*HandshakeResponse, error) {
 	reqBody := HandshakeRequest{
 		AgentID:                c.agentID,
-		ClientVersion:          c.clientVersion,
+		ClientVersion:          c.Version(),
 		LastProcessedEventUUID: lastProcessedEventUUID,
 	}
 
@@ -61,9 +61,12 @@ func (c *Client) SendTelemetry(ctx context.Context, telemetry MobileTelemetry) e
 	if agentID == "" {
 		agentID = telemetry.DeviceID
 	}
-	clientVersion := telemetry.ClientVersion
+	clientVersion := c.clientVersion
 	if clientVersion == "" {
-		clientVersion = c.clientVersion
+		clientVersion = telemetry.ClientVersion
+	}
+	if clientVersion == "" {
+		clientVersion = "0.1.0"
 	}
 	ts := telemetry.TimestampUnix
 	if ts <= 0 {

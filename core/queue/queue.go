@@ -31,7 +31,30 @@ func Open(dbPath string) (*Queue, error) {
 	}
 
 	// Schema evolution: ensure source_path_hash column exists on existing DBs
-	_, _ = db.Exec(`ALTER TABLE upload_queue ADD COLUMN source_path_hash TEXT NOT NULL DEFAULT ''`)
+	var hasSourcePathHash bool
+	rows, err := db.Query(`PRAGMA table_info(upload_queue)`)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("query upload_queue table_info: %w", err)
+	}
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue any
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err == nil && name == "source_path_hash" {
+			hasSourcePathHash = true
+			break
+		}
+	}
+	_ = rows.Close()
+
+	if !hasSourcePathHash {
+		if _, err := db.Exec(`ALTER TABLE upload_queue ADD COLUMN source_path_hash TEXT NOT NULL DEFAULT ''`); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("add source_path_hash column: %w", err)
+		}
+	}
 
 	// Reset any orphaned IN_PROGRESS items from a previous crashed/killed session back to PENDING
 	now := time.Now().Unix()

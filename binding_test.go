@@ -131,3 +131,57 @@ func TestBindingLookupBlake3ForLocalID_RoundTrip(t *testing.T) {
 		t.Fatalf("hash = %q, want %q", got, want)
 	}
 }
+
+// TestBindingEnqueueMediaWithSourceHash verifies that BindingEnqueueMediaWithSourceHash
+// stores the explicit sourcePathHash into the upload queue, and BindingEnqueueMedia
+// falls back to hashing the local path.
+func TestBindingEnqueueMediaWithSourceHash(t *testing.T) {
+	dir := t.TempDir()
+	if err := BindingOpen(filepath.Join(dir, "engine.db"), "http://localhost", "", "test", "test", "localhost"); err != nil {
+		t.Fatalf("BindingOpen: %v", err)
+	}
+	defer BindingClose()
+
+	p1 := filepath.Join(dir, "sample1.jpg")
+	if err := os.WriteFile(p1, []byte("sample1"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	id1, err := BindingEnqueueMediaWithSourceHash(p1, "sample1.jpg", "local-1", "Canon-R5", "explicit-source-hash-456", 1724000000, 7)
+	if err != nil {
+		t.Fatalf("BindingEnqueueMediaWithSourceHash: %v", err)
+	}
+	if id1 <= 0 {
+		t.Fatalf("expected id > 0, got %d", id1)
+	}
+
+	var srcHash1 string
+	if err := bindingEngine.queue.DB().QueryRow("SELECT source_path_hash FROM upload_queue WHERE id = ?", id1).Scan(&srcHash1); err != nil {
+		t.Fatalf("query source_path_hash 1: %v", err)
+	}
+	if srcHash1 != "explicit-source-hash-456" {
+		t.Fatalf("SourcePathHash = %q, want explicit-source-hash-456", srcHash1)
+	}
+
+	p2 := filepath.Join(dir, "sample2.jpg")
+	if err := os.WriteFile(p2, []byte("sample2"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	id2, err := BindingEnqueueMedia(p2, "sample2.jpg", "local-2", "Canon-R5", 1724000000, 7)
+	if err != nil {
+		t.Fatalf("BindingEnqueueMedia: %v", err)
+	}
+	if id2 <= 0 {
+		t.Fatalf("expected id > 0, got %d", id2)
+	}
+
+	var srcHash2 string
+	if err := bindingEngine.queue.DB().QueryRow("SELECT source_path_hash FROM upload_queue WHERE id = ?", id2).Scan(&srcHash2); err != nil {
+		t.Fatalf("query source_path_hash 2: %v", err)
+	}
+	if srcHash2 == "" || srcHash2 == "explicit-source-hash-456" {
+		t.Fatalf("expected fallback SourcePathHash, got %q", srcHash2)
+	}
+}
+
