@@ -157,27 +157,144 @@ func TestGetNodeStatuses(t *testing.T) {
 
 func TestSendTelemetry(t *testing.T) {
 	var received bool
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/mobile/telemetry" {
+		if r.URL.Path != "/api/v1/agent/telemetry" {
 			http.NotFound(w, r)
 			return
 		}
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		received = true
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "acknowledgedAtUnix": 1724000001})
 	}))
 	defer server.Close()
 
-	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1", ClientVersion: "1.2.3"})
 	err := c.SendTelemetry(context.Background(), MobileTelemetry{
-		DeviceID:     "pixel-10-fold",
-		BatteryLevel: 85,
-		IsCharging:   true,
+		DeviceID:        "pixel-10-fold",
+		TotalBytes:      256000000000,
+		FreeBytes:       128000000000,
+		UsedBytes:       128000000000,
+		SafeToFreeBytes: 32000000000,
+		BatteryLevel:    85,
+		IsCharging:      true,
+		TimestampUnix:   1724000000,
 	})
 	if err != nil {
 		t.Fatalf("SendTelemetry failed: %v", err)
 	}
 	if !received {
 		t.Fatal("expected telemetry to be received")
+	}
+	if receivedBody["agentId"] != "agent-1" {
+		t.Errorf("agentId = %v, want agent-1", receivedBody["agentId"])
+	}
+	if receivedBody["clientVersion"] != "1.2.3" {
+		t.Errorf("clientVersion = %v, want 1.2.3", receivedBody["clientVersion"])
+	}
+	scratch, ok := receivedBody["scratchStorage"].(map[string]any)
+	if !ok || scratch["mountPath"] != DefaultMobileMountPath {
+		t.Errorf("expected scratchStorage with mountPath '%s', got %v", DefaultMobileMountPath, receivedBody["scratchStorage"])
+	}
+	if scratch["totalBytes"] != float64(256000000000) {
+		t.Errorf("totalBytes = %v, want 256000000000", scratch["totalBytes"])
+	}
+	if scratch["freeBytes"] != float64(128000000000) {
+		t.Errorf("freeBytes = %v, want 128000000000", scratch["freeBytes"])
+	}
+	if scratch["usedBytes"] != float64(128000000000) {
+		t.Errorf("usedBytes = %v, want 128000000000", scratch["usedBytes"])
+	}
+	if scratch["prunableBytes"] != float64(32000000000) {
+		t.Errorf("prunableBytes = %v, want 32000000000", scratch["prunableBytes"])
+	}
+}
+
+func TestSendTelemetry_DeviceIDAndVersionFallback(t *testing.T) {
+	var receivedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/agent/telemetry" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "acknowledgedAtUnix": 1724000001})
+	}))
+	defer server.Close()
+
+	// When c.AgentID is empty, fall back to telemetry.DeviceID; when telemetry.ClientVersion is set, use it
+	c := New(Config{BaseURL: server.URL, APIKey: "key"})
+	err := c.SendTelemetry(context.Background(), MobileTelemetry{
+		DeviceID:      "pixel-fallback",
+		ClientVersion: "2.0.0-custom",
+		TimestampUnix: 1724000000,
+	})
+	if err != nil {
+		t.Fatalf("SendTelemetry failed: %v", err)
+	}
+	if receivedBody["agentId"] != "pixel-fallback" {
+		t.Errorf("agentId = %v, want pixel-fallback", receivedBody["agentId"])
+	}
+	if receivedBody["clientVersion"] != "2.0.0-custom" {
+		t.Errorf("clientVersion = %v, want 2.0.0-custom", receivedBody["clientVersion"])
+	}
+}
+
+func TestSendTelemetry_PlatformMountPath(t *testing.T) {
+	var receivedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "acknowledgedAtUnix": 1724000001})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key"})
+
+	// 1. iOS platform reports DefaultIOSMountPath
+	err := c.SendTelemetry(context.Background(), MobileTelemetry{
+		DeviceID:      "iphone-16-pro",
+		Platform:      "ios",
+		TimestampUnix: 1724000000,
+	})
+	if err != nil {
+		t.Fatalf("SendTelemetry: %v", err)
+	}
+	scratch := receivedBody["scratchStorage"].(map[string]any)
+	if scratch["mountPath"] != DefaultIOSMountPath {
+		t.Errorf("mountPath for iOS = %v, want %s", scratch["mountPath"], DefaultIOSMountPath)
+	}
+
+	// 2. Custom MountPath takes precedence
+	err = c.SendTelemetry(context.Background(), MobileTelemetry{
+		DeviceID:      "custom-device",
+		MountPath:     "/custom/mount",
+		TimestampUnix: 1724000000,
+	})
+	if err != nil {
+		t.Fatalf("SendTelemetry: %v", err)
+	}
+	scratch = receivedBody["scratchStorage"].(map[string]any)
+	if scratch["mountPath"] != "/custom/mount" {
+		t.Errorf("mountPath = %v, want /custom/mount", scratch["mountPath"])
+	}
+}
+
+func TestUploadStream_InvalidSourcePathHash(t *testing.T) {
+	c := New(Config{BaseURL: "http://example.com", APIKey: "key"})
+	// Test short hash
+	_, err := c.UploadStream(context.Background(), bytes.NewReader([]byte("test")), 4, "test.dng", UploadOptions{
+		SourcePathHash: "invalid_hash",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid SourcePathHash, got nil")
+	}
+
+	// Test non-hex characters
+	_, err = c.UploadStream(context.Background(), bytes.NewReader([]byte("test")), 4, "test.dng", UploadOptions{
+		SourcePathHash: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-hex SourcePathHash, got nil")
 	}
 }
 
@@ -186,6 +303,7 @@ func TestUploadStream(t *testing.T) {
 	var receivedBytes []byte
 	var capturedBlake3 string
 	var capturedCamera string
+	var capturedSourcePathHash string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/agent/upload" {
@@ -194,6 +312,7 @@ func TestUploadStream(t *testing.T) {
 		}
 		capturedBlake3 = r.Header.Get("X-Blake3-Hash")
 		capturedCamera = r.Header.Get("X-Camera-Model")
+		capturedSourcePathHash = r.Header.Get("X-Source-Path-Hash")
 		filename := r.Header.Get("X-Filename")
 		if filename != "PXL_TEST.dng" {
 			t.Errorf("unexpected filename header: %s", filename)
@@ -227,6 +346,7 @@ func TestUploadStream(t *testing.T) {
 		CameraModel:    "Pixel-Fold",
 		Blake3Hash:     "fakeblake3hash",
 		FastHash:       "fast1234",
+		SourcePathHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", // pragma: allowlist secret
 		CapturedAtUnix: 1724000000,
 		ProgressFn: func(bytesSent int64, totalBytes int64) {
 			atomic.AddInt64(&progressCalled, 1)
@@ -255,6 +375,9 @@ func TestUploadStream(t *testing.T) {
 	}
 	if capturedCamera != "Pixel-Fold" {
 		t.Fatalf("camera header mismatch: %s", capturedCamera)
+	}
+	if capturedSourcePathHash != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" { // pragma: allowlist secret
+		t.Fatalf("source path hash header mismatch: %s", capturedSourcePathHash)
 	}
 	if atomic.LoadInt64(&progressCalled) == 0 {
 		t.Fatal("expected progress callback to be called")

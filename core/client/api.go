@@ -9,6 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,7 +20,7 @@ import (
 func (c *Client) Handshake(ctx context.Context, lastProcessedEventUUID string) (*HandshakeResponse, error) {
 	reqBody := HandshakeRequest{
 		AgentID:                c.agentID,
-		ClientVersion:          c.clientVersion,
+		ClientVersion:          c.Version(),
 		LastProcessedEventUUID: lastProcessedEventUUID,
 	}
 
@@ -67,10 +70,48 @@ func (c *Client) GetNodeStatuses(ctx context.Context, nodeUUIDs []string) ([]Nod
 	return resp.Statuses, nil
 }
 
-// SendTelemetry dispatches mobile battery/storage telemetry via POST /api/v1/mobile/telemetry.
+// SendTelemetry dispatches mobile storage telemetry via POST /api/v1/agent/telemetry.
 func (c *Client) SendTelemetry(ctx context.Context, telemetry MobileTelemetry) error {
+	agentID := c.agentID
+	if agentID == "" {
+		agentID = telemetry.DeviceID
+	}
+	clientVersion := c.clientVersion
+	if clientVersion == "" {
+		clientVersion = telemetry.ClientVersion
+	}
+	if clientVersion == "" {
+		clientVersion = "0.1.0"
+	}
+	ts := telemetry.TimestampUnix
+	if ts <= 0 {
+		ts = time.Now().Unix()
+	}
+
+	mountPath := telemetry.MountPath
+	if mountPath == "" {
+		if strings.EqualFold(telemetry.Platform, "ios") || runtime.GOOS == "darwin" || runtime.GOOS == "ios" {
+			mountPath = DefaultIOSMountPath
+		} else {
+			mountPath = DefaultAndroidMountPath
+		}
+	}
+
+	payload := TelemetryInput{
+		AgentID:       agentID,
+		ClientVersion: clientVersion,
+		TimestampUnix: ts,
+		ScratchStorage: ScratchStorageDTO{
+			MountPath:     mountPath,
+			TotalBytes:    telemetry.TotalBytes,
+			FreeBytes:     telemetry.FreeBytes,
+			UsedBytes:     telemetry.UsedBytes,
+			PrunableBytes: telemetry.SafeToFreeBytes,
+		},
+	}
+
 	var resp map[string]any
-	if err := c.postJSON(ctx, "/api/v1/mobile/telemetry", telemetry, &resp); err != nil {
+	if err := c.postJSON(ctx, "/api/v1/agent/telemetry", payload, &resp); err != nil {
 		return wrapCallError("send telemetry failed", err)
 	}
 	return nil

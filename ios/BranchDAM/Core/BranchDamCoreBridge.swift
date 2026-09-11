@@ -139,7 +139,8 @@ public class BranchDamCoreBridge {
         localPath: String,
         filename: String,
         capturedAtUnix: Int64,
-        localID: String
+        localID: String,
+        sourcePathHash: String = ""
     ) -> Int64 {
         #if canImport(branchdam)
         guard let engine = self.engine else { return 0 }
@@ -148,6 +149,7 @@ public class BranchDamCoreBridge {
         opts.filename = filename
         opts.capturedAtUnix = capturedAtUnix
         opts.localID = localID
+        opts.sourcePathHash = sourcePathHash
         var outID: Int64 = 0
         workQueue.sync {
             do {

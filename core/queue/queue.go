@@ -30,6 +30,42 @@ func Open(dbPath string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to execute queue schema: %w", err)
 	}
 
+	// Schema evolution: ensure source_path_hash column exists on existing DBs
+	var hasSourcePathHash bool
+	rows, err := db.Query(`PRAGMA table_info(upload_queue)`)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("query upload_queue table_info: %w", err)
+	}
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue any
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			_ = rows.Close()
+			db.Close()
+			return nil, fmt.Errorf("scan upload_queue table_info: %w", err)
+		}
+		if name == "source_path_hash" {
+			hasSourcePathHash = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		db.Close()
+		return nil, fmt.Errorf("iterate upload_queue table_info: %w", err)
+	}
+	_ = rows.Close()
+
+	if !hasSourcePathHash {
+		if _, err := db.Exec(`ALTER TABLE upload_queue ADD COLUMN source_path_hash TEXT NOT NULL DEFAULT ''`); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("add source_path_hash column: %w", err)
+		}
+	}
+
 	// Reset any orphaned IN_PROGRESS items from a previous crashed/killed session back to PENDING
 	now := time.Now().Unix()
 	_, _ = db.Exec(`UPDATE upload_queue SET status = 'PENDING', updated_at_unix = ? WHERE status = 'IN_PROGRESS'`, now)

@@ -46,6 +46,7 @@ type MobileTelemetry struct {
 	DeviceID          string `json:"deviceId"`
 	DeviceName        string `json:"deviceName"`
 	Platform          string `json:"platform"`
+	MountPath         string `json:"mountPath,omitempty"`
 	ClientVersion     string `json:"clientVersion"`
 	TotalBytes        int64  `json:"totalBytes"`
 	FreeBytes         int64  `json:"freeBytes"`
@@ -56,6 +57,35 @@ type MobileTelemetry struct {
 	IsCharging        bool   `json:"isCharging"`
 	NetworkType       string `json:"networkType"`
 	TimestampUnix     int64  `json:"timestampUnix"`
+}
+
+// DefaultAndroidMountPath is the primary external storage root on Android.
+const DefaultAndroidMountPath = "/storage/emulated/0"
+
+// DefaultIOSMountPath is the standard application container sandbox root on iOS.
+const DefaultIOSMountPath = "/var/mobile"
+
+// DefaultMobileMountPath retains backwards-compatibility for callers referencing the legacy symbol.
+const DefaultMobileMountPath = DefaultAndroidMountPath
+
+// ScratchStorageDTO mirrors the scratchStorage sub-object of POST /api/v1/agent/telemetry.
+type ScratchStorageDTO struct {
+	MountPath            string `json:"mountPath"`
+	TotalBytes           int64  `json:"totalBytes"`
+	FreeBytes            int64  `json:"freeBytes"`
+	UsedBytes            int64  `json:"usedBytes"`
+	MirrorsSizeBytes     int64  `json:"mirrorsSizeBytes"`
+	RenderCacheSizeBytes int64  `json:"renderCacheSizeBytes"`
+	ProxiesSizeBytes     int64  `json:"proxiesSizeBytes"`
+	PrunableBytes        int64  `json:"prunableBytes"`
+}
+
+// TelemetryInput is the request body sent to POST /api/v1/agent/telemetry.
+type TelemetryInput struct {
+	AgentID        string            `json:"agentId"`
+	ClientVersion  string            `json:"clientVersion,omitempty"`
+	TimestampUnix  int64             `json:"timestampUnix"`
+	ScratchStorage ScratchStorageDTO `json:"scratchStorage"`
 }
 
 type UploadResponse struct {

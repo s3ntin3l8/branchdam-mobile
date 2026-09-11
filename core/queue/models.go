@@ -25,6 +25,7 @@ type UploadItem struct {
 	FastHash        string       `json:"fastHash"`
 	Blake3Hash      string       `json:"blake3Hash"`
 	CameraModel     string       `json:"cameraModel,omitempty"`
+	SourcePathHash  string       `json:"sourcePathHash,omitempty"`
 	SizeBytes       int64        `json:"sizeBytes"`
 	CapturedAtUnix  int64        `json:"capturedAtUnix"`
 	Status          UploadStatus `json:"status"`

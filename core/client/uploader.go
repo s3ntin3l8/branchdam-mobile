@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type ProgressCallback func(bytesSent int64, totalBytes int64)
@@ -16,6 +17,7 @@ type UploadOptions struct {
 	CameraModel    string
 	FastHash       string
 	Blake3Hash     string
+	SourcePathHash string
 	CapturedAtUnix int64
 	ProgressFn     ProgressCallback
 }
@@ -68,6 +70,13 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 	if opts.FastHash != "" {
 		req.Header.Set("X-Fast-Hash", opts.FastHash)
+	}
+	if opts.SourcePathHash != "" {
+		h := strings.ToLower(strings.TrimSpace(opts.SourcePathHash))
+		if len(h) != 64 || !IsLowerHex(h) {
+			return nil, fmt.Errorf("invalid SourcePathHash: must be 64 lowercase hex characters")
+		}
+		req.Header.Set("X-Source-Path-Hash", h)
 	}
 	if opts.CapturedAtUnix > 0 {
 		req.Header.Set("X-Capture-Timestamp", strconv.FormatInt(opts.CapturedAtUnix, 10))
@@ -143,4 +152,15 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 
 	return &uploadResp, nil
+}
+
+// IsLowerHex reports whether s contains only lowercase hexadecimal ASCII characters.
+func IsLowerHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }

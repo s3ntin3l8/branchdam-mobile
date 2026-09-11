@@ -32,6 +32,7 @@ const (
 	CodeHashMismatch     = "HASH_MISMATCH"
 	CodeNetworkError     = "NETWORK_ERROR"
 	CodeIOError          = "IO_ERROR"
+	CodeInvalidInput     = "INVALID_INPUT"
 )
 
 // MaxResponseBodyBytes caps the size of any HTTP response body the

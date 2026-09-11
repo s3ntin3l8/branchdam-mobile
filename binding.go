@@ -69,9 +69,16 @@ func BindingClose() error {
 	return err
 }
 
-// BindingEnqueueMedia enqueues a local media file for upload. Returns the
-// upload ID (>= 1) on success or 0 on error.
+// BindingEnqueueMedia enqueues a local media file for upload without an explicit source path hash.
+// Returns the upload ID (>= 1) on success or 0 on error.
 func BindingEnqueueMedia(localPath, filename, localID, cameraModel string,
+	capturedAtUnix, sizeBytes int64) (int64, error) {
+	return BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel, "", capturedAtUnix, sizeBytes)
+}
+
+// BindingEnqueueMediaWithSourceHash enqueues a local media file for upload with an explicit sourcePathHash.
+// Returns the upload ID (>= 1) on success or 0 on error.
+func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel, sourcePathHash string,
 	capturedAtUnix, sizeBytes int64) (int64, error) {
 
 	bindingMu.Lock()
@@ -84,6 +91,7 @@ func BindingEnqueueMedia(localPath, filename, localID, cameraModel string,
 		Filename:       filename,
 		LocalID:        localID,
 		CameraModel:    cameraModel,
+		SourcePathHash: sourcePathHash,
 		CapturedAtUnix: capturedAtUnix,
 		SizeBytes:      sizeBytes,
 	})

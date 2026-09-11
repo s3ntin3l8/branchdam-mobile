@@ -2,11 +2,14 @@ package engine
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
@@ -80,7 +83,17 @@ func New(q *queue.Queue, c *client.Client) *Engine {
 }
 
 // EnqueueLocalCapture reads a local media file, calculates hashes, records local state, and queues for upload.
-func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix int64, localID string, cameraModel ...string) (*queue.UploadItem, error) {
+func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix int64, localID string, cameraModel, sourcePathHash string) (*queue.UploadItem, error) {
+	srcPathHash := strings.ToLower(strings.TrimSpace(sourcePathHash))
+	if srcPathHash != "" {
+		if len(srcPathHash) != 64 || !client.IsLowerHex(srcPathHash) {
+			return nil, &client.ClientError{
+				Code:    client.CodeInvalidInput,
+				Message: fmt.Sprintf("invalid sourcePathHash %q: must be 64 lowercase hex characters", sourcePathHash),
+			}
+		}
+	}
+
 	// B.2.5: Stat before Open so a missing-file failure surfaces with
 	// the canonical IO_ERROR code at the FFI boundary rather than a
 	// generic open error.
@@ -127,11 +140,20 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		return existing, nil
 	}
 
-	cam := ""
-	if len(cameraModel) > 0 && cameraModel[0] != "" {
-		cam = cameraModel[0]
-	} else if e.c != nil {
+	cam := cameraModel
+	if cam == "" && e.c != nil {
 		cam = e.c.AgentID()
+	}
+
+	if srcPathHash == "" {
+		if localID != "" {
+			// Stable across iOS app launches where sandbox container UUID changes
+			h := sha256.Sum256([]byte(localID))
+			srcPathHash = hex.EncodeToString(h[:])
+		} else if localPath != "" {
+			h := sha256.Sum256([]byte(localPath))
+			srcPathHash = hex.EncodeToString(h[:])
+		}
 	}
 
 	item := &queue.UploadItem{
@@ -140,6 +162,7 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		FastHash:       fastHash,
 		Blake3Hash:     fullHash,
 		CameraModel:    cam,
+		SourcePathHash: srcPathHash,
 		SizeBytes:      sizeBytes,
 		CapturedAtUnix: capturedAtUnix,
 	}
@@ -211,6 +234,7 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 			CameraModel:    cam,
 			FastHash:       item.FastHash,
 			Blake3Hash:     item.Blake3Hash,
+			SourcePathHash: item.SourcePathHash,
 			CapturedAtUnix: item.CapturedAtUnix,
 		}
 

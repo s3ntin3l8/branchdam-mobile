@@ -58,15 +58,11 @@ func New(cfg Config) *Client {
 			},
 		}
 	}
-	version := cfg.ClientVersion
-	if version == "" {
-		version = "0.1.0"
-	}
 	return &Client{
 		baseURL:       baseURL,
 		apiKey:        cfg.APIKey,
 		agentID:       cfg.AgentID,
-		clientVersion: version,
+		clientVersion: cfg.ClientVersion,
 		httpClient:    httpClient,
 		uploadClient:  uploadClient,
 	}
@@ -74,6 +70,13 @@ func New(cfg Config) *Client {
 
 func (c *Client) AgentID() string {
 	return c.agentID
+}
+
+func (c *Client) Version() string {
+	if c.clientVersion != "" {
+		return c.clientVersion
+	}
+	return "0.1.0"
 }
 
 func (c *Client) setHeaders(req *http.Request) {
@@ -87,7 +90,7 @@ func (c *Client) setHeaders(req *http.Request) {
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
 	}
-	req.Header.Set("User-Agent", fmt.Sprintf("branchdam-mobile/%s (%s)", c.clientVersion, c.agentID))
+	req.Header.Set("User-Agent", fmt.Sprintf("branchdam-mobile/%s (%s)", c.Version(), c.agentID))
 	req.Header.Set("Content-Type", "application/json")
 }
 
