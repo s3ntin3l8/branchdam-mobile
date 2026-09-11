@@ -1,9 +1,18 @@
 package com.branchdam.mobile.ui.gallery
 
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.*
@@ -20,8 +29,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.branchdam.mobile.ui.components.shimmer
-import com.branchdam.mobile.ui.theme.BranchDamTheme
+import com.branchdam.mobile.ui.components.*
+import com.branchdam.mobile.ui.theme.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,14 +38,19 @@ import kotlinx.coroutines.launch
 fun GalleryScreen(
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
+    onNavigateToDetail: (Long) -> Unit = {},
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
+    val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
     val state = rememberPullToRefreshState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    val isSelectionMode = selectedItemIds.isNotEmpty()
 
     LaunchedEffect(loadError) {
         val currentError = loadError
@@ -51,7 +65,62 @@ fun GalleryScreen(
     }
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Gallery") }) },
+        topBar = {
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "${selectedItemIds.size} selected",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear selection"
+                            )
+                        }
+                    },
+                    actions = {
+                        val selectableCount = remember(items) { items.count { !it.isOffloaded } }
+                        val isAllSelectableSelected = selectableCount > 0 && selectedItemIds.size == selectableCount
+                        IconButton(onClick = {
+                            if (isAllSelectableSelected) {
+                                viewModel.clearSelection()
+                            } else {
+                                viewModel.selectAll()
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.SelectAll,
+                                contentDescription = if (isAllSelectableSelected) "Deselect all" else "Select all"
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.uploadSelectedItems(context) { count ->
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Enqueued $count item(s) for upload")
+                                    }
+                                }
+                            },
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudUpload,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Upload")
+                        }
+                    }
+                )
+            } else {
+                CenterAlignedTopAppBar(title = { Text("Gallery") })
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
@@ -107,7 +176,14 @@ fun GalleryScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         items(items, key = { it.mediaItem.id }) { galleryItem ->
-                            GalleryItemCard(galleryItem)
+                            val isSelected = selectedItemIds.contains(galleryItem.mediaItem.id)
+                            GalleryItemCard(
+                                galleryItem = galleryItem,
+                                isSelected = isSelected,
+                                isSelectionMode = isSelectionMode,
+                                onToggleSelect = { viewModel.toggleSelection(galleryItem.mediaItem.id) },
+                                onClick = { onNavigateToDetail(galleryItem.mediaItem.id) }
+                            )
                         }
                     }
                 }
@@ -116,11 +192,33 @@ fun GalleryScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GalleryItemCard(galleryItem: GalleryItem) {
+private fun GalleryItemCard(
+    galleryItem: GalleryItem,
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
+    onToggleSelect: () -> Unit,
+    onClick: () -> Unit,
+) {
     Card(
-        modifier = Modifier.aspectRatio(1f),
-        shape = MaterialTheme.shapes.large
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(MaterialTheme.shapes.large)
+            .combinedClickable(
+                onClick = {
+                    if (isSelectionMode) {
+                        onToggleSelect()
+                    } else {
+                        onClick()
+                    }
+                },
+                onLongClick = {
+                    onToggleSelect()
+                }
+            ),
+        shape = MaterialTheme.shapes.large,
+        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -132,6 +230,14 @@ private fun GalleryItemCard(galleryItem: GalleryItem) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+
+            if (isSelected) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                ) {}
+            }
+
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
@@ -144,7 +250,21 @@ private fun GalleryItemCard(galleryItem: GalleryItem) {
                     fontWeight = FontWeight.ExtraBold
                 )
             }
-            if (galleryItem.mediaItem.isDng) {
+
+            if (isSelectionMode || isSelected) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Icon(
+                        imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Outlined.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(4.dp).size(20.dp)
+                    )
+                }
+            } else if (galleryItem.mediaItem.isDng) {
                 Surface(
                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                     color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
@@ -155,6 +275,44 @@ private fun GalleryItemCard(galleryItem: GalleryItem) {
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+
+            if (galleryItem.mediaItem.isVideo) {
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    shape = MaterialTheme.shapes.extraSmall,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Video",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            "VIDEO",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            } else if (galleryItem.isOffloaded) {
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+                    shape = MaterialTheme.shapes.extraSmall,
+                ) {
+                    Text(
+                        "Offloaded",
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

@@ -52,6 +52,11 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
+# Unset conflicting ANDROID_PREFS_ROOT if ANDROID_USER_HOME is also present
+if [ -n "$ANDROID_PREFS_ROOT" ] && [ -n "$ANDROID_USER_HOME" ]; then
+    unset ANDROID_PREFS_ROOT
+fi
+
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then

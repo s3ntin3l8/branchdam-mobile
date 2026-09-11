@@ -1,19 +1,24 @@
 package com.branchdam.mobile.ui.navigation
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.branchdam.mobile.ui.PairingConfig
+import androidx.navigation.navArgument
+import com.branchdam.mobile.ui.gallery.GalleryDetailScreen
 import com.branchdam.mobile.ui.gallery.GalleryScreen
+import com.branchdam.mobile.ui.gallery.GalleryViewModel
 import com.branchdam.mobile.ui.lineage.LineageScreen
 import com.branchdam.mobile.ui.onboarding.OnboardingScreen
 import com.branchdam.mobile.ui.qrscan.QrScanScreen
@@ -114,7 +119,32 @@ fun AppNavGraph(
             )
         }
         composable(Screen.Gallery.route) {
-            GalleryScreen()
+            GalleryScreen(
+                onNavigateToDetail = { mediaId ->
+                    navController.navigate(Screen.GalleryDetail.createRoute(mediaId)) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        composable(
+            route = Screen.GalleryDetail.route,
+            arguments = listOf(navArgument("mediaId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val mediaId = backStackEntry.arguments?.getLong("mediaId") ?: 0L
+            val galleryViewModel: GalleryViewModel = remember(backStackEntry) {
+                try {
+                    val parentEntry = navController.getBackStackEntry(Screen.Gallery.route)
+                    ViewModelProvider(parentEntry)[GalleryViewModel::class.java]
+                } catch (_: Exception) {
+                    ViewModelProvider(backStackEntry)[GalleryViewModel::class.java]
+                }
+            }
+            GalleryDetailScreen(
+                mediaId = mediaId,
+                onNavigateBack = { navController.navigateUp() },
+                viewModel = galleryViewModel
+            )
         }
         composable(Screen.Sync.route) {
             SyncStatusScreen()
