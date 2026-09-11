@@ -63,9 +63,13 @@ fun GalleryDetailScreen(
                 actions = {
                     if (galleryItem != null && !galleryItem.isOffloaded) {
                         IconButton(onClick = {
-                            viewModel.uploadItem(context, galleryItem.mediaItem) {
+                            viewModel.uploadItem(context, galleryItem.mediaItem) { success ->
                                 scope.launch {
-                                    snackbarHostState.showSnackbar("Enqueued for upload")
+                                    if (success) {
+                                        snackbarHostState.showSnackbar("Enqueued for upload")
+                                    } else {
+                                        snackbarHostState.showSnackbar("Failed to enqueue item for upload")
+                                    }
                                 }
                             }
                         }) {
@@ -82,9 +86,13 @@ fun GalleryDetailScreen(
             if (galleryItem != null && !galleryItem.isOffloaded) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        viewModel.uploadItem(context, galleryItem.mediaItem) {
+                        viewModel.uploadItem(context, galleryItem.mediaItem) { success ->
                             scope.launch {
-                                snackbarHostState.showSnackbar("Enqueued for upload")
+                                if (success) {
+                                    snackbarHostState.showSnackbar("Enqueued for upload")
+                                } else {
+                                    snackbarHostState.showSnackbar("Failed to enqueue item for upload")
+                                }
                             }
                         }
                     },

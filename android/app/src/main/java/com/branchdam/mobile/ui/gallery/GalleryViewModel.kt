@@ -91,7 +91,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun selectAll() {
-        _selectedItemIds.value = _items.value.map { it.mediaItem.id }.toSet()
+        _selectedItemIds.value = _items.value.filter { !it.isOffloaded }.map { it.mediaItem.id }.toSet()
     }
 
     fun clearSelection() {
@@ -100,37 +100,55 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun uploadSelectedItems(context: Context, onComplete: (Int) -> Unit) {
         val selectedIds = _selectedItemIds.value
-        val itemsToUpload = _items.value.filter { selectedIds.contains(it.mediaItem.id) }
-        if (itemsToUpload.isEmpty()) return
+        val itemsToUpload = _items.value.filter { selectedIds.contains(it.mediaItem.id) && !it.isOffloaded }
+        if (itemsToUpload.isEmpty()) {
+            clearSelection()
+            onComplete(0)
+            return
+        }
 
         viewModelScope.launch(Dispatchers.IO) {
+            var successCount = 0
             for (item in itemsToUpload) {
-                EngineHolder.enqueueMedia(
+                val mediaId = EngineHolder.enqueueMedia(
                     localPath = item.mediaItem.filePath,
                     filename = item.mediaItem.displayName,
                     capturedAtUnix = item.mediaItem.dateTakenUnix,
                     localId = item.mediaItem.contentUri
                 )
+                if (mediaId > 0L) {
+                    successCount++
+                }
             }
-            SyncScheduler.triggerImmediateSync(context)
+            if (successCount > 0) {
+                SyncScheduler.triggerImmediateSync(context)
+            }
             withContext(Dispatchers.Main) {
                 clearSelection()
-                onComplete(itemsToUpload.size)
+                onComplete(successCount)
             }
         }
     }
 
-    fun uploadItem(context: Context, mediaItem: MediaItem, onComplete: () -> Unit) {
+    fun uploadItem(context: Context, mediaItem: MediaItem, onComplete: (Boolean) -> Unit) {
+        if (EngineHolder.isMediaOffloaded(mediaItem.contentUri)) {
+            onComplete(false)
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
-            EngineHolder.enqueueMedia(
+            val mediaId = EngineHolder.enqueueMedia(
                 localPath = mediaItem.filePath,
                 filename = mediaItem.displayName,
                 capturedAtUnix = mediaItem.dateTakenUnix,
                 localId = mediaItem.contentUri
             )
-            SyncScheduler.triggerImmediateSync(context)
+            val success = mediaId > 0L
+            if (success) {
+                SyncScheduler.triggerImmediateSync(context)
+            }
             withContext(Dispatchers.Main) {
-                onComplete()
+                onComplete(success)
             }
         }
     }

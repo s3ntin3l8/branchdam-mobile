@@ -48,6 +48,23 @@ class GalleryViewModelTest {
     }
 
     @Test
+    fun testGetItemById() {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        assertNull("Lookup on empty list should return null", viewModel.getItemById(999L))
+    }
+
+    @Test
+    fun testUploadSelectedItems_emptySelectionDoesNothing() {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        var callbackCount = -1
+        viewModel.uploadSelectedItems(ApplicationProvider.getApplicationContext()) { count ->
+            callbackCount = count
+        }
+        assertEquals("Empty selection should return 0", 0, callbackCount)
+        assertTrue("Selection should remain empty", viewModel.selectedItemIds.value.isEmpty())
+    }
+
+    @Test
     fun testFormatFileSize() {
         assertEquals("0 B", formatFileSize(0L))
         assertEquals("0 B", formatFileSize(-10L))
