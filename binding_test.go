@@ -184,4 +184,3 @@ func TestBindingEnqueueMediaWithSourceHash(t *testing.T) {
 		t.Fatalf("expected fallback SourcePathHash, got %q", srcHash2)
 	}
 }
-

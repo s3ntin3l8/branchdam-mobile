@@ -519,4 +519,3 @@ func TestEnqueueLocalCapture_SourcePathHash(t *testing.T) {
 		t.Fatalf("SourcePathHash = %q, want %q", item2.SourcePathHash, expectedHashHex)
 	}
 }
-
