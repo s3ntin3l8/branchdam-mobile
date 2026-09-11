@@ -73,7 +73,7 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 	if opts.SourcePathHash != "" {
 		h := strings.ToLower(strings.TrimSpace(opts.SourcePathHash))
-		if len(h) != 64 || !isHex(h) {
+		if len(h) != 64 || !IsLowerHex(h) {
 			return nil, fmt.Errorf("invalid SourcePathHash: must be 64 lowercase hex characters")
 		}
 		req.Header.Set("X-Source-Path-Hash", h)
@@ -154,7 +154,8 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	return &uploadResp, nil
 }
 
-func isHex(s string) bool {
+// IsLowerHex reports whether s contains only lowercase hexadecimal ASCII characters.
+func IsLowerHex(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {

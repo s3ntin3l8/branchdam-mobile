@@ -240,6 +240,45 @@ func TestSendTelemetry_DeviceIDAndVersionFallback(t *testing.T) {
 	}
 }
 
+func TestSendTelemetry_PlatformMountPath(t *testing.T) {
+	var receivedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "acknowledgedAtUnix": 1724000001})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key"})
+
+	// 1. iOS platform reports DefaultIOSMountPath
+	err := c.SendTelemetry(context.Background(), MobileTelemetry{
+		DeviceID:      "iphone-16-pro",
+		Platform:      "ios",
+		TimestampUnix: 1724000000,
+	})
+	if err != nil {
+		t.Fatalf("SendTelemetry: %v", err)
+	}
+	scratch := receivedBody["scratchStorage"].(map[string]any)
+	if scratch["mountPath"] != DefaultIOSMountPath {
+		t.Errorf("mountPath for iOS = %v, want %s", scratch["mountPath"], DefaultIOSMountPath)
+	}
+
+	// 2. Custom MountPath takes precedence
+	err = c.SendTelemetry(context.Background(), MobileTelemetry{
+		DeviceID:      "custom-device",
+		MountPath:     "/custom/mount",
+		TimestampUnix: 1724000000,
+	})
+	if err != nil {
+		t.Fatalf("SendTelemetry: %v", err)
+	}
+	scratch = receivedBody["scratchStorage"].(map[string]any)
+	if scratch["mountPath"] != "/custom/mount" {
+		t.Errorf("mountPath = %v, want /custom/mount", scratch["mountPath"])
+	}
+}
+
 func TestUploadStream_InvalidSourcePathHash(t *testing.T) {
 	c := New(Config{BaseURL: "http://example.com", APIKey: "key"})
 	// Test short hash

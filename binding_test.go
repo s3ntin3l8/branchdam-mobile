@@ -147,7 +147,8 @@ func TestBindingEnqueueMediaWithSourceHash(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	id1, err := BindingEnqueueMediaWithSourceHash(p1, "sample1.jpg", "local-1", "Canon-R5", "explicit-source-hash-456", 1724000000, 7)
+	validHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" // pragma: allowlist secret
+	id1, err := BindingEnqueueMediaWithSourceHash(p1, "sample1.jpg", "local-1", "Canon-R5", validHash, 1724000000, 7)
 	if err != nil {
 		t.Fatalf("BindingEnqueueMediaWithSourceHash: %v", err)
 	}
@@ -159,8 +160,8 @@ func TestBindingEnqueueMediaWithSourceHash(t *testing.T) {
 	if err := bindingEngine.queue.DB().QueryRow("SELECT source_path_hash FROM upload_queue WHERE id = ?", id1).Scan(&srcHash1); err != nil {
 		t.Fatalf("query source_path_hash 1: %v", err)
 	}
-	if srcHash1 != "explicit-source-hash-456" {
-		t.Fatalf("SourcePathHash = %q, want explicit-source-hash-456", srcHash1)
+	if srcHash1 != validHash {
+		t.Fatalf("SourcePathHash = %q, want %q", srcHash1, validHash)
 	}
 
 	p2 := filepath.Join(dir, "sample2.jpg")
@@ -180,7 +181,12 @@ func TestBindingEnqueueMediaWithSourceHash(t *testing.T) {
 	if err := bindingEngine.queue.DB().QueryRow("SELECT source_path_hash FROM upload_queue WHERE id = ?", id2).Scan(&srcHash2); err != nil {
 		t.Fatalf("query source_path_hash 2: %v", err)
 	}
-	if srcHash2 == "" || srcHash2 == "explicit-source-hash-456" {
+	if srcHash2 == "" || srcHash2 == validHash {
 		t.Fatalf("expected fallback SourcePathHash, got %q", srcHash2)
+	}
+
+	// Invalid sourcePathHash rejected at binding entry
+	if _, err := BindingEnqueueMediaWithSourceHash(p1, "sample1.jpg", "local-3", "Canon-R5", "invalid-hash", 1724000000, 7); err == nil {
+		t.Fatalf("expected error for invalid sourcePathHash in BindingEnqueueMediaWithSourceHash, got nil")
 	}
 }

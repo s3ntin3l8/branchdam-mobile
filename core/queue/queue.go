@@ -42,10 +42,20 @@ func Open(dbPath string) (*Queue, error) {
 		var name, colType string
 		var notNull, pk int
 		var dfltValue any
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err == nil && name == "source_path_hash" {
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			_ = rows.Close()
+			db.Close()
+			return nil, fmt.Errorf("scan upload_queue table_info: %w", err)
+		}
+		if name == "source_path_hash" {
 			hasSourcePathHash = true
 			break
 		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		db.Close()
+		return nil, fmt.Errorf("iterate upload_queue table_info: %w", err)
 	}
 	_ = rows.Close()
 

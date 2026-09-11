@@ -489,19 +489,20 @@ func TestEnqueueLocalCapture_SourcePathHash(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	// 1. Explicit source path hash and camera model
-	item1, err := eng.EnqueueLocalCapture(f1, "f1.dng", 1724000000, "local-1", "Sony-A7IV", "custom-source-hash-123")
+	// 1. Explicit source path hash (64 lowercase hex) and camera model
+	validCustomHash := "a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00" // pragma: allowlist secret
+	item1, err := eng.EnqueueLocalCapture(f1, "f1.dng", 1724000000, "local-1", "Sony-A7IV", validCustomHash)
 	if err != nil {
 		t.Fatalf("EnqueueLocalCapture: %v", err)
 	}
 	if item1.CameraModel != "Sony-A7IV" {
 		t.Fatalf("CameraModel = %q, want Sony-A7IV", item1.CameraModel)
 	}
-	if item1.SourcePathHash != "custom-source-hash-123" {
-		t.Fatalf("SourcePathHash = %q, want custom-source-hash-123", item1.SourcePathHash)
+	if item1.SourcePathHash != validCustomHash {
+		t.Fatalf("SourcePathHash = %q, want %q", item1.SourcePathHash, validCustomHash)
 	}
 
-	// 2. Fallback source path hash and camera model
+	// 2. Fallback source path hash derives from stable localID across launches
 	f2 := filepath.Join(tempDir, "f2.dng")
 	if err := os.WriteFile(f2, []byte("f2-bytes"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -513,9 +514,34 @@ func TestEnqueueLocalCapture_SourcePathHash(t *testing.T) {
 	if item2.CameraModel != "fallback-camera-model" {
 		t.Fatalf("CameraModel = %q, want fallback-camera-model", item2.CameraModel)
 	}
-	expectedHash := sha256.Sum256([]byte(f2))
+	expectedHash := sha256.Sum256([]byte("local-2"))
 	expectedHashHex := hex.EncodeToString(expectedHash[:])
 	if item2.SourcePathHash != expectedHashHex {
 		t.Fatalf("SourcePathHash = %q, want %q", item2.SourcePathHash, expectedHashHex)
+	}
+
+	// 3. When localID is empty, fallback derives from localPath
+	f3 := filepath.Join(tempDir, "f3.dng")
+	if err := os.WriteFile(f3, []byte("f3-bytes"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	item3, err := eng.EnqueueLocalCapture(f3, "f3.dng", 1724000000, "", "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+	expectedHash3 := sha256.Sum256([]byte(f3))
+	expectedHash3Hex := hex.EncodeToString(expectedHash3[:])
+	if item3.SourcePathHash != expectedHash3Hex {
+		t.Fatalf("SourcePathHash = %q, want %q", item3.SourcePathHash, expectedHash3Hex)
+	}
+
+	// 4. Invalid sourcePathHash rejected at enqueue with CodeInvalidInput
+	_, err = eng.EnqueueLocalCapture(f1, "f1.dng", 1724000000, "local-err", "", "not-64-hex")
+	if err == nil {
+		t.Fatalf("expected error for invalid sourcePathHash, got nil")
+	}
+	ce, ok := err.(*client.ClientError)
+	if !ok || ce.Code != client.CodeInvalidInput {
+		t.Fatalf("expected CodeInvalidInput, got %v", err)
 	}
 }

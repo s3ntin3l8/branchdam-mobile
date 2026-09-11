@@ -236,12 +236,23 @@ func (e *Engine) EnqueueMedia(opts EnqueueMediaOptions) (int64, error) {
 	if opts.LocalID == "" {
 		return 0, newError(CodeInvalidInput, "LocalID is required")
 	}
+	if opts.SourcePathHash != "" {
+		h := strings.ToLower(strings.TrimSpace(opts.SourcePathHash))
+		if len(h) != 64 || !client.IsLowerHex(h) {
+			return 0, newError(CodeInvalidInput, "invalid SourcePathHash: must be 64 lowercase hex characters")
+		}
+		opts.SourcePathHash = h
+	}
 
 	eng := e.engine
 	item, err := eng.EnqueueLocalCapture(
 		opts.LocalPath, opts.Filename, opts.CapturedAtUnix, opts.LocalID, opts.CameraModel, opts.SourcePathHash,
 	)
 	if err != nil {
+		var ce *client.ClientError
+		if errors.As(err, &ce) && ce.Code == client.CodeInvalidInput {
+			return 0, newError(CodeInvalidInput, "enqueue media: %v", err)
+		}
 		return 0, newError(CodeIOError, "enqueue media: %v", err)
 	}
 	if item == nil {

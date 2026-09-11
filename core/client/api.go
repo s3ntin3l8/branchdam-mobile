@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -86,12 +88,21 @@ func (c *Client) SendTelemetry(ctx context.Context, telemetry MobileTelemetry) e
 		ts = time.Now().Unix()
 	}
 
+	mountPath := telemetry.MountPath
+	if mountPath == "" {
+		if strings.EqualFold(telemetry.Platform, "ios") || runtime.GOOS == "darwin" || runtime.GOOS == "ios" {
+			mountPath = DefaultIOSMountPath
+		} else {
+			mountPath = DefaultAndroidMountPath
+		}
+	}
+
 	payload := TelemetryInput{
 		AgentID:       agentID,
 		ClientVersion: clientVersion,
 		TimestampUnix: ts,
 		ScratchStorage: ScratchStorageDTO{
-			MountPath:     DefaultMobileMountPath,
+			MountPath:     mountPath,
 			TotalBytes:    telemetry.TotalBytes,
 			FreeBytes:     telemetry.FreeBytes,
 			UsedBytes:     telemetry.UsedBytes,
