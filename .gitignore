@@ -93,3 +93,6 @@ docs/superpowers/
 
 # Agent worktrees
 .worktrees/
+
+# Developer worktrees (per AGENTS.md make wt convention)
+.wt/
