@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.6](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.5...branchdam-mobile-v0.7.6) (2026-09-11)
+
+
+### Features
+
+* **android:** add batch selection upload and asset detail view in gallery ([#155](https://github.com/s3ntin3l8/branchdam-mobile/issues/155)) ([b5e7715](https://github.com/s3ntin3l8/branchdam-mobile/commit/b5e77155e4418fc6c1dde1a13715b8fe5cb7aebd))
+* **client:** add EventUUID for transport-level idempotency ([#160](https://github.com/s3ntin3l8/branchdam-mobile/issues/160)) ([3793f11](https://github.com/s3ntin3l8/branchdam-mobile/commit/3793f11515bdd8798bdbbba45ab2d8b99a5faa4d))
+* comprehensive Material 3 design system overhaul and adaptive navigation ([#152](https://github.com/s3ntin3l8/branchdam-mobile/issues/152)) ([6b276e5](https://github.com/s3ntin3l8/branchdam-mobile/commit/6b276e56e0953e75e0bdf021418317fc4ce9c1ca))
+* **ingest:** wire mobile camera roll lineage detection and safe space reclaim ([#156](https://github.com/s3ntin3l8/branchdam-mobile/issues/156)) ([2672298](https://github.com/s3ntin3l8/branchdam-mobile/commit/267229863ffc9988f2ddbf5a2db4da56370012e3))
+* **ios:** Android feature parity — Gallery, Sync Status, multi-page Settings, diagnostic log ([dac7e01](https://github.com/s3ntin3l8/branchdam-mobile/commit/dac7e01bf8fe1b794531776eae0d02ef6da8df6f))
+
+
+### Bug Fixes
+
+* **android:** enable edge-to-edge and resolve double padding ([#150](https://github.com/s3ntin3l8/branchdam-mobile/issues/150)) ([1e6666e](https://github.com/s3ntin3l8/branchdam-mobile/commit/1e6666e84eae9e1fae6b0ffc11d2b9bbfaadac47))
+* **client:** use agent telemetry endpoint and forward source path hash ([#154](https://github.com/s3ntin3l8/branchdam-mobile/issues/154)) ([e7c3595](https://github.com/s3ntin3l8/branchdam-mobile/commit/e7c35958f68adc21fbd13f60b31fb21176933d47))
+* exclude bot-authored PRs by author, not actor ([#153](https://github.com/s3ntin3l8/branchdam-mobile/issues/153)) ([7271e45](https://github.com/s3ntin3l8/branchdam-mobile/commit/7271e4511c3d50c08893724cf04adcb6ff30233f))
+* **ios:** add macos slice to xcframework for My Mac destination ([#148](https://github.com/s3ntin3l8/branchdam-mobile/issues/148)) ([dd9ea74](https://github.com/s3ntin3l8/branchdam-mobile/commit/dd9ea74080e86553185e4982774f469a9daf3ed3))
+* **ios:** add UILaunchScreen key to opt into full modern viewport ([a1a2256](https://github.com/s3ntin3l8/branchdam-mobile/commit/a1a225668d745c55a53c9b7542aa67737c8d9dcc))
+
 ## [0.7.5](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.4...branchdam-mobile-v0.7.5) (2026-09-06)
 
 
