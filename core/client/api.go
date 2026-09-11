@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/google/uuid"
 )
 
 // Handshake performs agent handshake against POST /api/v1/agent/handshake.
@@ -27,8 +29,19 @@ func (c *Client) Handshake(ctx context.Context, lastProcessedEventUUID string) (
 }
 
 // SubmitEvent dispatches an agent lifecycle or lineage event to POST /api/v1/agent/events.
-func (c *Client) SubmitEvent(ctx context.Context, eventType, payloadJSON string) (*AgentEventResponse, error) {
+// If eventUUID is provided, it is reused for transport-level idempotency on retries;
+// otherwise a fresh UUIDv7 is minted.
+func (c *Client) SubmitEvent(ctx context.Context, eventUUID, eventType, payloadJSON string) (*AgentEventResponse, error) {
+	if eventUUID == "" {
+		u, err := uuid.NewV7()
+		if err != nil {
+			u = uuid.New()
+		}
+		eventUUID = u.String()
+	}
+
 	reqBody := AgentEventRequest{
+		EventUUID: eventUUID,
 		AgentID:   c.agentID,
 		EventType: eventType,
 		Payload:   payloadJSON,

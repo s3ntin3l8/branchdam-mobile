@@ -16,6 +16,7 @@ type HandshakeResponse struct {
 }
 
 type AgentEventRequest struct {
+	EventUUID string `json:"eventUuid,omitempty"`
 	AgentID   string `json:"agentId"`
 	EventType string `json:"eventType"`
 	Payload   string `json:"payload"`
