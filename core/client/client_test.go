@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestClientHandshake(t *testing.T) {
@@ -65,6 +67,7 @@ func TestClientHandshake(t *testing.T) {
 }
 
 func TestSubmitEvent(t *testing.T) {
+	var receivedUUIDs []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/agent/events" {
 			http.NotFound(w, r)
@@ -72,6 +75,7 @@ func TestSubmitEvent(t *testing.T) {
 		}
 		var req AgentEventRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		receivedUUIDs = append(receivedUUIDs, req.EventUUID)
 		if req.EventUUID == "" {
 			t.Error("expected non-empty EventUUID in request")
 		}
@@ -83,12 +87,41 @@ func TestSubmitEvent(t *testing.T) {
 	defer server.Close()
 
 	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
-	resp, err := c.SubmitEvent(context.Background(), "EVENT_EDGE_ATTACHED", `{"relation":"DERIVED_FROM"}`)
+
+	// 1. Explicit EventUUID is preserved across retries
+	const stableUUID = "018f3a9b-8d76-7890-a123-456789abcdef"
+	resp, err := c.SubmitEvent(context.Background(), stableUUID, "EVENT_EDGE_ATTACHED", `{"relation":"DERIVED_FROM"}`)
 	if err != nil {
 		t.Fatalf("SubmitEvent failed: %v", err)
 	}
 	if resp.EventID != "018f-evt" {
 		t.Fatalf("unexpected eventID: %s", resp.EventID)
+	}
+
+	// Retry with the same stableUUID
+	_, err = c.SubmitEvent(context.Background(), stableUUID, "EVENT_EDGE_ATTACHED", `{"relation":"DERIVED_FROM"}`)
+	if err != nil {
+		t.Fatalf("SubmitEvent retry failed: %v", err)
+	}
+
+	if len(receivedUUIDs) < 2 || receivedUUIDs[0] != stableUUID || receivedUUIDs[1] != stableUUID {
+		t.Errorf("expected both attempts to reuse stableUUID %s, got %v", stableUUID, receivedUUIDs)
+	}
+
+	// 2. Omitting EventUUID generates a valid UUIDv7
+	_, err = c.SubmitEvent(context.Background(), "", "EVENT_EDGE_ATTACHED", `{"relation":"DERIVED_FROM"}`)
+	if err != nil {
+		t.Fatalf("SubmitEvent with empty UUID failed: %v", err)
+	}
+	if len(receivedUUIDs) < 3 {
+		t.Fatal("expected 3 requests received")
+	}
+	parsed, err := uuid.Parse(receivedUUIDs[2])
+	if err != nil {
+		t.Fatalf("auto-generated EventUUID not valid: %v", err)
+	}
+	if parsed.Version() != 7 {
+		t.Errorf("expected UUID version 7, got %d", parsed.Version())
 	}
 }
 
