@@ -5,4 +5,5 @@
     <color name="brand_teal_light">#4FD1C5</color>
     <color name="brand_dark">#0F172A</color>
     <color name="brand_surface">#1E293B</color>
+    <color name="splash_background">#F4FBFA</color>
 </resources>

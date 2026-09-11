@@ -2,54 +2,76 @@ package com.branchdam.mobile.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF90CAF9),
-    secondary = Color(0xFF80CBC4),
-    tertiary = Color(0xFFFFB74D),
-    background = Color(0xFF121212),
-    surface = Color(0xFF1E1E1E),
-    onPrimary = Color.Black,
-    onSecondary = Color.Black,
-    onBackground = Color(0xFFE0E0E0),
-    onSurface = Color(0xFFE0E0E0),
+    primary = PrimaryDark,
+    onPrimary = OnPrimaryDark,
+    primaryContainer = PrimaryContainerDark,
+    onPrimaryContainer = OnPrimaryContainerDark,
+    secondary = SecondaryDark,
+    onSecondary = OnSecondaryDark,
+    secondaryContainer = SecondaryContainerDark,
+    onSecondaryContainer = OnSecondaryContainerDark,
+    tertiary = TertiaryDark,
+    onTertiary = OnTertiaryDark,
+    tertiaryContainer = TertiaryContainerDark,
+    onTertiaryContainer = OnTertiaryContainerDark,
+    error = ErrorDark,
+    onError = OnErrorDark,
+    errorContainer = ErrorContainerDark,
+    onErrorContainer = OnErrorContainerDark,
+    background = BackgroundDark,
+    onBackground = OnBackgroundDark,
+    surface = SurfaceDark,
+    onSurface = OnSurfaceDark,
+    surfaceVariant = SurfaceVariantDark,
+    onSurfaceVariant = OnSurfaceVariantDark,
+    outline = OutlineDark,
+    outlineVariant = OutlineVariantDark,
+    scrim = ScrimDark,
+    inverseSurface = InverseSurfaceDark,
+    inverseOnSurface = InverseOnSurfaceDark,
+    inversePrimary = InversePrimaryDark,
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF1565C0),
-    onPrimary = Color.White,
-    secondary = Color(0xFF00897B),
-    onSecondary = Color.White,
-    tertiary = Color(0xFFF57C00),
-    onTertiary = Color.White,
-    background = Color(0xFFFAFAFA),
-    onBackground = Color(0xFF212121),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF212121),
+    primary = PrimaryLight,
+    onPrimary = OnPrimaryLight,
+    primaryContainer = PrimaryContainerLight,
+    onPrimaryContainer = OnPrimaryContainerLight,
+    secondary = SecondaryLight,
+    onSecondary = OnSecondaryLight,
+    secondaryContainer = SecondaryContainerLight,
+    onSecondaryContainer = OnSecondaryContainerLight,
+    tertiary = TertiaryLight,
+    onTertiary = OnTertiaryLight,
+    tertiaryContainer = TertiaryContainerLight,
+    onTertiaryContainer = OnTertiaryContainerLight,
+    error = ErrorLight,
+    onError = OnErrorLight,
+    errorContainer = ErrorContainerLight,
+    onErrorContainer = OnErrorContainerLight,
+    background = BackgroundLight,
+    onBackground = OnBackgroundLight,
+    surface = SurfaceLight,
+    onSurface = OnSurfaceLight,
+    surfaceVariant = SurfaceVariantLight,
+    onSurfaceVariant = OnSurfaceVariantLight,
+    outline = OutlineLight,
+    outlineVariant = OutlineVariantLight,
+    scrim = ScrimLight,
+    inverseSurface = InverseSurfaceLight,
+    inverseOnSurface = InverseOnSurfaceLight,
+    inversePrimary = InversePrimaryLight,
 )
 
 /**
  * Resolves the user-selected [themeMode] into the concrete dark/light
  * boolean and the dynamic-color gate. Extracted from the composable
  * so it can be unit-tested without a Compose runtime.
- *
- * @param themeMode the persisted user preference.
- * @param systemIsDark whether the OS currently reports dark mode.
- * @param dynamicColor whether the caller wants Material You colors
- *        (only honored on API 31+).
- * @param sdkInt the build's reported SDK level; pass
- *        `Build.VERSION.SDK_INT` in production.
- * @return `(darkTheme, useDynamic)` where `darkTheme` selects the
- *         color scheme and `useDynamic` controls whether the
- *         platform-derived dynamic scheme is used.
  */
 internal fun resolveTheme(
     themeMode: ThemeMode,
@@ -85,6 +107,8 @@ fun BranchDamTheme(
     }
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = BranchDamTypography,
+        shapes = BranchDamShapes,
         content = content,
     )
 }

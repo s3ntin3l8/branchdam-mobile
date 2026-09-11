@@ -295,7 +295,7 @@ func (e *Engine) SyncEvents(ctx context.Context, batchSize int) (int, error) {
 			return sentCount, ctx.Err()
 		}
 
-		_, err := e.c.SubmitEvent(ctx, evt.EventType, evt.PayloadJSON)
+		_, err := e.c.SubmitEvent(ctx, evt.EventUUID, evt.EventType, evt.PayloadJSON)
 		if err != nil {
 			_ = e.q.MarkEventFailed(evt.ID, err.Error(), 5)
 			continue

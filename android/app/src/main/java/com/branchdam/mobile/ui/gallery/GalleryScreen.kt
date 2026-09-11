@@ -1,35 +1,28 @@
 package com.branchdam.mobile.ui.gallery
 
 import android.net.Uri
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.branchdam.mobile.ui.components.shimmer
+import com.branchdam.mobile.ui.theme.BranchDamTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,92 +34,167 @@ fun GalleryScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
 
+    val state = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(loadError) {
+        val currentError = loadError
+        if (currentError != null && items.isNotEmpty()) {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = currentError,
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Gallery") }) },
+        topBar = { CenterAlignedTopAppBar(title = { Text("Gallery") }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
-        when {
-            isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = { viewModel.loadItems() },
+            state = state,
+            modifier = Modifier.padding(padding)
+        ) {
+            val currentError = loadError
+            when {
+                isLoading && items.isEmpty() -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        userScrollEnabled = false
+                    ) {
+                        items(12) {
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clip(MaterialTheme.shapes.medium)
+                                    .shimmer()
+                            )
+                        }
+                    }
                 }
-            }
-            loadError != null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        loadError!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                currentError != null && items.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            currentError,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
-            }
-            items.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "No media items found",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+                items.isEmpty() -> {
+                    EmptyGalleryState()
                 }
-            }
-            else -> {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 120.dp),
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(items, key = { it.mediaItem.id }) { galleryItem ->
-                        Card(modifier = Modifier.aspectRatio(1f)) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(Uri.parse(galleryItem.mediaItem.contentUri))
-                                        .crossfade(300)
-                                        .build(),
-                                    contentDescription = galleryItem.mediaItem.displayName,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                                Surface(
-                                    modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    shape = MaterialTheme.shapes.extraSmall,
-                                ) {
-                                    Text(
-                                        galleryItem.lineageStatus,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
-                                if (galleryItem.mediaItem.isDng) {
-                                    Surface(
-                                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
-                                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                                        shape = MaterialTheme.shapes.extraSmall,
-                                    ) {
-                                        Text(
-                                            "RAW",
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
-                                    }
-                                }
-                            }
+                else -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(items, key = { it.mediaItem.id }) { galleryItem ->
+                            GalleryItemCard(galleryItem)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GalleryItemCard(galleryItem: GalleryItem) {
+    Card(
+        modifier = Modifier.aspectRatio(1f),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(Uri.parse(galleryItem.mediaItem.contentUri))
+                    .crossfade(300)
+                    .build(),
+                contentDescription = galleryItem.mediaItem.displayName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Surface(
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                shape = MaterialTheme.shapes.extraSmall,
+            ) {
+                Text(
+                    galleryItem.lineageStatus,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            if (galleryItem.mediaItem.isDng) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
+                    shape = MaterialTheme.shapes.extraSmall,
+                ) {
+                    Text(
+                        "RAW",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun EmptyGalleryPreview() {
+    BranchDamTheme {
+        EmptyGalleryState()
+    }
+}
+
+@Composable
+private fun EmptyGalleryState() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Outlined.PhotoLibrary,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+        )
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "No media items found",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Photos and videos from your camera roll will appear here once synced.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }

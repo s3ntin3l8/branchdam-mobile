@@ -3,6 +3,8 @@ package com.branchdam.mobile.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,14 +25,14 @@ fun OtgImportConfirmationDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = modifier,
+        icon = { Icon(Icons.Default.Usb, contentDescription = null) },
         title = {
-            Column {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "USB-C SD Card Detected",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(4.dp))
                 Text(
                     text = scanResult.deviceLabel,
                     style = MaterialTheme.typography.bodyMedium,
@@ -45,37 +47,29 @@ fun OtgImportConfirmationDialog(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
 
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (scanResult.rawCount > 0) {
-                            Text(
-                                text = "• RAW Photos: ${scanResult.rawCount}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            M3SummaryRow("RAW Photos", scanResult.rawCount.toString())
                         }
                         if (scanResult.jpegCount > 0) {
-                            Text(
-                                text = "• JPEGs / HEICs: ${scanResult.jpegCount}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            M3SummaryRow("JPEGs / HEICs", scanResult.jpegCount.toString())
                         }
                         if (scanResult.videoCount > 0) {
-                            Text(
-                                text = "• Videos: ${scanResult.videoCount}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            M3SummaryRow("Videos", scanResult.videoCount.toString())
                         }
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 Text(
                     text = "Confirm import to copy full-resolution masters into branchDAM local queue for sync.",
                     style = MaterialTheme.typography.bodySmall,
@@ -84,21 +78,27 @@ fun OtgImportConfirmationDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
+            Button(onClick = onConfirm) {
                 Text("Import to branchDAM")
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("Skip / Cancel")
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         }
     )
+}
+
+@Composable
+private fun M3SummaryRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable
@@ -112,18 +112,33 @@ fun OtgIngestProgressDialog(
         modifier = modifier,
         title = {
             Text(
-                text = "Importing Media (${progress.currentFileIndex}/${progress.totalFiles})",
-                style = MaterialTheme.typography.titleMedium,
+                text = "Importing Media",
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                LinearProgressIndicator(
-                    progress = { progress.percentage },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column {
+                    LinearProgressIndicator(
+                        progress = { progress.percentage },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${(progress.percentage * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Text(
+                            text = "${progress.currentFileIndex}/${progress.totalFiles}",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+
                 Text(
                     text = progress.currentFileName,
                     style = MaterialTheme.typography.bodySmall,
@@ -153,7 +168,7 @@ fun OtgIngestCompletedDialog(
         title = {
             Text(
                 text = if (fileErrors.isEmpty()) "Import Complete" else "Import Finished With Errors",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = if (fileErrors.isEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
             )
@@ -162,35 +177,37 @@ fun OtgIngestCompletedDialog(
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 Text(
                     text = "Successfully staged $importedCount items (${com.branchdam.mobile.otg.OtgMediaCandidate.formatBytes(totalBytes)}) to branchDAM queue.",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 if (fileErrors.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     Text(
                         text = "${fileErrors.size} item(s) skipped:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             fileErrors.forEach { err ->
-                                Text(
-                                    text = "• ${err.candidate.fileName}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = err.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Spacer(Modifier.height(6.dp))
+                                Column {
+                                    Text(
+                                        text = err.candidate.fileName,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = err.message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
                             }
                         }
                     }
@@ -217,7 +234,7 @@ fun OtgIngestErrorDialog(
         title = {
             Text(
                 text = "Import Failed",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
             )

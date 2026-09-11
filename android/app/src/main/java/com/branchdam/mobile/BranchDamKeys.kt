@@ -100,6 +100,11 @@ object BranchDamKeys {
      */
     const val THEME_MODE = "branchdam_theme_mode"
 
+    /**
+     * Whether the user has completed the onboarding flow.
+     */
+    const val ONBOARDING_COMPLETED = "branchdam_onboarding_completed"
+
     /** Default background sync interval in minutes. */
     const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
 

@@ -8,11 +8,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -32,7 +35,7 @@ import com.branchdam.mobile.ui.OtgIngestCompletedDialog
 import com.branchdam.mobile.ui.OtgIngestErrorDialog
 import com.branchdam.mobile.ui.OtgIngestProgressDialog
 import com.branchdam.mobile.ui.navigation.AppNavGraph
-import com.branchdam.mobile.ui.navigation.BottomNavBar
+import com.branchdam.mobile.ui.navigation.NavigationSuiteScaffold
 import com.branchdam.mobile.ui.navigation.Screen
 import com.branchdam.mobile.ui.navigation.bottomNavRoutes
 import com.branchdam.mobile.ui.settings.SettingsViewModel
@@ -210,7 +213,9 @@ internal fun DrivePermissionFlow(
 
 class MainActivity : ComponentActivity() {
 
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -242,6 +247,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             BranchDamTheme(themeMode = themeMode) {
+                val windowSizeClass = calculateWindowSizeClass(this)
                 val permissionFlow = remember { PermissionFlowState() }
 
                 val (notificationsBatch, mediaBatch) = remember { runtimePermissionBatches() }
@@ -282,29 +288,46 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
-                val showBottomBar = currentRoute in bottomNavRoutes
+                val sharedPrefs = applicationContext.getSharedPreferences(
+                    BranchDamKeys.PREFS_NAME,
+                    android.content.Context.MODE_PRIVATE,
+                )
+                val isOnboardingCompleted = remember {
+                    val serverUrlSet = sharedPrefs.getString(BranchDamApplication.KEY_SERVER_URL, null) != null
+                    sharedPrefs.getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, serverUrlSet)
+                }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            AppNavGraph(
-                                navController = navController,
-                            )
+                    NavigationSuiteScaffold(
+                        windowSizeClass = windowSizeClass,
+                        currentRoute = currentRoute,
+                        onNavigate = { route ->
+                            if (route == Screen.Settings.route) {
+                                settingsViewModel.triggerNavigationReset()
+                            }
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
-                        if (showBottomBar) {
-                            BottomNavBar(
-                                currentRoute = currentRoute,
-                                onNavigate = { route: String ->
-                                    if (route == Screen.Settings.route) {
-                                        settingsViewModel.triggerNavigationReset()
-                                    }
-                                    navController.navigate(route) {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                            )
+                    ) {
+                        AppNavGraph(
+                            navController = navController,
+                            windowSizeClass = windowSizeClass,
+                            startDestination = if (isOnboardingCompleted) Screen.Lineage.route else Screen.Onboarding.route,
+                            onRequestPermissions = {
+                                if (permissionFlow.batch.value == PermissionBatch.NONE) {
+                                    permissionFlow.nextBatch()
+                                }
+                            }
+                        )
+                    }
+
+                    // Handle onboarding completion persistence
+                    LaunchedEffect(currentRoute) {
+                        if (currentRoute == Screen.Lineage.route && !isOnboardingCompleted) {
+                            sharedPrefs.edit().putBoolean(BranchDamKeys.ONBOARDING_COMPLETED, true).apply()
                         }
                     }
 
