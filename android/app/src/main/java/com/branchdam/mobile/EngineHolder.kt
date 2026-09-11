@@ -77,7 +77,9 @@ object EngineHolder {
         capturedAtUnix: Long,
         localId: String,
     ): Long {
+        // Failure or uninitialized when native engine library is present
         if (nativeAvailable.get() && !isInitialized) return 0L
+        // Test stub fallback simulating a generated ID when native AAR is absent
         if (!nativeAvailable.get()) return 1L
         return try {
             executor.submit(Callable {
