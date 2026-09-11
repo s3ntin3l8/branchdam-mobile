@@ -52,6 +52,23 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
+# Unset conflicting ANDROID_PREFS_ROOT if ANDROID_USER_HOME is also present
+if [ -n "$ANDROID_PREFS_ROOT" ] && [ -n "$ANDROID_USER_HOME" ]; then
+    unset ANDROID_PREFS_ROOT
+fi
+
+# Redirect to JDK 21 if default JAVA_HOME is JDK 25 (incompatible with Gradle 8.11)
+if [ -d "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home" ]; then
+    if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+        JAVA_VER_CHECK=$("$JAVA_HOME/bin/java" -version 2>&1 | head -n 1)
+        case "$JAVA_VER_CHECK" in
+            *"25."*)
+                export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+                ;;
+        esac
+    fi
+fi
+
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
