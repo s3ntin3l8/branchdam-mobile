@@ -266,7 +266,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun shareDiagnosticLog(context: android.content.Context) {
         val logFile = java.io.File(SyncLogger.getLogPath(context))
-        if (!logFile.exists()) return
+        if (!logFile.exists()) {
+            SyncLogger.log(context, "shareDiagnosticLog: log file does not exist at ${logFile.absolutePath}")
+            return
+        }
         try {
             val uri = androidx.core.content.FileProvider.getUriForFile(
                 context,
@@ -284,8 +287,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
-        } catch (_: Exception) {
-            // Guard against ActivityNotFoundException or FileProvider resolution errors
+        } catch (e: android.content.ActivityNotFoundException) {
+            SyncLogger.log(context, "No app available to handle share intent", e)
+            android.widget.Toast.makeText(context, "No app available to handle share intent", android.widget.Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            SyncLogger.log(context, "shareDiagnosticLog failed", e)
         }
     }
 
