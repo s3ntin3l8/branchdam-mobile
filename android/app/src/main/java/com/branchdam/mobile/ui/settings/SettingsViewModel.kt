@@ -266,18 +266,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun shareDiagnosticLog(context: android.content.Context) {
         val logFile = java.io.File(SyncLogger.getLogPath(context))
-        if (!logFile.exists()) return
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            logFile
-        )
-        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (!logFile.exists()) {
+            SyncLogger.log(context, "shareDiagnosticLog: log file does not exist at ${logFile.absolutePath}")
+            return
         }
-        context.startActivity(android.content.Intent.createChooser(intent, "Share Sync Log"))
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                logFile
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                clipData = android.content.ClipData.newRawUri("Diagnostic Log", uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = android.content.Intent.createChooser(intent, "Share Sync Log").apply {
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (e: android.content.ActivityNotFoundException) {
+            SyncLogger.log(context, "No app available to handle share intent", e)
+            android.widget.Toast.makeText(context, "No app available to handle share intent", android.widget.Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            SyncLogger.log(context, "shareDiagnosticLog failed", e)
+        }
     }
 
     private fun persistSettings() {
