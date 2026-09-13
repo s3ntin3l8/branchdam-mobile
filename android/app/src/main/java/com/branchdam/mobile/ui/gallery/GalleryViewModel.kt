@@ -19,11 +19,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class GalleryItem(
-    val mediaItem: MediaItem,
-    val lineageStatus: String,
+    val primaryMediaItem: MediaItem,
+    val companionMediaItem: MediaItem? = null,
+    val lineageStatus: String = "Unpaired",
     val isOffloaded: Boolean = false,
     val backupStatus: String = "NOT_ENQUEUED",
 ) {
+    val mediaItem: MediaItem get() = primaryMediaItem
+    val isPair: Boolean get() = companionMediaItem != null
     val isBackedUp: Boolean get() = backupStatus == "COMPLETED" || isOffloaded
     val isPendingUpload: Boolean get() = backupStatus == "PENDING" || backupStatus == "IN_PROGRESS"
     val isUploadFailed: Boolean get() = backupStatus == "FAILED"
@@ -57,33 +60,78 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val videos = MediaScanner.queryRecentVideos(context)
                     val allItems = images + videos
 
-                    val pairedIds = mutableSetOf<Long>()
                     val pairs = PairDetector.findPairs(allItems)
+                    val pairedRawIds = mutableSetOf<Long>()
+                    val pairedJpegIds = mutableSetOf<Long>()
+                    val pairMapByJpegId = mutableMapOf<Long, com.branchdam.mobile.lineage.LineagePair>()
+
                     for (pair in pairs) {
-                        pairedIds.add(pair.masterRaw.id)
-                        pairedIds.add(pair.derivativeJpeg.id)
+                        pairedRawIds.add(pair.masterRaw.id)
+                        pairedJpegIds.add(pair.derivativeJpeg.id)
+                        pairMapByJpegId[pair.derivativeJpeg.id] = pair
                     }
 
                     val allStatuses = EngineHolder.getAllMediaStatuses()
+                    val resultList = mutableListOf<GalleryItem>()
 
-                    allItems.map { item ->
-                        val status = when {
-                            pairedIds.contains(item.id) -> "Paired"
-                            item.isDng -> "RAW"
-                            else -> "Unpaired"
+                    for (item in allItems) {
+                        if (pairedRawIds.contains(item.id)) {
+                            // Grouped under companion JPEG card
+                            continue
                         }
-                        val backupStatus = allStatuses[item.contentUri]
-                            ?: allStatuses[item.filePath]
-                            ?: allStatuses[item.displayName]
-                            ?: "NOT_ENQUEUED"
-                        val isOffloaded = backupStatus == "OFFLOADED"
-                        GalleryItem(
-                            mediaItem = item,
-                            lineageStatus = status,
-                            isOffloaded = isOffloaded,
-                            backupStatus = backupStatus,
-                        )
+
+                        if (pairedJpegIds.contains(item.id)) {
+                            val pair = pairMapByJpegId[item.id]
+                            val companionRaw = pair?.masterRaw
+
+                            val jpegStatus = allStatuses[item.contentUri]
+                                ?: allStatuses[item.filePath]
+                                ?: allStatuses[item.displayName]
+                                ?: "NOT_ENQUEUED"
+                            val rawStatus = companionRaw?.let {
+                                allStatuses[it.contentUri]
+                                    ?: allStatuses[it.filePath]
+                                    ?: allStatuses[it.displayName]
+                            } ?: "NOT_ENQUEUED"
+
+                            val combinedStatus = when {
+                                jpegStatus == "COMPLETED" && rawStatus == "COMPLETED" -> "COMPLETED"
+                                jpegStatus == "COMPLETED" || rawStatus == "COMPLETED" -> "COMPLETED"
+                                jpegStatus == "OFFLOADED" || rawStatus == "OFFLOADED" -> "OFFLOADED"
+                                jpegStatus == "PENDING" || rawStatus == "PENDING" || jpegStatus == "IN_PROGRESS" || rawStatus == "IN_PROGRESS" -> "PENDING"
+                                jpegStatus == "FAILED" || rawStatus == "FAILED" -> "FAILED"
+                                else -> "NOT_ENQUEUED"
+                            }
+                            val isOffloaded = combinedStatus == "OFFLOADED"
+
+                            resultList.add(
+                                GalleryItem(
+                                    primaryMediaItem = item,
+                                    companionMediaItem = companionRaw,
+                                    lineageStatus = "RAW+JPEG",
+                                    isOffloaded = isOffloaded,
+                                    backupStatus = combinedStatus,
+                                )
+                            )
+                        } else {
+                            val backupStatus = allStatuses[item.contentUri]
+                                ?: allStatuses[item.filePath]
+                                ?: allStatuses[item.displayName]
+                                ?: "NOT_ENQUEUED"
+                            val isOffloaded = backupStatus == "OFFLOADED"
+                            val status = if (item.isDng) "RAW" else "Unpaired"
+                            resultList.add(
+                                GalleryItem(
+                                    primaryMediaItem = item,
+                                    companionMediaItem = null,
+                                    lineageStatus = status,
+                                    isOffloaded = isOffloaded,
+                                    backupStatus = backupStatus,
+                                )
+                            )
+                        }
                     }
+                    resultList
                 }
                 _items.value = galleryItems
                 _loadError.value = null
@@ -122,13 +170,34 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(ioDispatcher) {
             var successCount = 0
             for (item in itemsToUpload) {
-                val mediaId = EngineHolder.enqueueMedia(
-                    localPath = item.mediaItem.filePath,
-                    filename = item.mediaItem.displayName,
-                    capturedAtUnix = item.mediaItem.dateTakenUnix,
-                    localId = item.mediaItem.contentUri
+                val primary = item.primaryMediaItem
+                val companion = item.companionMediaItem
+
+                val primaryId = EngineHolder.enqueueMedia(
+                    localPath = primary.filePath,
+                    filename = primary.displayName,
+                    capturedAtUnix = primary.dateTakenUnix,
+                    localId = primary.contentUri
                 )
-                if (mediaId > 0L) {
+                var companionId = 0L
+                if (companion != null) {
+                    companionId = EngineHolder.enqueueMedia(
+                        localPath = companion.filePath,
+                        filename = companion.displayName,
+                        capturedAtUnix = companion.dateTakenUnix,
+                        localId = companion.contentUri
+                    )
+                    if (primaryId > 0L && companionId > 0L) {
+                        EngineHolder.enqueueLineageEvent(
+                            parentLocalID = companion.contentUri,
+                            childLocalID = primary.contentUri,
+                            relationshipType = "DERIVED_FROM",
+                            resolver = "android_camera_pair",
+                            confidence = 1.00
+                        )
+                    }
+                }
+                if (primaryId > 0L || companionId > 0L) {
                     successCount++
                 }
             }
@@ -155,18 +224,40 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
+        val galleryItem = _items.value.find { it.primaryMediaItem.id == mediaItem.id || it.companionMediaItem?.id == mediaItem.id }
+        val primary = galleryItem?.primaryMediaItem ?: mediaItem
+        val companion = galleryItem?.companionMediaItem
+
         viewModelScope.launch(ioDispatcher) {
-            val mediaId = EngineHolder.enqueueMedia(
-                localPath = mediaItem.filePath,
-                filename = mediaItem.displayName,
-                capturedAtUnix = mediaItem.dateTakenUnix,
-                localId = mediaItem.contentUri
+            val primaryId = EngineHolder.enqueueMedia(
+                localPath = primary.filePath,
+                filename = primary.displayName,
+                capturedAtUnix = primary.dateTakenUnix,
+                localId = primary.contentUri
             )
-            val success = mediaId > 0L
+            var companionId = 0L
+            if (companion != null) {
+                companionId = EngineHolder.enqueueMedia(
+                    localPath = companion.filePath,
+                    filename = companion.displayName,
+                    capturedAtUnix = companion.dateTakenUnix,
+                    localId = companion.contentUri
+                )
+                if (primaryId > 0L && companionId > 0L) {
+                    EngineHolder.enqueueLineageEvent(
+                        parentLocalID = companion.contentUri,
+                        childLocalID = primary.contentUri,
+                        relationshipType = "DERIVED_FROM",
+                        resolver = "android_camera_pair",
+                        confidence = 1.00
+                    )
+                }
+            }
+            val success = primaryId > 0L || companionId > 0L
             if (success) {
                 _items.update { list ->
                     list.map { item ->
-                        if (item.mediaItem.id == mediaItem.id) {
+                        if (item.primaryMediaItem.id == primary.id) {
                             item.copy(backupStatus = "PENDING")
                         } else item
                     }
@@ -180,7 +271,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun getItemById(id: Long): GalleryItem? {
-        return _items.value.find { it.mediaItem.id == id }
+        return _items.value.find { it.primaryMediaItem.id == id || it.companionMediaItem?.id == id }
     }
 
     @androidx.annotation.VisibleForTesting

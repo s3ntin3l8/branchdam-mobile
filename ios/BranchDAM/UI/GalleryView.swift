@@ -61,37 +61,59 @@ class GalleryViewModel: ObservableObject {
             .map { (id: $0.id, filename: $0.filename, dateUnix: $0.dateUnix) }
         let pairs = ApplePairDetector.findProRawPairs(masters: raws, derivatives: jpegs)
 
-        var pairedIds = Set<String>()
+        var pairedRawIds = Set<String>()
+        var pairedJpegIds = Set<String>()
         for pair in pairs {
-            pairedIds.insert(pair.masterLocalId)
-            pairedIds.insert(pair.derivativeLocalId)
+            pairedRawIds.insert(pair.masterLocalId)
+            pairedJpegIds.insert(pair.derivativeLocalId)
         }
 
         let allStatuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
+        var galleryItems = [GalleryItem]()
 
-        return metas.map { meta in
-            let status: String
-            if pairedIds.contains(meta.id) {
-                status = "Paired"
-            } else if meta.isRaw {
-                status = "RAW"
-            } else {
-                status = "Unpaired"
+        for meta in metas {
+            let metaLocalId = "ph://\(meta.id)"
+            if pairedRawIds.contains(meta.id) || pairedRawIds.contains(metaLocalId) {
+                // Grouped under companion JPEG card
+                continue
             }
-            let backupStatus = allStatuses[meta.id]
-                ?? allStatuses["ph://\(meta.id)"]
-                ?? allStatuses[meta.filename]
-                ?? "NOT_ENQUEUED"
-            let isOffloaded = backupStatus == "OFFLOADED"
-            return GalleryItem(
-                id: meta.id,
-                asset: meta.asset,
-                lineageStatus: status,
-                isRaw: meta.isRaw,
-                isOffloaded: isOffloaded,
-                backupStatus: backupStatus
-            )
+
+            if pairedJpegIds.contains(meta.id) || pairedJpegIds.contains(metaLocalId) {
+                let backupStatus = allStatuses[meta.id]
+                    ?? allStatuses[metaLocalId]
+                    ?? allStatuses[meta.filename]
+                    ?? "NOT_ENQUEUED"
+                let isOffloaded = backupStatus == "OFFLOADED"
+                galleryItems.append(
+                    GalleryItem(
+                        id: meta.id,
+                        asset: meta.asset,
+                        lineageStatus: "RAW+JPEG",
+                        isRaw: false,
+                        isOffloaded: isOffloaded,
+                        backupStatus: backupStatus
+                    )
+                )
+            } else {
+                let status: String = meta.isRaw ? "RAW" : "Unpaired"
+                let backupStatus = allStatuses[meta.id]
+                    ?? allStatuses[metaLocalId]
+                    ?? allStatuses[meta.filename]
+                    ?? "NOT_ENQUEUED"
+                let isOffloaded = backupStatus == "OFFLOADED"
+                galleryItems.append(
+                    GalleryItem(
+                        id: meta.id,
+                        asset: meta.asset,
+                        lineageStatus: status,
+                        isRaw: meta.isRaw,
+                        isOffloaded: isOffloaded,
+                        backupStatus: backupStatus
+                    )
+                )
+            }
         }
+        return galleryItems
     }
 }
 
@@ -242,7 +264,7 @@ public struct GalleryView: View {
 
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "Paired": return .green.opacity(0.85)
+        case "RAW+JPEG", "Paired": return .green.opacity(0.85)
         case "RAW": return Color.accentColor.opacity(0.85)
         default: return Color.gray.opacity(0.7)
         }

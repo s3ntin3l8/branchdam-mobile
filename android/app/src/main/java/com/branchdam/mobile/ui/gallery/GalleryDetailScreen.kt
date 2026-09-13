@@ -258,15 +258,19 @@ fun GalleryDetailScreen(
                             else -> "Not backed up (Local only)"
                         }
                         DetailRow(label = "Backup Status", value = backupStatusValue)
-                        DetailRow(label = "File Name", value = galleryItem.mediaItem.displayName)
-                        DetailRow(label = "Date Taken", value = formatDateTaken(galleryItem.mediaItem.dateTakenUnix))
-                        DetailRow(label = "File Size", value = formatFileSize(galleryItem.mediaItem.sizeBytes))
-                        DetailRow(label = "MIME Type", value = galleryItem.mediaItem.mimeType)
-                        if (galleryItem.mediaItem.burstId != null) {
-                            DetailRow(label = "Burst ID", value = galleryItem.mediaItem.burstId)
+                        DetailRow(label = "Primary File Name", value = galleryItem.primaryMediaItem.displayName)
+                        if (galleryItem.companionMediaItem != null) {
+                            DetailRow(label = "RAW Master File Name", value = galleryItem.companionMediaItem.displayName)
+                            DetailRow(label = "RAW Master Size", value = formatFileSize(galleryItem.companionMediaItem.sizeBytes))
                         }
-                        DetailRow(label = "Local Path", value = galleryItem.mediaItem.filePath.ifEmpty { "N/A" })
-                        DetailRow(label = "Content URI", value = galleryItem.mediaItem.contentUri)
+                        DetailRow(label = "Date Taken", value = formatDateTaken(galleryItem.primaryMediaItem.dateTakenUnix))
+                        DetailRow(label = "File Size", value = formatFileSize(galleryItem.primaryMediaItem.sizeBytes))
+                        DetailRow(label = "MIME Type", value = galleryItem.primaryMediaItem.mimeType)
+                        if (galleryItem.primaryMediaItem.burstId != null) {
+                            DetailRow(label = "Burst ID", value = galleryItem.primaryMediaItem.burstId)
+                        }
+                        DetailRow(label = "Local Path", value = galleryItem.primaryMediaItem.filePath.ifEmpty { "N/A" })
+                        DetailRow(label = "Content URI", value = galleryItem.primaryMediaItem.contentUri)
                     }
                 }
 
