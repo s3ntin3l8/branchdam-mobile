@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.7](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.6...branchdam-mobile-v0.7.7) (2026-09-13)
+
+
+### Bug Fixes
+
+* **android:** resolve app crash when sharing diagnostic log ([#161](https://github.com/s3ntin3l8/branchdam-mobile/issues/161)) ([6d49f4a](https://github.com/s3ntin3l8/branchdam-mobile/commit/6d49f4a63233acb2878dc54efa8a3b1bc3ecca9f))
+
 ## [0.7.6](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.5...branchdam-mobile-v0.7.6) (2026-09-11)
 
 
