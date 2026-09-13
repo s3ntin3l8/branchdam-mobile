@@ -326,13 +326,17 @@ func TestSyncUploads_CancelDoesNotStallNextBatch(t *testing.T) {
 
 	var uploads int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		uploads++
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(client.UploadResponse{
-			OK:       true,
-			NodeUUID: "resume-node-1",
-			Status:   "UPLOADED",
-		})
+		if r.URL.Path == "/api/v1/agent/upload" {
+			uploads++
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(client.UploadResponse{
+				OK:       true,
+				NodeUUID: "resume-node-1",
+				Status:   "UPLOADED",
+			})
+		} else {
+			http.NotFound(w, r)
+		}
 	}))
 	defer server.Close()
 
@@ -543,5 +547,56 @@ func TestEnqueueLocalCapture_SourcePathHash(t *testing.T) {
 	ce, ok := err.(*client.ClientError)
 	if !ok || ce.Code != client.CodeInvalidInput {
 		t.Fatalf("expected CodeInvalidInput, got %v", err)
+	}
+}
+
+func TestEnqueueLocalCapture_ServerPreScreen(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_prescreen_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/agent/check-content" {
+			_ = json.NewEncoder(w).Encode(client.ContentCheckResult{
+				Found:    true,
+				NodeUUID: "prescreened-node-uuid-123",
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "k", AgentID: "a"})
+	eng := New(q, c)
+
+	testFilePath := filepath.Join(tempDir, "PXL_PRESCREEN.dng")
+	if err := os.WriteFile(testFilePath, []byte("prescreen bytes"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_PRESCREEN.dng", 1724000000, "local_uri_prescreen", "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+
+	if item.Status != queue.UploadCompleted {
+		t.Fatalf("expected Status COMPLETED for prescreened content, got %s", item.Status)
+	}
+	if item.NodeUUID != "prescreened-node-uuid-123" {
+		t.Fatalf("expected NodeUUID 'prescreened-node-uuid-123', got %s", item.NodeUUID)
+	}
+
+	// Verify local_media_state table was updated
+	mState, err := q.GetMediaByLocalID("local_uri_prescreen")
+	if err != nil || mState == nil {
+		t.Fatalf("GetMediaByLocalID failed: %v", err)
+	}
+	if mState.NodeUUID != "prescreened-node-uuid-123" {
+		t.Fatalf("expected mState.NodeUUID 'prescreened-node-uuid-123', got %s", mState.NodeUUID)
 	}
 }

@@ -90,7 +90,9 @@ func (c *Client) SendTelemetry(ctx context.Context, telemetry MobileTelemetry) e
 
 	mountPath := telemetry.MountPath
 	if mountPath == "" {
-		if strings.EqualFold(telemetry.Platform, "ios") || runtime.GOOS == "darwin" || runtime.GOOS == "ios" {
+		if strings.EqualFold(telemetry.Platform, "android") {
+			mountPath = DefaultAndroidMountPath
+		} else if strings.EqualFold(telemetry.Platform, "ios") || runtime.GOOS == "darwin" || runtime.GOOS == "ios" {
 			mountPath = DefaultIOSMountPath
 		} else {
 			mountPath = DefaultAndroidMountPath

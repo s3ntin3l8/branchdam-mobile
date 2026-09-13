@@ -156,6 +156,33 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		}
 	}
 
+	// Server pre-screen gate: check if server already has this content
+	if e.c != nil {
+		checkRes, checkErr := e.c.CheckContent(context.Background(), fastHash, fullHash)
+		if checkErr == nil && checkRes.Found && checkRes.NodeUUID != "" {
+			item := &queue.UploadItem{
+				LocalPath:      localPath,
+				TargetFilename: filename,
+				FastHash:       fastHash,
+				Blake3Hash:     fullHash,
+				CameraModel:    cam,
+				SourcePathHash: srcPathHash,
+				SizeBytes:      sizeBytes,
+				CapturedAtUnix: capturedAtUnix,
+				Status:         queue.UploadCompleted,
+				NodeUUID:       checkRes.NodeUUID,
+			}
+			id, err := e.q.EnqueueUpload(item)
+			if err == nil {
+				item.ID = id
+				if localID != "" {
+					_ = e.q.RecordLocalMedia(localID, checkRes.NodeUUID, fullHash, "ACTIVE")
+				}
+				return item, nil
+			}
+		}
+	}
+
 	item := &queue.UploadItem{
 		LocalPath:      localPath,
 		TargetFilename: filename,
@@ -276,6 +303,7 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		if err := e.q.MarkUploadComplete(item.ID, resp.NodeUUID); err != nil {
 			continue
 		}
+		_ = e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, resp.NodeUUID)
 
 		completedCount++
 	}
@@ -460,3 +488,19 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 	}
 	return SafeSpaceVerdict{LocalID: localID, Eligible: true}, nil
 }
+
+// GetMediaStatus returns the backup status of a media item by localID.
+func (e *Engine) GetMediaStatus(localID string) (string, error) {
+	return e.q.GetMediaStatus(localID)
+}
+
+// GetAllMediaStatuses returns a map of localID/localPath/srcPathHash -> status for all tracked items.
+func (e *Engine) GetAllMediaStatuses() (map[string]string, error) {
+	return e.q.GetAllMediaStatuses()
+}
+
+// CountPendingUploads returns the number of pending/in-progress uploads in the queue.
+func (e *Engine) CountPendingUploads() (int64, error) {
+	return e.q.CountPendingUploads()
+}
+

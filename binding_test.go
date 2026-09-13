@@ -190,3 +190,79 @@ func TestBindingEnqueueMediaWithSourceHash(t *testing.T) {
 		t.Fatalf("expected error for invalid sourcePathHash in BindingEnqueueMediaWithSourceHash, got nil")
 	}
 }
+
+func TestBindingGetMediaStatusAndCountPendingUploads(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test_status.db")
+
+	if err := BindingOpen(dbPath, "http://localhost", "", "test", "0.2.0", "localhost"); err != nil {
+		t.Fatalf("BindingOpen: %v", err)
+	}
+	defer BindingClose()
+
+	// Initial status for un-enqueued item
+	status, err := BindingGetMediaStatus("local-test-1")
+	if err != nil {
+		t.Fatalf("BindingGetMediaStatus: %v", err)
+	}
+	if status != "NOT_ENQUEUED" {
+		t.Fatalf("expected NOT_ENQUEUED, got %q", status)
+	}
+
+	count, err := BindingCountPendingUploads()
+	if err != nil {
+		t.Fatalf("BindingCountPendingUploads: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 pending, got %d", count)
+	}
+
+	// Enqueue item
+	sampleFile := filepath.Join(dir, "sample.jpg")
+	if err := os.WriteFile(sampleFile, []byte("sample bytes"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	id, err := BindingEnqueueMedia(sampleFile, "sample.jpg", "local-test-1", "Pixel", 1724000000, 12)
+	if err != nil || id <= 0 {
+		t.Fatalf("BindingEnqueueMedia failed: %v, id=%d", err, id)
+	}
+
+	status, err = BindingGetMediaStatus("local-test-1")
+	if err != nil {
+		t.Fatalf("BindingGetMediaStatus after enqueue: %v", err)
+	}
+	if status != "PENDING" {
+		t.Fatalf("expected PENDING, got %q", status)
+	}
+
+	count, err = BindingCountPendingUploads()
+	if err != nil {
+		t.Fatalf("BindingCountPendingUploads: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 pending, got %d", count)
+	}
+
+	// Mark completed
+	if err := bindingEngine.queue.MarkUploadComplete(id, "node-uuid-123"); err != nil {
+		t.Fatalf("MarkUploadComplete: %v", err)
+	}
+
+	status, err = BindingGetMediaStatus("local-test-1")
+	if err != nil {
+		t.Fatalf("BindingGetMediaStatus after complete: %v", err)
+	}
+	if status != "COMPLETED" {
+		t.Fatalf("expected COMPLETED, got %q", status)
+	}
+
+	count, err = BindingCountPendingUploads()
+	if err != nil {
+		t.Fatalf("BindingCountPendingUploads: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 pending after completion, got %d", count)
+	}
+}
+

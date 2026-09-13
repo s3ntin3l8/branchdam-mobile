@@ -301,3 +301,43 @@ func BindingCheckContent(fastHash, fullHash string) (string, error) {
 	}
 	return string(b), nil
 }
+
+// BindingGetMediaStatus returns the status of a local media asset.
+// Returns "OFFLOADED", "COMPLETED", "IN_PROGRESS", "PENDING", "FAILED", or "NOT_ENQUEUED".
+func BindingGetMediaStatus(localID string) (string, error) {
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if bindingEngine == nil {
+		return "NOT_ENQUEUED", fmt.Errorf("engine not open")
+	}
+	return bindingEngine.GetMediaStatus(localID)
+}
+
+// BindingGetAllMediaStatuses returns a JSON-encoded map of localID/localPath/srcPathHash -> status.
+func BindingGetAllMediaStatuses() (string, error) {
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if bindingEngine == nil {
+		return "{}", fmt.Errorf("engine not open")
+	}
+	m, err := bindingEngine.GetAllMediaStatuses()
+	if err != nil {
+		return "{}", err
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
+}
+
+// BindingCountPendingUploads returns the number of pending/in-progress uploads in the queue.
+func BindingCountPendingUploads() (int64, error) {
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if bindingEngine == nil {
+		return 0, fmt.Errorf("engine not open")
+	}
+	return bindingEngine.CountPendingUploads()
+}
+

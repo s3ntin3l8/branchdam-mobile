@@ -202,8 +202,16 @@ class MediaStoreObserver(
     }
 
     private fun runLineageDetection(newItems: List<MediaItem>) {
+        // Query recent images to allow cross-batch companion pairing (e.g. RAW uploaded after companion JPEG).
+        val recentImages = try {
+            MediaScanner.queryRecentImages(context, minDateTakenUnix = 0, limit = 100)
+        } catch (_: Throwable) {
+            emptyList()
+        }
+        val candidateItems = (recentImages + newItems).distinctBy { it.id }
+
         // Pair detection (DNG + JPEG companion pairs).
-        val pairs = PairDetector.findPairs(newItems)
+        val pairs = PairDetector.findPairs(candidateItems)
         PairDetector.registerPairLineage(pairs)
 
         // Edit correlation (in-phone editor exports -> camera roll master).

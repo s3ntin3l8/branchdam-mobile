@@ -22,7 +22,12 @@ data class GalleryItem(
     val mediaItem: MediaItem,
     val lineageStatus: String,
     val isOffloaded: Boolean = false,
-)
+    val backupStatus: String = "NOT_ENQUEUED",
+) {
+    val isBackedUp: Boolean get() = backupStatus == "COMPLETED" || isOffloaded
+    val isPendingUpload: Boolean get() = backupStatus == "PENDING" || backupStatus == "IN_PROGRESS"
+    val isUploadFailed: Boolean get() = backupStatus == "FAILED"
+}
 
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -59,17 +64,24 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         pairedIds.add(pair.derivativeJpeg.id)
                     }
 
+                    val allStatuses = EngineHolder.getAllMediaStatuses()
+
                     allItems.map { item ->
                         val status = when {
                             pairedIds.contains(item.id) -> "Paired"
                             item.isDng -> "RAW"
                             else -> "Unpaired"
                         }
-                        val isOffloaded = EngineHolder.isMediaOffloaded(item.contentUri)
+                        val backupStatus = allStatuses[item.contentUri]
+                            ?: allStatuses[item.filePath]
+                            ?: allStatuses[item.displayName]
+                            ?: "NOT_ENQUEUED"
+                        val isOffloaded = backupStatus == "OFFLOADED"
                         GalleryItem(
                             mediaItem = item,
                             lineageStatus = status,
-                            isOffloaded = isOffloaded
+                            isOffloaded = isOffloaded,
+                            backupStatus = backupStatus,
                         )
                     }
                 }
@@ -121,6 +133,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
             if (successCount > 0) {
+                _items.update { list ->
+                    list.map { item ->
+                        if (selectedIds.contains(item.mediaItem.id) && !item.isOffloaded) {
+                            item.copy(backupStatus = "PENDING")
+                        } else item
+                    }
+                }
                 SyncScheduler.triggerImmediateSync(context)
             }
             withContext(Dispatchers.Main) {
@@ -145,6 +164,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             )
             val success = mediaId > 0L
             if (success) {
+                _items.update { list ->
+                    list.map { item ->
+                        if (item.mediaItem.id == mediaItem.id) {
+                            item.copy(backupStatus = "PENDING")
+                        } else item
+                    }
+                }
                 SyncScheduler.triggerImmediateSync(context)
             }
             withContext(Dispatchers.Main) {

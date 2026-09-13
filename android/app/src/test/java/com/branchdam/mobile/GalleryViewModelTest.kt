@@ -184,6 +184,38 @@ class GalleryViewModelTest {
     }
 
     @Test
+    fun testGalleryItem_backupStatusProperties() {
+        val notEnqueued = GalleryItem(
+            mediaItem = MediaItem(1L, "uri1", "path1", "name1", "image/jpeg", 100L, 1000L, false),
+            lineageStatus = "Unpaired",
+            backupStatus = "NOT_ENQUEUED"
+        )
+        assertFalse(notEnqueued.isBackedUp)
+        assertFalse(notEnqueued.isPendingUpload)
+        assertFalse(notEnqueued.isUploadFailed)
+
+        val pending = notEnqueued.copy(backupStatus = "PENDING")
+        assertFalse(pending.isBackedUp)
+        assertTrue(pending.isPendingUpload)
+        assertFalse(pending.isUploadFailed)
+
+        val completed = notEnqueued.copy(backupStatus = "COMPLETED")
+        assertTrue(completed.isBackedUp)
+        assertFalse(completed.isPendingUpload)
+        assertFalse(completed.isUploadFailed)
+
+        val offloaded = notEnqueued.copy(isOffloaded = true, backupStatus = "OFFLOADED")
+        assertTrue(offloaded.isBackedUp)
+        assertFalse(offloaded.isPendingUpload)
+        assertFalse(offloaded.isUploadFailed)
+
+        val failed = notEnqueued.copy(backupStatus = "FAILED")
+        assertFalse(failed.isBackedUp)
+        assertFalse(failed.isPendingUpload)
+        assertTrue(failed.isUploadFailed)
+    }
+
+    @Test
     fun testFormatFileSize() {
         assertEquals("0 B", formatFileSize(0L))
         assertEquals("0 B", formatFileSize(-10L))

@@ -85,6 +85,20 @@ fun SyncStatusScreen(
                     ListItem(
                         headlineContent = {
                             Text(
+                                if (uiState.pendingUploadsCount == 0L) {
+                                    "0 items (All backed up)"
+                                } else {
+                                    "${uiState.pendingUploadsCount} item(s) pending upload"
+                                }
+                            )
+                        },
+                        overlineContent = { Text("Pending Uploads") },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    ListItem(
+                        headlineContent = {
+                            Text(
                                 if (uiState.lastSyncTime > 0) {
                                     DateUtils.getRelativeTimeSpanString(
                                         uiState.lastSyncTime,

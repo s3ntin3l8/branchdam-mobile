@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import com.branchdam.mobile.observer.MediaStoreObserver
+import com.branchdam.mobile.service.ImportConfirmationNotifier
+import com.branchdam.mobile.service.SyncNotificationHelper
 import com.branchdam.mobile.service.SyncScheduler
 import java.io.File
 
@@ -38,6 +40,9 @@ open class BranchDamApplication : Application() {
 
         mediaStoreObserver = MediaStoreObserver(this)
         mediaStoreObserver.register()
+
+        SyncNotificationHelper.ensureChannel(this)
+        ImportConfirmationNotifier.createNotificationChannel(this)
 
         SyncScheduler.schedulePeriodicSync(this)
     }
@@ -86,8 +91,22 @@ open class BranchDamApplication : Application() {
          */
         fun readSecureEngineConfig(context: Context): EngineConfig {
             val encrypted = EncryptedPrefs.get(context)
-            val prefs = encrypted ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            return readEngineConfig(prefs)
+            val nonSecret = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+            val serverUrl = encrypted?.getString(KEY_SERVER_URL, null)
+                ?: nonSecret.getString(KEY_SERVER_URL, null)
+                ?: DEFAULT_SERVER_URL
+
+            val apiKey = encrypted?.getString(KEY_API_KEY, null)
+                ?: nonSecret.getString(KEY_API_KEY, "")
+                ?: ""
+
+            val defaultAgentId = DEFAULT_AGENT_ID_PREFIX + android.os.Build.MODEL
+            val agentId = encrypted?.getString(KEY_AGENT_ID, null)
+                ?: nonSecret.getString(KEY_AGENT_ID, defaultAgentId)
+                ?: defaultAgentId
+
+            return EngineConfig(serverUrl, apiKey, agentId)
         }
 
         /**

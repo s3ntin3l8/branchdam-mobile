@@ -128,11 +128,48 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
         return discovered
     }
 
+    private func fetchRecentContextAssets() -> [DiscoveredAsset] {
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.fetchLimit = 100
+
+        let fetchResult = PHAsset.fetchAssets(with: options)
+        var contextAssets = [DiscoveredAsset]()
+
+        fetchResult.enumerateObjects { asset, _, _ in
+            let resources = PHAssetResource.assetResources(for: asset)
+            let primaryResource = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
+            let filename = primaryResource?.originalFilename ?? "IMG_\(asset.localIdentifier.prefix(8)).JPG"
+            let creationUnix = Int64(asset.creationDate?.timeIntervalSince1970 ?? 0)
+            let isRaw = (asset.mediaSubtypes.rawValue & PHAssetMediaSubtype.photoHDR.rawValue) != 0 || filename.uppercased().hasSuffix(".DNG")
+            let isVideo = asset.mediaType == .video
+            let isLivePhoto = asset.mediaSubtypes.contains(.photoLive)
+
+            contextAssets.append(
+                DiscoveredAsset(
+                    localIdentifier: asset.localIdentifier,
+                    filename: filename,
+                    creationDateUnix: creationUnix,
+                    isRaw: isRaw,
+                    isVideo: isVideo,
+                    isLivePhoto: isLivePhoto
+                )
+            )
+        }
+        return contextAssets
+    }
+
     private func runLineageDetection(_ assets: [DiscoveredAsset]) {
         lineageQueue.async {
+            let contextAssets = self.fetchRecentContextAssets()
+            var combinedMap = [String: DiscoveredAsset]()
+            for a in contextAssets { combinedMap[a.localIdentifier] = a }
+            for a in assets { combinedMap[a.localIdentifier] = a }
+            let candidateAssets = Array(combinedMap.values)
+
             // ProRAW pair detection (DNG + HEIC/JPEG companions).
-            let raws: [DiscoveredAsset] = assets.filter({ (asset: DiscoveredAsset) -> Bool in asset.isRaw == true })
-            let jpegs: [DiscoveredAsset] = assets.filter({ (asset: DiscoveredAsset) -> Bool in (asset.isRaw == false) && (asset.isVideo == false) })
+            let raws: [DiscoveredAsset] = candidateAssets.filter({ (asset: DiscoveredAsset) -> Bool in asset.isRaw == true })
+            let jpegs: [DiscoveredAsset] = candidateAssets.filter({ (asset: DiscoveredAsset) -> Bool in (asset.isRaw == false) && (asset.isVideo == false) })
             if !raws.isEmpty && !jpegs.isEmpty {
                 let pairs = ApplePairDetector.findProRawPairs(
                     masters: raws.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) },

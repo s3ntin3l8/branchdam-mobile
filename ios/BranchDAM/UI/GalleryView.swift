@@ -6,6 +6,11 @@ struct GalleryItem: Identifiable {
     let asset: PHAsset
     let lineageStatus: String
     let isRaw: Bool
+    let isOffloaded: Bool
+    let backupStatus: String
+
+    var isBackedUp: Bool { backupStatus == "COMPLETED" || isOffloaded }
+    var isPendingUpload: Bool { backupStatus == "PENDING" || backupStatus == "IN_PROGRESS" }
 }
 
 @MainActor
@@ -62,6 +67,8 @@ class GalleryViewModel: ObservableObject {
             pairedIds.insert(pair.derivativeLocalId)
         }
 
+        let allStatuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
+
         return metas.map { meta in
             let status: String
             if pairedIds.contains(meta.id) {
@@ -71,7 +78,19 @@ class GalleryViewModel: ObservableObject {
             } else {
                 status = "Unpaired"
             }
-            return GalleryItem(id: meta.id, asset: meta.asset, lineageStatus: status, isRaw: meta.isRaw)
+            let backupStatus = allStatuses[meta.id]
+                ?? allStatuses["ph://\(meta.id)"]
+                ?? allStatuses[meta.filename]
+                ?? "NOT_ENQUEUED"
+            let isOffloaded = backupStatus == "OFFLOADED"
+            return GalleryItem(
+                id: meta.id,
+                asset: meta.asset,
+                lineageStatus: status,
+                isRaw: meta.isRaw,
+                isOffloaded: isOffloaded,
+                backupStatus: backupStatus
+            )
         }
     }
 }
@@ -192,6 +211,24 @@ public struct GalleryView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 4))
                                         .padding(4)
                                 }
+                            }
+
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    if item.isBackedUp {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 14))
+                                            .padding(4)
+                                    } else if item.isPendingUpload {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .foregroundColor(.blue)
+                                            .font(.system(size: 14))
+                                            .padding(4)
+                                    }
+                                }
+                                Spacer()
                             }
                         }
                         .aspectRatio(1, contentMode: .fit)
