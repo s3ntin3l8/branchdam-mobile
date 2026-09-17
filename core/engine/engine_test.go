@@ -550,7 +550,7 @@ func TestEnqueueLocalCapture_SourcePathHash(t *testing.T) {
 	}
 }
 
-func TestEnqueueLocalCapture_ServerPreScreen(t *testing.T) {
+func TestSyncUploads_BackgroundPreScreen(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "engine_prescreen_test.db")
 	q, err := queue.Open(dbPath)
@@ -584,19 +584,53 @@ func TestEnqueueLocalCapture_ServerPreScreen(t *testing.T) {
 		t.Fatalf("EnqueueLocalCapture: %v", err)
 	}
 
-	if item.Status != queue.UploadCompleted {
-		t.Fatalf("expected Status COMPLETED for prescreened content, got %s", item.Status)
-	}
-	if item.NodeUUID != "prescreened-node-uuid-123" {
-		t.Fatalf("expected NodeUUID 'prescreened-node-uuid-123', got %s", item.NodeUUID)
+	// Local enqueue is fast and PENDING
+	if item.Status != queue.UploadPending {
+		t.Fatalf("expected Status PENDING on enqueue, got %s", item.Status)
 	}
 
-	// Verify local_media_state table was updated
-	mState, err := q.GetMediaByLocalID("local_uri_prescreen")
-	if err != nil || mState == nil {
-		t.Fatalf("GetMediaByLocalID failed: %v", err)
+	// Background sync runs pre-screen and marks completed without streaming bytes
+	completedCount, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil || completedCount != 1 {
+		t.Fatalf("SyncUploads failed: %v, count=%d", err, completedCount)
 	}
-	if mState.NodeUUID != "prescreened-node-uuid-123" {
-		t.Fatalf("expected mState.NodeUUID 'prescreened-node-uuid-123', got %s", mState.NodeUUID)
+
+	// Verify upload item in queue is completed
+	state, err := q.GetUploadItemByBlake3Hash(item.Blake3Hash)
+	if err != nil || state == nil {
+		t.Fatalf("GetUploadItemByBlake3Hash failed: %v", err)
+	}
+	if state.Status != queue.UploadCompleted || state.NodeUUID != "prescreened-node-uuid-123" {
+		t.Fatalf("unexpected upload state after background pre-screen: %+v", state)
+	}
+}
+
+func TestEngine_GetMediaStatus_And_CountPendingUploads(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_status_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	eng := New(q, nil)
+
+	st, err := eng.GetMediaStatus("unknown-local-id")
+	if err != nil || st != "NOT_ENQUEUED" {
+		t.Fatalf("expected NOT_ENQUEUED, got %s (err: %v)", st, err)
+	}
+
+	count, err := eng.CountPendingUploads()
+	if err != nil || count != 0 {
+		t.Fatalf("expected 0 pending uploads, got %d (err: %v)", count, err)
+	}
+
+	all, err := eng.GetAllMediaStatuses()
+	if err != nil {
+		t.Fatalf("GetAllMediaStatuses failed: %v", err)
+	}
+	if len(all) != 0 {
+		t.Fatalf("expected empty map, got %v", all)
 	}
 }

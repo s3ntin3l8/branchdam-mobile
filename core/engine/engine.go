@@ -11,7 +11,6 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
 	"github.com/s3ntin3l8/branchdam-mobile/core/hasher"
@@ -157,35 +156,6 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		}
 	}
 
-	// Server pre-screen gate: check if server already has this content
-	if e.c != nil {
-		checkCtx, checkCancel := context.WithTimeout(context.Background(), 1*time.Second)
-		checkRes, checkErr := e.c.CheckContent(checkCtx, fastHash, fullHash)
-		checkCancel()
-		if checkErr == nil && checkRes.Found && checkRes.NodeUUID != "" {
-			item := &queue.UploadItem{
-				LocalPath:      localPath,
-				TargetFilename: filename,
-				FastHash:       fastHash,
-				Blake3Hash:     fullHash,
-				CameraModel:    cam,
-				SourcePathHash: srcPathHash,
-				SizeBytes:      sizeBytes,
-				CapturedAtUnix: capturedAtUnix,
-				Status:         queue.UploadCompleted,
-				NodeUUID:       checkRes.NodeUUID,
-			}
-			id, err := e.q.EnqueueUpload(item)
-			if err == nil {
-				item.ID = id
-				if localID != "" {
-					_ = e.q.RecordLocalMedia(localID, checkRes.NodeUUID, fullHash, "ACTIVE")
-				}
-				return item, nil
-			}
-		}
-	}
-
 	item := &queue.UploadItem{
 		LocalPath:      localPath,
 		TargetFilename: filename,
@@ -241,6 +211,21 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		}
 		if ctx.Err() != nil {
 			return completedCount, ctx.Err()
+		}
+
+		// Background pre-screen: check if server already has this content by hash before streaming file payload
+		if e.c != nil {
+			checkRes, checkErr := e.c.CheckContent(ctx, item.FastHash, item.Blake3Hash)
+			if checkErr == nil && checkRes.Found && checkRes.NodeUUID != "" {
+				slog.Info("engine: background sync pre-screen dedup — content already exists on server",
+					"nodeUUID", checkRes.NodeUUID, "localPath", item.LocalPath)
+				_ = e.q.MarkUploadComplete(item.ID, checkRes.NodeUUID)
+				if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, checkRes.NodeUUID); err != nil {
+					slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
+				}
+				completedCount++
+				continue
+			}
 		}
 
 		// B.2.5: Stat before Open so a missing file surfaces as IO_ERROR.
