@@ -158,17 +158,15 @@ fun GalleryDetailScreen(
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Media Preview
+                // Dynamic Aspect Media Preview
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(340.dp)
+                        .heightIn(min = 280.dp, max = 460.dp)
                         .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
                     if (galleryItem.mediaItem.isVideo) {
-                        // Intentional placeholder: video assets display a centered play affordance
-                        // against a dark backdrop without decoding video frames inline.
                         Surface(
                             shape = MaterialTheme.shapes.extraLarge,
                             color = Color.Black.copy(alpha = 0.6f),
@@ -187,27 +185,27 @@ fun GalleryDetailScreen(
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(Uri.parse(galleryItem.mediaItem.contentUri))
-                                .crossfade(300)
+                                .crossfade(200)
                                 .build(),
                             contentDescription = galleryItem.mediaItem.displayName,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
 
                 // Metadata Card
                 ElevatedCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 12.dp),
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
                             text = "Asset Information",
@@ -274,7 +272,7 @@ fun GalleryDetailScreen(
                     }
                 }
 
-                Spacer(Modifier.height(80.dp)) // Padding for FAB
+                Spacer(Modifier.height(80.dp))
             }
         }
     }
