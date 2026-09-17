@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import com.branchdam.mobile.ui.components.*
 import com.branchdam.mobile.ui.theme.*
@@ -422,7 +423,11 @@ private fun GalleryItemCard(
         val builder = ImageRequest.Builder(context)
             .data(Uri.parse(galleryItem.mediaItem.contentUri))
             .crossfade(200)
-        ExifOrientationHelper.applyExifOrientation(builder, context, galleryItem.mediaItem.contentUri)
+        if (galleryItem.mediaItem.isVideo) {
+            builder.decoderFactory(VideoFrameDecoder.Factory())
+        } else {
+            ExifOrientationHelper.applyExifOrientation(builder, context, galleryItem.mediaItem.contentUri)
+        }
         builder.build()
     }
 
