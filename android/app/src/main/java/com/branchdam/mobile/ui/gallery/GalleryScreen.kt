@@ -13,18 +13,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -184,34 +182,169 @@ fun GalleryScreen(
                     }
                 )
             } else {
-                CenterAlignedTopAppBar(title = { Text("Gallery") })
+                var showFilterMenu by remember { mutableStateOf(false) }
+                var showSortMenu by remember { mutableStateOf(false) }
+                val isFilterActive = selectedFilter != GalleryFilter.ALL || selectedFolder != "All Folders"
+
+                CenterAlignedTopAppBar(
+                    title = { Text("Gallery") },
+                    actions = {
+                        Box {
+                            IconButton(onClick = { showFilterMenu = true }) {
+                                if (isFilterActive) {
+                                    BadgedBox(
+                                        badge = { Badge() }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Tune,
+                                            contentDescription = "Filter media",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Tune,
+                                        contentDescription = "Filter media"
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showFilterMenu,
+                                onDismissRequest = { showFilterMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Folder", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                                    enabled = false,
+                                    onClick = {}
+                                )
+                                availableFolders.forEach { folder ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (folder == selectedFolder) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    Spacer(Modifier.width(16.dp))
+                                                }
+                                                Text(folder)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.setFolder(folder)
+                                            showFilterMenu = false
+                                        }
+                                    )
+                                }
+
+                                HorizontalDivider()
+
+                                DropdownMenuItem(
+                                    text = { Text("Media Type", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                                    enabled = false,
+                                    onClick = {}
+                                )
+                                GalleryFilter.entries.forEach { filter ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (selectedFilter == filter) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    Spacer(Modifier.width(16.dp))
+                                                }
+                                                Text(filter.label)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.setFilter(filter)
+                                            showFilterMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Box {
+                            IconButton(onClick = { showSortMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = "Sort media"
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Date (Newest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.DATE, GallerySortDirection.DESC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Date (Oldest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.DATE, GallerySortDirection.ASC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Size (Largest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.SIZE, GallerySortDirection.DESC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Size (Smallest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.SIZE, GallerySortDirection.ASC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Name (A to Z)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.NAME, GallerySortDirection.ASC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Name (Z to A)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.NAME, GallerySortDirection.DESC)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            FilterAndSortBar(
-                selectedFilter = selectedFilter,
-                onSelectFilter = viewModel::setFilter,
-                selectedFolder = selectedFolder,
-                availableFolders = availableFolders,
-                onSelectFolder = viewModel::setFolder,
-                selectedSortProperty = selectedSortProperty,
-                selectedSortDirection = selectedSortDirection,
-                onSelectSort = viewModel::setSort
-            )
-
             PullToRefreshBox(
                 isRefreshing = isLoading,
                 onRefresh = { viewModel.loadItems() },
                 state = state,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.fillMaxSize()
             ) {
                 val currentError = loadError
                 when {
@@ -270,119 +403,6 @@ fun GalleryScreen(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilterAndSortBar(
-    selectedFilter: GalleryFilter,
-    onSelectFilter: (GalleryFilter) -> Unit,
-    selectedFolder: String,
-    availableFolders: List<String>,
-    onSelectFolder: (String) -> Unit,
-    selectedSortProperty: GallerySortProperty,
-    selectedSortDirection: GallerySortDirection,
-    onSelectSort: (GallerySortProperty, GallerySortDirection) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var showFolderMenu by remember { mutableStateOf(false) }
-    var showSortMenu by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        GalleryFilter.entries.forEach { filter ->
-            FilterChip(
-                selected = selectedFilter == filter,
-                onClick = { onSelectFilter(filter) },
-                label = { Text(filter.label) }
-            )
-        }
-
-        Box {
-            AssistChip(
-                onClick = { showFolderMenu = true },
-                label = { Text(selectedFolder) },
-                leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp)) }
-            )
-            DropdownMenu(
-                expanded = showFolderMenu,
-                onDismissRequest = { showFolderMenu = false }
-            ) {
-                availableFolders.forEach { folder ->
-                    DropdownMenuItem(
-                        text = { Text(folder) },
-                        onClick = {
-                            onSelectFolder(folder)
-                            showFolderMenu = false
-                        }
-                    )
-                }
-            }
-        }
-
-        Box {
-            val sortLabel = "Sort: ${selectedSortProperty.label} (${if (selectedSortDirection == GallerySortDirection.DESC) "Desc" else "Asc"})"
-            AssistChip(
-                onClick = { showSortMenu = true },
-                label = { Text(sortLabel) },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp)) }
-            )
-            DropdownMenu(
-                expanded = showSortMenu,
-                onDismissRequest = { showSortMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Date (Newest First)") },
-                    onClick = {
-                        onSelectSort(GallerySortProperty.DATE, GallerySortDirection.DESC)
-                        showSortMenu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Date (Oldest First)") },
-                    onClick = {
-                        onSelectSort(GallerySortProperty.DATE, GallerySortDirection.ASC)
-                        showSortMenu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Size (Largest First)") },
-                    onClick = {
-                        onSelectSort(GallerySortProperty.SIZE, GallerySortDirection.DESC)
-                        showSortMenu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Size (Smallest First)") },
-                    onClick = {
-                        onSelectSort(GallerySortProperty.SIZE, GallerySortDirection.ASC)
-                        showSortMenu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Name (A to Z)") },
-                    onClick = {
-                        onSelectSort(GallerySortProperty.NAME, GallerySortDirection.ASC)
-                        showSortMenu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Name (Z to A)") },
-                    onClick = {
-                        onSelectSort(GallerySortProperty.NAME, GallerySortDirection.DESC)
-                        showSortMenu = false
-                    }
-                )
             }
         }
     }
