@@ -159,7 +159,7 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 
 	// Server pre-screen gate: check if server already has this content
 	if e.c != nil {
-		checkCtx, checkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		checkCtx, checkCancel := context.WithTimeout(context.Background(), 1*time.Second)
 		checkRes, checkErr := e.c.CheckContent(checkCtx, fastHash, fullHash)
 		checkCancel()
 		if checkErr == nil && checkRes.Found && checkRes.NodeUUID != "" {
@@ -306,7 +306,9 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		if err := e.q.MarkUploadComplete(item.ID, resp.NodeUUID); err != nil {
 			continue
 		}
-		_ = e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, resp.NodeUUID)
+		if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, resp.NodeUUID); err != nil {
+			slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
+		}
 
 		completedCount++
 	}

@@ -75,7 +75,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
 
             let filename = primaryResource?.originalFilename ?? "IMG_\(asset.localIdentifier.prefix(8)).JPG"
             let creationUnix = Int64(asset.creationDate?.timeIntervalSince1970 ?? 0)
-            let isRaw = (asset.mediaSubtypes.rawValue & PHAssetMediaSubtype.photoHDR.rawValue) != 0 || filename.uppercased().hasSuffix(".DNG")
+            let isRaw = filename.uppercased().hasSuffix(".DNG") || resources.contains(where: { $0.originalFilename.uppercased().hasSuffix(".DNG") })
             let isVideo = asset.mediaType == .video
             let isLivePhoto = asset.mediaSubtypes.contains(.photoLive)
 
@@ -141,7 +141,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
             let primaryResource = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
             let filename = primaryResource?.originalFilename ?? "IMG_\(asset.localIdentifier.prefix(8)).JPG"
             let creationUnix = Int64(asset.creationDate?.timeIntervalSince1970 ?? 0)
-            let isRaw = (asset.mediaSubtypes.rawValue & PHAssetMediaSubtype.photoHDR.rawValue) != 0 || filename.uppercased().hasSuffix(".DNG")
+            let isRaw = filename.uppercased().hasSuffix(".DNG") || resources.contains(where: { $0.originalFilename.uppercased().hasSuffix(".DNG") })
             let isVideo = asset.mediaType == .video
             let isLivePhoto = asset.mediaSubtypes.contains(.photoLive)
 

@@ -97,9 +97,8 @@ open class BranchDamApplication : Application() {
                 ?: nonSecret.getString(KEY_SERVER_URL, null)
                 ?: DEFAULT_SERVER_URL
 
-            val apiKey = encrypted?.getString(KEY_API_KEY, null)
-                ?: nonSecret.getString(KEY_API_KEY, "")
-                ?: ""
+            // API key must only come from master-key encrypted prefs
+            val apiKey = encrypted?.getString(KEY_API_KEY, null) ?: ""
 
             val defaultAgentId = DEFAULT_AGENT_ID_PREFIX + android.os.Build.MODEL
             val agentId = encrypted?.getString(KEY_AGENT_ID, null)

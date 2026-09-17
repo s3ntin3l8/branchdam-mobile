@@ -304,7 +304,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
         nonSecretPrefs.edit()
             .putString(BranchDamApplication.KEY_SERVER_URL, _serverUrl.value)
-            .putString(BranchDamApplication.KEY_API_KEY, _apiKey.value)
             .putString(BranchDamApplication.KEY_AGENT_ID, _agentId.value)
             .apply()
     }

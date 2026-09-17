@@ -95,11 +95,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             } ?: "NOT_ENQUEUED"
 
                             val combinedStatus = when {
-                                jpegStatus == "COMPLETED" && rawStatus == "COMPLETED" -> "COMPLETED"
-                                jpegStatus == "COMPLETED" || rawStatus == "COMPLETED" -> "COMPLETED"
-                                jpegStatus == "OFFLOADED" || rawStatus == "OFFLOADED" -> "OFFLOADED"
-                                jpegStatus == "PENDING" || rawStatus == "PENDING" || jpegStatus == "IN_PROGRESS" || rawStatus == "IN_PROGRESS" -> "PENDING"
                                 jpegStatus == "FAILED" || rawStatus == "FAILED" -> "FAILED"
+                                jpegStatus == "PENDING" || rawStatus == "PENDING" || jpegStatus == "IN_PROGRESS" || rawStatus == "IN_PROGRESS" -> "PENDING"
+                                jpegStatus == "OFFLOADED" || rawStatus == "OFFLOADED" -> "OFFLOADED"
+                                jpegStatus == "COMPLETED" || rawStatus == "COMPLETED" -> "COMPLETED"
                                 else -> "NOT_ENQUEUED"
                             }
                             val isOffloaded = combinedStatus == "OFFLOADED"
