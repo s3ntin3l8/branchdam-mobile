@@ -262,7 +262,7 @@ private fun AssetPreviewCard(
             .clickable(enabled = uri != null, onClick = onInspect),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = Color.Black
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -281,7 +281,7 @@ private fun AssetPreviewCard(
                         .crossfade(true)
                         .build(),
                     contentDescription = "$roleLabel: $filename",
-                    contentScale = ContentScale.Crop,
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().rotate(auditRotation),
                     loading = {
                         Box(
@@ -603,6 +603,10 @@ private fun FullImageComparisonDialog(
                     val activeFilename = if (selectedTab == 0) candidate.masterFilename else candidate.childFilename
 
                     if (activeUri != null) {
+                        val dialogContext = LocalContext.current
+                        val dialogRotation = remember(activeUri) {
+                            ExifOrientationHelper.getExifRotationDegrees(dialogContext, activeUri)
+                        }
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(Uri.parse(activeUri))
@@ -610,7 +614,7 @@ private fun FullImageComparisonDialog(
                                 .build(),
                             contentDescription = activeFilename,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize().rotate(dialogRotation)
                         )
                     } else {
                         Text(
