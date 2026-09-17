@@ -333,3 +333,12 @@ func BindingCountPendingUploads() (int64, error) {
 	}
 	return e.CountPendingUploads()
 }
+
+// BindingResetFailedUploads resets all FAILED upload items back to PENDING.
+func BindingResetFailedUploads() (int64, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return 0, err
+	}
+	return e.ResetFailedUploads()
+}

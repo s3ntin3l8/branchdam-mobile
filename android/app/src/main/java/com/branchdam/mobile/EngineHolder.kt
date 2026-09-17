@@ -196,6 +196,16 @@ object EngineHolder {
         }
     }
 
+    fun resetFailedUploads(): Long {
+        if (!nativeAvailable.get() || !isInitialized) return 0L
+        return try {
+            queryExecutor.submit(Callable { Branchdam.bindingResetFailedUploads() }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "resetFailedUploads failed: $t")
+            0L
+        }
+    }
+
     @androidx.annotation.VisibleForTesting
     internal val mockMediaStatusMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 

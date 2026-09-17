@@ -132,6 +132,9 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		}
 	}
 
+	// Reset any previous FAILED entry for this file so re-enqueueing recovers it
+	_ = e.q.ResetUploadByBlake3Hash(fullHash)
+
 	// Dedup gate: check if this blake3Hash is already queued or uploaded
 	if existing, err := e.q.GetUploadItemByBlake3Hash(fullHash); err == nil && existing != nil {
 		if localID != "" {
@@ -492,4 +495,9 @@ func (e *Engine) GetAllMediaStatuses() (map[string]string, error) {
 // CountPendingUploads returns the number of pending/in-progress uploads in the queue.
 func (e *Engine) CountPendingUploads() (int64, error) {
 	return e.q.CountPendingUploads()
+}
+
+// ResetFailedUploads resets all FAILED upload items back to PENDING.
+func (e *Engine) ResetFailedUploads() (int64, error) {
+	return e.q.ResetFailedUploads()
 }

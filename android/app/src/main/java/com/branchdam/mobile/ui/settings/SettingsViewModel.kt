@@ -246,6 +246,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _isConnecting.value = false
                 if (isReachable) {
                     _connectionError.value = null
+                    EngineHolder.resetFailedUploads()
+                    SyncScheduler.triggerImmediateSync(context)
                     val template = EngineHolder.fetchNamingTemplate()
                     if (template.isNotBlank()) {
                         _namingTemplate.value = template

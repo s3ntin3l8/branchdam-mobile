@@ -117,6 +117,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
 
     fun refresh() {
         checkConnection()
+        EngineHolder.resetFailedUploads()
         val pendingUploads = EngineHolder.countPendingUploads()
         _uiState.value = _uiState.value.copy(
             isConnected = EngineHolder.isInitialized(),
@@ -126,6 +127,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun triggerSync() {
+        EngineHolder.resetFailedUploads()
         val request = OneTimeWorkRequestBuilder<SyncWorker>().build()
         workManager.enqueueUniqueWork(SyncScheduler.IMMEDIATE_WORK_TAG, ExistingWorkPolicy.REPLACE, request)
     }
