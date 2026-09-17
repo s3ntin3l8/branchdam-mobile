@@ -244,15 +244,25 @@ object EngineHolder {
      * round-trip takes.
      */
     fun testConnection(): Boolean {
-        if (!nativeAvailable.get() || !isInitialized) return false
+        return testConnectionDetailed() == null
+    }
+
+    /**
+     * Attempts a handshake with the server to verify reachability and
+     * authentication. Returns null if successful, or the detailed
+     * error message string if the handshake fails.
+     */
+    fun testConnectionDetailed(): String? {
+        if (!nativeAvailable.get() || !isInitialized) return "Engine not initialized"
         return try {
             queryExecutor.submit(Callable {
                 Branchdam.bindingFetchNamingTemplate()
-                true
+                null
             }).get()
         } catch (t: Throwable) {
-            Log.w(TAG, "testConnection failed: $t")
-            false
+            val msg = t.cause?.message ?: t.message ?: "Handshake failed"
+            Log.w(TAG, "testConnection detailed failed: $msg")
+            msg
         }
     }
 

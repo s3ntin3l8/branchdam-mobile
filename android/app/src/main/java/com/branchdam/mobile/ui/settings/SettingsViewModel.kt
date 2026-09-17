@@ -44,6 +44,7 @@ typealias EngineInit = (
  * with the test scheduler's virtual clock.
  */
 typealias TestConnectionFn = suspend () -> Boolean
+typealias TestConnectionDetailedFn = suspend () -> String?
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -142,6 +143,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 } ?: false
             }
             _isConnected.value = isReachable
+            _connectionError.value = if (!isReachable) {
+                val rawError = withContext(testIoDispatcher) {
+                    withTimeoutOrNull(reachabilityTimeoutMs) {
+                        testConnectionDetailedFn()
+                    } ?: "Connection timed out"
+                } ?: "Server unreachable"
+                when {
+                    rawError.contains("401") -> "Authentication Failed (HTTP 401) — Check API Key"
+                    rawError.contains("403") -> "Access Denied (HTTP 403) — Forbidden by server"
+                    rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
+                    else -> rawError
+                }
+            } else null
         }
     }
 
@@ -236,8 +250,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             )
 
             if (initSuccess) {
-                // T2-11: Verify the server is actually reachable before
-                // declaring the connection "Connected".
                 val isReachable = withTimeoutOrNull(reachabilityTimeoutMs) {
                     testConnectionFn()
                 } ?: false
@@ -253,7 +265,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         _namingTemplate.value = template
                     }
                 } else {
-                    _connectionError.value = "Server unreachable"
+                    val rawError = withTimeoutOrNull(reachabilityTimeoutMs) {
+                        testConnectionDetailedFn()
+                    } ?: "Connection timed out"
+                    _connectionError.value = when {
+                        rawError.contains("401") -> "Authentication Failed (HTTP 401) — Check API Key"
+                        rawError.contains("403") -> "Access Denied (HTTP 403) — Forbidden by server"
+                        rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
+                        else -> rawError
+                    }
                 }
             } else {
                 _isConnected.value = false
@@ -328,7 +348,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
          * gomobile AAR.
          */
         @androidx.annotation.VisibleForTesting
-        var testConnectionFn: TestConnectionFn = { EngineHolder.testConnection() }
+        var testConnectionFn: TestConnectionFn = { testConnectionDetailedFn() == null }
+
+        @androidx.annotation.VisibleForTesting
+        var testConnectionDetailedFn: TestConnectionDetailedFn = { EngineHolder.testConnectionDetailed() }
 
         /**
          * Test seam for the dispatcher used inside `checkConnection`.

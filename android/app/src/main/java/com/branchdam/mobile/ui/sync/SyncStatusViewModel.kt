@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class SyncStatusUiState(
     val isConnected: Boolean = false,
     val isServerReachable: Boolean = false,
+    val connectionError: String? = null,
     val isSyncing: Boolean = false,
     val lastSyncTime: Long = 0L,
     val workerState: String = "Idle",
@@ -49,6 +51,7 @@ data class SyncStatusUiState(
  * the gomobile binding returns.
  */
 typealias TestConnectionFn = suspend () -> Boolean
+typealias TestConnectionDetailedFn = suspend () -> String?
 
 class SyncStatusViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -87,31 +90,49 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                     prefs.edit().putLong(BranchDamKeys.LAST_SYNC_TIME, lastSyncTime).apply()
                 }
                 val pendingUploads = EngineHolder.countPendingUploads()
-                _uiState.value = _uiState.value.copy(
-                    isConnected = EngineHolder.isInitialized(),
-                    isSyncing = isSyncing,
-                    lastSyncTime = lastSyncTime,
-                    workerState = workerState,
-                    pendingUploadsCount = pendingUploads,
-                )
+                _uiState.update { current ->
+                    current.copy(
+                        isConnected = EngineHolder.isInitialized(),
+                        isSyncing = isSyncing,
+                        lastSyncTime = lastSyncTime,
+                        workerState = workerState,
+                        pendingUploadsCount = pendingUploads,
+                    )
+                }
             }
         }
     }
 
     fun checkConnection() {
         viewModelScope.launch {
-            // Bound the handshake so a misconfigured server's TCP
-            // timeout can't lock the UI or the single-threaded
-            // EngineHolder executor that backs the gomobile binding.
-            // Treat a timeout the same as a failed handshake — the UI
-            // shows "Server unreachable" and the Sync Now button
-            // stays disabled; the user can hit Refresh to retry.
             val isReachable = withContext(ioDispatcher) {
                 withTimeoutOrNull(reachabilityTimeoutMs) {
                     testConnectionFn()
                 } ?: false
             }
-            _uiState.value = _uiState.value.copy(isServerReachable = isReachable)
+            val formattedError = if (!isReachable) {
+                val rawError = withContext(ioDispatcher) {
+                    withTimeoutOrNull(reachabilityTimeoutMs) {
+                        testConnectionDetailedFn()
+                    } ?: "Connection timed out"
+                } ?: "Server unreachable"
+
+                when {
+                    rawError.contains("401") -> "Authentication Failed (HTTP 401) — Check API Key in Settings"
+                    rawError.contains("403") -> "Access Denied (HTTP 403) — Forbidden by server"
+                    rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
+                    else -> rawError
+                }
+            } else {
+                null
+            }
+
+            _uiState.update { current ->
+                current.copy(
+                    isServerReachable = isReachable,
+                    connectionError = formattedError
+                )
+            }
         }
     }
 
@@ -119,11 +140,13 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
         checkConnection()
         EngineHolder.resetFailedUploads()
         val pendingUploads = EngineHolder.countPendingUploads()
-        _uiState.value = _uiState.value.copy(
-            isConnected = EngineHolder.isInitialized(),
-            lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
-            pendingUploadsCount = pendingUploads,
-        )
+        _uiState.update { current ->
+            current.copy(
+                isConnected = EngineHolder.isInitialized(),
+                lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
+                pendingUploadsCount = pendingUploads,
+            )
+        }
     }
 
     fun triggerSync() {
@@ -155,7 +178,10 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
          * paths without instantiating a real gomobile engine.
          */
         @androidx.annotation.VisibleForTesting
-        var testConnectionFn: TestConnectionFn = { EngineHolder.testConnection() }
+        var testConnectionFn: TestConnectionFn = { testConnectionDetailedFn() == null }
+
+        @androidx.annotation.VisibleForTesting
+        var testConnectionDetailedFn: TestConnectionDetailedFn = { EngineHolder.testConnectionDetailed() }
 
         /**
          * Test seam: the dispatcher used for the blocking handshake.

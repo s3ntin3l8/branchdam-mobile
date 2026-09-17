@@ -71,11 +71,13 @@ fun SyncStatusScreen(
                             )
                         },
                         supportingContent = {
-                            if (uiState.isConnected && !uiState.isServerReachable) {
+                            if (!uiState.isServerReachable) {
+                                val errorDetail = uiState.connectionError ?: if (uiState.isConnected) "Local engine ready, but server handshake failed." else "Engine not initialized"
                                 Text(
-                                    text = "Local engine ready, but server handshake failed.",
+                                    text = errorDetail,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
-                                    style = MaterialTheme.typography.bodySmall
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         },
