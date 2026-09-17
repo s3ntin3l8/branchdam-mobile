@@ -21,6 +21,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import com.branchdam.mobile.ui.components.ExifOrientationHelper
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -269,6 +271,10 @@ private fun AssetPreviewCard(
             contentAlignment = Alignment.Center,
         ) {
             if (uri != null) {
+                val auditContext = LocalContext.current
+                val auditRotation = remember(uri) {
+                    ExifOrientationHelper.getExifRotationDegrees(auditContext, uri)
+                }
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(Uri.parse(uri))
@@ -276,7 +282,7 @@ private fun AssetPreviewCard(
                         .build(),
                     contentDescription = "$roleLabel: $filename",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().rotate(auditRotation),
                     loading = {
                         Box(
                             modifier = Modifier.fillMaxSize(),
