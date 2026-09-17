@@ -342,3 +342,20 @@ func BindingResetFailedUploads() (int64, error) {
 	}
 	return e.ResetFailedUploads()
 }
+
+// BindingGetActiveUploadProgress returns JSON string of active upload metrics, or "" if none.
+func BindingGetActiveUploadProgress() (string, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
+	}
+	prog, progErr := e.GetActiveUploadProgress()
+	if progErr != nil || prog == nil {
+		return "", progErr
+	}
+	b, err := json.Marshal(prog)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}

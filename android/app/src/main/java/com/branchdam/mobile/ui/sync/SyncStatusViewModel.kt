@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.branchdam.mobile.ActiveUploadProgress
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.service.SyncScheduler
@@ -28,28 +29,9 @@ data class SyncStatusUiState(
     val lastSyncTime: Long = 0L,
     val workerState: String = "Idle",
     val pendingUploadsCount: Long = 0L,
+    val activeUploadProgress: ActiveUploadProgress? = null,
 )
 
-/**
- * Test seam for the reachability check. Production defaults to a call
- * into [EngineHolder.testConnection] (which dispatches through the
- * gomobile binding and can block on an HTTP round-trip). Tests pass a
- * pure lambda to drive success / failure / hang paths without loading
- * the AAR.
- *
- * The blocking call is the original concern from the PR #131 review:
- * `EngineHolder.testConnection` runs on the single-threaded executor
- * shared by every other `EngineHolder.*` binding, so a slow handshake
- * holds up `syncBatch` for the duration of the TCP timeout. The
- * `withTimeoutOrNull` wrapper in [SyncStatusViewModel.checkConnection]
- * bounds the wait to [reachabilityTimeoutMs] and treats a timeout
- * the same as a failure.
- *
- * Marked `suspend` so the test seam can use `delay` (a suspending
- * function) in the synthetic-hang test; production callers don't
- * actually suspend — `EngineHolder.testConnection` returns when
- * the gomobile binding returns.
- */
 typealias TestConnectionFn = suspend () -> Boolean
 typealias TestConnectionDetailedFn = suspend () -> String?
 
@@ -64,6 +46,27 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     init {
         observeWorker()
         checkConnection()
+        pollActiveUploadProgress()
+    }
+
+    fun pollActiveUploadProgress() {
+        viewModelScope.launch {
+            val activeProgress = withContext(ioDispatcher) {
+                EngineHolder.getActiveUploadProgress()
+            }
+            val pendingCount = if (activeProgress != null || _uiState.value.isSyncing) {
+                withContext(ioDispatcher) { EngineHolder.countPendingUploads() }
+            } else {
+                _uiState.value.pendingUploadsCount
+            }
+
+            _uiState.update { current ->
+                current.copy(
+                    activeUploadProgress = activeProgress,
+                    pendingUploadsCount = pendingCount
+                )
+            }
+        }
     }
 
     private fun observeWorker() {
@@ -139,6 +142,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     fun refresh() {
         checkConnection()
         EngineHolder.resetFailedUploads()
+        pollActiveUploadProgress()
         val pendingUploads = EngineHolder.countPendingUploads()
         _uiState.update { current ->
             current.copy(
@@ -151,6 +155,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
 
     fun triggerSync() {
         EngineHolder.resetFailedUploads()
+        pollActiveUploadProgress()
         val request = OneTimeWorkRequestBuilder<SyncWorker>().build()
         workManager.enqueueUniqueWork(SyncScheduler.IMMEDIATE_WORK_TAG, ExistingWorkPolicy.REPLACE, request)
     }

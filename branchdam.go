@@ -519,6 +519,14 @@ func (e *Engine) ResetFailedUploads() (int64, error) {
 	return e.engine.ResetFailedUploads()
 }
 
+// GetActiveUploadProgress returns current active upload metrics, or nil if no upload active.
+func (e *Engine) GetActiveUploadProgress() (*engine.ActiveUploadProgress, error) {
+	if err := e.requireOpen(); err != nil {
+		return nil, err
+	}
+	return e.engine.GetActiveUploadProgress()
+}
+
 // ---------------------------------------------------------------------------
 // Safe space reclaim
 // ---------------------------------------------------------------------------

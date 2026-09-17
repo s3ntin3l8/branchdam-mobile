@@ -206,6 +206,34 @@ object EngineHolder {
         }
     }
 
+    fun getActiveUploadProgress(): ActiveUploadProgress? {
+        if (!nativeAvailable.get() || !isInitialized) return null
+        return try {
+            val jsonStr = queryExecutor.submit(Callable { Branchdam.bindingGetActiveUploadProgress() }).get()
+            if (jsonStr.isNullOrBlank()) null else parseActiveUploadProgress(jsonStr)
+        } catch (t: Throwable) {
+            Log.w(TAG, "getActiveUploadProgress failed: $t")
+            null
+        }
+    }
+
+    private fun parseActiveUploadProgress(jsonStr: String): ActiveUploadProgress? {
+        return try {
+            val obj = org.json.JSONObject(jsonStr)
+            ActiveUploadProgress(
+                id = obj.optLong("id", 0L),
+                filename = obj.optString("filename", ""),
+                bytesSent = obj.optLong("bytesSent", 0L),
+                totalBytes = obj.optLong("totalBytes", 0L),
+                speedBytesPerSec = obj.optDouble("speedBytesPerSec", 0.0),
+                itemIndex = obj.optInt("itemIndex", 0),
+                totalItems = obj.optInt("totalItems", 0)
+            )
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
     @androidx.annotation.VisibleForTesting
     internal val mockMediaStatusMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 
@@ -319,6 +347,28 @@ object EngineHolder {
 
     private const val MOCK_NAMING_TEMPLATE =
         "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
+}
+
+data class ActiveUploadProgress(
+    val id: Long,
+    val filename: String,
+    val bytesSent: Long,
+    val totalBytes: Long,
+    val speedBytesPerSec: Double,
+    val itemIndex: Int,
+    val totalItems: Int
+) {
+    val progressFraction: Float
+        get() = if (totalBytes > 0) (bytesSent.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f) else 0f
+
+    val formattedTransferred: String
+        get() = com.branchdam.mobile.ui.gallery.formatFileSize(bytesSent)
+
+    val formattedTotal: String
+        get() = com.branchdam.mobile.ui.gallery.formatFileSize(totalBytes)
+
+    val formattedSpeed: String
+        get() = if (speedBytesPerSec > 0) "${com.branchdam.mobile.ui.gallery.formatFileSize(speedBytesPerSec.toLong())}/s" else "0 B/s"
 }
 
 fun defaultEngineDbPath(filesDir: File): String = File(filesDir, "branchdam_queue.db").absolutePath
