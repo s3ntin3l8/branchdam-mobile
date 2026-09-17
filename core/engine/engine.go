@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
 	"github.com/s3ntin3l8/branchdam-mobile/core/hasher"
@@ -158,7 +159,9 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 
 	// Server pre-screen gate: check if server already has this content
 	if e.c != nil {
-		checkRes, checkErr := e.c.CheckContent(context.Background(), fastHash, fullHash)
+		checkCtx, checkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		checkRes, checkErr := e.c.CheckContent(checkCtx, fastHash, fullHash)
+		checkCancel()
 		if checkErr == nil && checkRes.Found && checkRes.NodeUUID != "" {
 			item := &queue.UploadItem{
 				LocalPath:      localPath,
