@@ -1,22 +1,41 @@
 package com.branchdam.mobile.ui
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 data class AuditCandidate(
@@ -25,7 +44,17 @@ data class AuditCandidate(
     val childFilename: String,
     val confidence: Double,
     val resolver: String,
-)
+    val masterUri: String? = null,
+    val childUri: String? = null,
+    val masterMimeType: String? = null,
+    val childMimeType: String? = null,
+) {
+    val resolvedMasterUri: String?
+        get() = masterUri ?: edgeId.split("|", limit = 2).getOrNull(0)?.takeIf { it.isNotBlank() }
+
+    val resolvedChildUri: String?
+        get() = childUri ?: edgeId.split("|", limit = 2).getOrNull(1)?.takeIf { it.isNotBlank() }
+}
 
 @Composable
 fun AuditQueueScreen(
@@ -75,76 +104,101 @@ private fun AuditCard(
     onReject: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var inspectUri by remember { mutableStateOf<String?>(null) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            "Verify Match",
+            text = "Verify Lineage Match",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        ElevatedCard(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            ),
+                .weight(1f, fill = false)
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                AssetInfoRow("Master", candidate.masterFilename)
-                AssetInfoRow("Derivative", candidate.childFilename)
+            val isWideLayout = maxWidth > 500.dp
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
+            if (isWideLayout) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
-                        Text(
-                            "Confidence",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "${(candidate.confidence * 100).toInt()}%",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = if (candidate.confidence > 0.9) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.tertiary,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
+                    AssetPreviewCard(
+                        roleLabel = "MASTER",
+                        filename = candidate.masterFilename,
+                        contentUri = candidate.resolvedMasterUri,
+                        mimeType = candidate.masterMimeType,
+                        isMaster = true,
+                        onInspect = { inspectUri = candidate.resolvedMasterUri },
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text(
-                            candidate.resolver,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
+                    LineageConnector(
+                        confidence = candidate.confidence,
+                        resolver = candidate.resolver,
+                        isHorizontal = true
+                    )
+
+                    AssetPreviewCard(
+                        roleLabel = "DERIVATIVE",
+                        filename = candidate.childFilename,
+                        contentUri = candidate.resolvedChildUri,
+                        mimeType = candidate.childMimeType,
+                        isMaster = false,
+                        onInspect = { inspectUri = candidate.resolvedChildUri },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AssetPreviewCard(
+                        roleLabel = "MASTER",
+                        filename = candidate.masterFilename,
+                        contentUri = candidate.resolvedMasterUri,
+                        mimeType = candidate.masterMimeType,
+                        isMaster = true,
+                        onInspect = { inspectUri = candidate.resolvedMasterUri },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    LineageConnector(
+                        confidence = candidate.confidence,
+                        resolver = candidate.resolver,
+                        isHorizontal = false
+                    )
+
+                    AssetPreviewCard(
+                        roleLabel = "DERIVATIVE",
+                        filename = candidate.childFilename,
+                        contentUri = candidate.resolvedChildUri,
+                        mimeType = candidate.childMimeType,
+                        isMaster = false,
+                        onInspect = { inspectUri = candidate.resolvedChildUri },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             FilledTonalButton(
@@ -175,22 +229,424 @@ private fun AuditCard(
             }
         }
     }
+
+    if (inspectUri != null) {
+        FullImageComparisonDialog(
+            candidate = candidate,
+            initialUri = inspectUri,
+            onDismiss = { inspectUri = null }
+        )
+    }
 }
 
 @Composable
-private fun AssetInfoRow(label: String, filename: String) {
-    Column {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            filename,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1
-        )
+private fun AssetPreviewCard(
+    roleLabel: String,
+    filename: String,
+    contentUri: String?,
+    mimeType: String?,
+    isMaster: Boolean,
+    onInspect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val formatBadge = remember(filename, mimeType) { detectFormatBadge(filename, mimeType) }
+    val uri = contentUri?.takeIf { it.isNotBlank() }
+
+    Card(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.large)
+            .clickable(enabled = uri != null, onClick = onInspect),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (uri != null) {
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(Uri.parse(uri))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "$roleLabel: $filename",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(28.dp),
+                                strokeWidth = 2.5.dp
+                            )
+                        }
+                    },
+                    error = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Image,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.outline
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = formatBadge,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                )
+            } else {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(36.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = formatBadge,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.75f)
+                            )
+                        )
+                    )
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = filename,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = if (isMaster) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = if (isMaster) MaterialTheme.colorScheme.onPrimaryContainer
+                               else MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isMaster) Icons.Default.RawOn else Icons.Default.Photo,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "$roleLabel • $formatBadge",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (uri != null) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.5f),
+                    contentColor = Color.White
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ZoomIn,
+                        contentDescription = "Inspect image",
+                        modifier = Modifier
+                            .padding(6.dp)
+                            .size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LineageConnector(
+    confidence: Double,
+    resolver: String,
+    isHorizontal: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val confidencePct = (confidence * 100).toInt()
+    val isHighConfidence = confidence >= 0.95
+
+    if (isHorizontal) {
+        Column(
+            modifier = modifier.padding(horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
+        ) {
+            Surface(
+                color = if (isHighConfidence) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.tertiaryContainer,
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = "$confidencePct%",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (isHighConfidence) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Link,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Lineage direction",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                Text(
+                    text = resolver,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    } else {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                Text(
+                    text = resolver,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Link,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Icon(
+                    imageVector = Icons.Default.ArrowDownward,
+                    contentDescription = "Lineage direction",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Surface(
+                color = if (isHighConfidence) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.tertiaryContainer,
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = "$confidencePct% match",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (isHighConfidence) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullImageComparisonDialog(
+    candidate: AuditCandidate,
+    initialUri: String?,
+    onDismiss: () -> Unit,
+) {
+    var selectedTab by remember { mutableIntStateOf(if (initialUri == candidate.resolvedChildUri) 1 else 0) }
+    val masterUri = candidate.resolvedMasterUri
+    val childUri = candidate.resolvedChildUri
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Visual Asset Comparison",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Master: ${candidate.masterFilename}") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Derivative: ${candidate.childFilename}") }
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.large)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val activeUri = if (selectedTab == 0) masterUri else childUri
+                    val activeFilename = if (selectedTab == 0) candidate.masterFilename else candidate.childFilename
+
+                    if (activeUri != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(Uri.parse(activeUri))
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = activeFilename,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = "No image preview available for $activeFilename",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Match Confidence: ${(candidate.confidence * 100).toInt()}% (${candidate.resolver})",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = onDismiss) {
+                        Text("Done")
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun detectFormatBadge(filename: String, mimeType: String?): String {
+    val lowerFile = filename.lowercase()
+    val lowerMime = mimeType?.lowercase() ?: ""
+    return when {
+        lowerFile.endsWith(".dng") || lowerMime.contains("dng") || lowerMime.contains("raw") -> "RAW (DNG)"
+        lowerFile.endsWith(".jpg") || lowerFile.endsWith(".jpeg") || lowerMime.contains("jpeg") -> "JPEG"
+        lowerFile.endsWith(".heic") || lowerFile.endsWith(".heif") || lowerMime.contains("heic") -> "HEIC"
+        lowerFile.endsWith(".png") || lowerMime.contains("png") -> "PNG"
+        lowerFile.endsWith(".mp4") || lowerFile.endsWith(".mov") || lowerMime.contains("video") -> "VIDEO"
+        else -> filename.substringAfterLast('.').uppercase().takeIf { it.length in 2..5 } ?: "IMAGE"
     }
 }
 
@@ -204,7 +660,7 @@ fun AuditCardPreview() {
                 masterFilename = "IMG_001.DNG",
                 childFilename = "IMG_001.JPG",
                 confidence = 0.95,
-                resolver = "FastHash"
+                resolver = "android_camera_pair"
             ),
             onConfirm = {},
             onReject = {}

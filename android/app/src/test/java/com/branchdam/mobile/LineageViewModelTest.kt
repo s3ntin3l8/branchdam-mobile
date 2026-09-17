@@ -38,6 +38,12 @@ class LineageViewModelTest {
         assertEquals("PXL_001.jpg", candidate.childFilename)
         assertEquals(1.00, candidate.confidence, 0.001)
         assertEquals("android_camera_pair", candidate.resolver)
+        assertEquals("content://images/1", candidate.masterUri)
+        assertEquals("content://images/2", candidate.childUri)
+        assertEquals("image/x-adobe-dng", candidate.masterMimeType)
+        assertEquals("image/jpeg", candidate.childMimeType)
+        assertEquals("content://images/1", candidate.resolvedMasterUri)
+        assertEquals("content://images/2", candidate.resolvedChildUri)
         assertTrue(candidate.edgeId.contains("|"))
     }
 
@@ -68,6 +74,10 @@ class LineageViewModelTest {
         assertEquals("IMG_001.jpg", candidate.masterFilename)
         assertEquals("IMG_001 Edited.jpg", candidate.childFilename)
         assertEquals(0.95, candidate.confidence, 0.001)
+        assertEquals("content://images/10", candidate.masterUri)
+        assertEquals("content://images/11", candidate.childUri)
+        assertEquals("image/jpeg", candidate.masterMimeType)
+        assertEquals("image/jpeg", candidate.childMimeType)
         assertTrue(candidate.resolver.contains("google_photos"))
     }
 
