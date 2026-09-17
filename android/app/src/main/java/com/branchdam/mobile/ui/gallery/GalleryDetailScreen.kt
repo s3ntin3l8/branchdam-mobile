@@ -1,9 +1,14 @@
 package com.branchdam.mobile.ui.gallery
 
+import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,7 +22,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import com.branchdam.mobile.ui.components.ExifOrientationHelper
 import androidx.compose.ui.layout.ContentScale
@@ -28,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -216,34 +221,53 @@ fun GalleryDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (activeItem.isVideo) {
-                        Surface(
-                            shape = MaterialTheme.shapes.extraLarge,
-                            color = Color.Black.copy(alpha = 0.6f),
-                            modifier = Modifier.size(64.dp)
+                        val videoRequest = remember(activeItem.contentUri) {
+                            ImageRequest.Builder(context)
+                                .data(Uri.parse(activeItem.contentUri))
+                                .decoderFactory(VideoFrameDecoder.Factory())
+                                .crossfade(true)
+                                .build()
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable { launchVideoPlayback(context, activeItem) },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Video",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(40.dp)
-                                )
+                            AsyncImage(
+                                model = videoRequest,
+                                contentDescription = activeItem.displayName,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Play Video",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                }
                             }
                         }
                     } else {
-                        val detailRotation = remember(activeItem.contentUri) {
-                            ExifOrientationHelper.getExifRotationDegrees(context, activeItem.contentUri)
-                        }
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
+                        val imageRequest = remember(activeItem.contentUri) {
+                            val builder = ImageRequest.Builder(context)
                                 .data(Uri.parse(activeItem.contentUri))
                                 .crossfade(200)
-                                .build(),
+                            ExifOrientationHelper.applyExifOrientation(builder, context, activeItem.contentUri)
+                            builder.build()
+                        }
+                        AsyncImage(
+                            model = imageRequest,
                             contentDescription = activeItem.displayName,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .rotate(detailRotation)
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -253,6 +277,7 @@ fun GalleryDetailScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -260,12 +285,12 @@ fun GalleryDetailScreen(
                         FilterChip(
                             selected = !showRawPreview,
                             onClick = { showRawPreview = false },
-                            label = { Text("JPEG (${galleryItem.primaryMediaItem.displayName})") }
+                            label = { Text("JPEG") }
                         )
                         FilterChip(
                             selected = showRawPreview,
                             onClick = { showRawPreview = true },
-                            label = { Text("RAW (${galleryItem.companionMediaItem.displayName})") }
+                            label = { Text("RAW (DNG)") }
                         )
                     }
                 }
@@ -384,4 +409,16 @@ internal fun formatDateTaken(unixTimestampSecs: Long): String {
     if (unixTimestampSecs <= 0) return "Unknown"
     val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     return sdf.format(Date(unixTimestampSecs * 1000L))
+}
+
+private fun launchVideoPlayback(context: android.content.Context, item: com.branchdam.mobile.observer.MediaItem) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(item.contentUri), item.mimeType.ifEmpty { "video/*" })
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "No video player application found", Toast.LENGTH_SHORT).show()
+    }
 }

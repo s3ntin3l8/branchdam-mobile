@@ -398,8 +398,12 @@ private fun GalleryItemCard(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val rotation = remember(galleryItem.mediaItem.contentUri) {
-        ExifOrientationHelper.getExifRotationDegrees(context, galleryItem.mediaItem.contentUri)
+    val imageRequest = remember(galleryItem.mediaItem.contentUri) {
+        val builder = ImageRequest.Builder(context)
+            .data(Uri.parse(galleryItem.mediaItem.contentUri))
+            .crossfade(200)
+        ExifOrientationHelper.applyExifOrientation(builder, context, galleryItem.mediaItem.contentUri)
+        builder.build()
     }
 
     Card(
@@ -423,13 +427,10 @@ private fun GalleryItemCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(Uri.parse(galleryItem.mediaItem.contentUri))
-                    .crossfade(200)
-                    .build(),
+                model = imageRequest,
                 contentDescription = galleryItem.mediaItem.displayName,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().rotate(rotation),
+                modifier = Modifier.fillMaxSize(),
             )
 
             if (isSelected) {

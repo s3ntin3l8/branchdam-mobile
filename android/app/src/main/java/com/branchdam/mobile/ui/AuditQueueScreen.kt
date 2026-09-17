@@ -272,17 +272,18 @@ private fun AssetPreviewCard(
         ) {
             if (uri != null) {
                 val auditContext = LocalContext.current
-                val auditRotation = remember(uri) {
-                    ExifOrientationHelper.getExifRotationDegrees(auditContext, uri)
-                }
-                SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                val imageRequest = remember(uri) {
+                    val builder = ImageRequest.Builder(auditContext)
                         .data(Uri.parse(uri))
                         .crossfade(true)
-                        .build(),
+                    ExifOrientationHelper.applyExifOrientation(builder, auditContext, uri)
+                    builder.build()
+                }
+                SubcomposeAsyncImage(
+                    model = imageRequest,
                     contentDescription = "$roleLabel: $filename",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().rotate(auditRotation),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                     loading = {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -604,17 +605,18 @@ private fun FullImageComparisonDialog(
 
                     if (activeUri != null) {
                         val dialogContext = LocalContext.current
-                        val dialogRotation = remember(activeUri) {
-                            ExifOrientationHelper.getExifRotationDegrees(dialogContext, activeUri)
-                        }
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
+                        val dialogRequest = remember(activeUri) {
+                            val builder = ImageRequest.Builder(dialogContext)
                                 .data(Uri.parse(activeUri))
                                 .crossfade(true)
-                                .build(),
+                            ExifOrientationHelper.applyExifOrientation(builder, dialogContext, activeUri)
+                            builder.build()
+                        }
+                        AsyncImage(
+                            model = dialogRequest,
                             contentDescription = activeFilename,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize().rotate(dialogRotation)
+                            modifier = Modifier.fillMaxSize()
                         )
                     } else {
                         Text(
