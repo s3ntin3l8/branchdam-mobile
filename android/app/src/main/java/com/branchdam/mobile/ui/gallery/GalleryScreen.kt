@@ -393,7 +393,9 @@ fun GalleryScreen(
                         EmptyGalleryState()
                     }
                     else -> {
+                        val gridState = rememberLazyGridState()
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Adaptive(minSize = 110.dp),
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(2.dp),

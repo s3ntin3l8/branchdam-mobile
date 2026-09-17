@@ -28,7 +28,7 @@ object MediaScanner {
     private const val QUERY_ARG_SQL_SORT_ORDER = "android:query-arg-sql-sort-order"
     private const val QUERY_ARG_LIMIT = "android:query-arg-limit"
 
-    fun queryRecentImages(context: Context, minDateTakenUnix: Long = 0, limit: Int = 100): List<MediaItem> {
+    fun queryRecentImages(context: Context, minDateTakenUnix: Long = 0, limit: Int = 5000): List<MediaItem> {
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
@@ -56,7 +56,7 @@ object MediaScanner {
         )
     }
 
-    fun queryRecentVideos(context: Context, minDateTakenUnix: Long = 0, limit: Int = 50): List<MediaItem> {
+    fun queryRecentVideos(context: Context, minDateTakenUnix: Long = 0, limit: Int = 1000): List<MediaItem> {
         val projection = arrayOf(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.DISPLAY_NAME,
