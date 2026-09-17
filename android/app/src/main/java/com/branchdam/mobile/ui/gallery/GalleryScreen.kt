@@ -3,9 +3,12 @@ package com.branchdam.mobile.ui.gallery
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -23,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -138,18 +142,18 @@ fun GalleryScreen(
             when {
                 isLoading && items.isEmpty() -> {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        columns = GridCells.Adaptive(minSize = 110.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(2.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
                         userScrollEnabled = false
                     ) {
                         items(12) {
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(1f)
-                                    .clip(MaterialTheme.shapes.medium)
+                                    .clip(RoundedCornerShape(2.dp))
                                     .shimmer()
                             )
                         }
@@ -172,11 +176,11 @@ fun GalleryScreen(
                 }
                 else -> {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        columns = GridCells.Adaptive(minSize = 110.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(2.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         items(items, key = { it.mediaItem.id }) { galleryItem ->
                             val isSelected = selectedItemIds.contains(galleryItem.mediaItem.id)
@@ -207,7 +211,7 @@ private fun GalleryItemCard(
     Card(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(MaterialTheme.shapes.large)
+            .clip(RoundedCornerShape(2.dp))
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) {
@@ -220,14 +224,14 @@ private fun GalleryItemCard(
                     onToggleSelect()
                 }
             ),
-        shape = MaterialTheme.shapes.large,
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        shape = RoundedCornerShape(2.dp),
+        border = if (isSelected) BorderStroke(2.5.dp, MaterialTheme.colorScheme.primary) else null,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(Uri.parse(galleryItem.mediaItem.contentUri))
-                    .crossfade(300)
+                    .crossfade(200)
                     .build(),
                 contentDescription = galleryItem.mediaItem.displayName,
                 contentScale = ContentScale.Crop,
@@ -237,163 +241,132 @@ private fun GalleryItemCard(
             if (isSelected) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                 ) {}
             }
 
-            Surface(
-                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                shape = MaterialTheme.shapes.extraSmall,
-            ) {
-                Text(
-                    galleryItem.lineageStatus,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.ExtraBold
-                )
+            // Top-Left Lineage Status Badge (only when paired or non-default)
+            if (galleryItem.lineageStatus != "Unpaired") {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(4.dp),
+                ) {
+                    Text(
+                        text = galleryItem.lineageStatus,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
+            // Top-Right Format / Selection Badge
             if (isSelectionMode || isSelected) {
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
+                    shape = CircleShape,
                 ) {
                     Icon(
                         imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Outlined.CheckCircle,
                         contentDescription = "Selected",
-                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(4.dp).size(20.dp)
+                        tint = Color.White,
+                        modifier = Modifier.padding(2.dp).size(18.dp)
                     )
                 }
             } else if (galleryItem.mediaItem.isDng) {
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
                     color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.extraSmall,
+                    shape = RoundedCornerShape(4.dp),
                 ) {
                     Text(
-                        "RAW",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        text = "RAW",
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
-            }
-
-            if (galleryItem.mediaItem.isVideo) {
+            } else if (galleryItem.mediaItem.isVideo) {
                 Surface(
-                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                    shape = MaterialTheme.shapes.extraSmall,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                    color = Color.Black.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(4.dp),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Video",
-                            modifier = Modifier.size(14.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
                         )
                         Text(
-                            "VIDEO",
+                            text = "VIDEO",
                             style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
 
+            // Bottom-Right Backup / Offload Status Badge
             if (galleryItem.isOffloaded) {
                 Surface(
-                    modifier = Modifier.align(if (galleryItem.mediaItem.isVideo) Alignment.BottomEnd else Alignment.BottomStart).padding(8.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.extraSmall,
+                    shape = RoundedCornerShape(4.dp),
                 ) {
                     Text(
-                        "Offloaded",
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        text = "Offloaded",
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
             } else if (galleryItem.isBackedUp) {
                 Surface(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.extraSmall,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
+                    color = Color.Black.copy(alpha = 0.5f),
+                    shape = CircleShape,
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudDone,
-                            contentDescription = "Backed Up",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            "Backed Up",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.CloudDone,
+                        contentDescription = "Backed Up",
+                        tint = Color.White,
+                        modifier = Modifier.padding(3.dp).size(14.dp)
+                    )
                 }
             } else if (galleryItem.isPendingUpload) {
                 Surface(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.extraSmall,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
+                    color = Color.Black.copy(alpha = 0.5f),
+                    shape = CircleShape,
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudSync,
-                            contentDescription = "Pending Upload",
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            "Pending",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.CloudSync,
+                        contentDescription = "Pending Upload",
+                        tint = Color.White,
+                        modifier = Modifier.padding(3.dp).size(14.dp)
+                    )
                 }
             } else if (galleryItem.isUploadFailed) {
                 Surface(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.extraSmall,
+                    shape = CircleShape,
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "Upload Failed",
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            "Failed",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Upload Failed",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(3.dp).size(14.dp)
+                    )
                 }
             }
         }

@@ -109,6 +109,10 @@ class LineageViewModel(application: Application) : AndroidViewModel(application)
                 childFilename = pair.derivativeJpeg.displayName,
                 confidence = pair.confidence,
                 resolver = pair.resolver,
+                masterUri = pair.masterRaw.contentUri,
+                childUri = pair.derivativeJpeg.contentUri,
+                masterMimeType = pair.masterRaw.mimeType,
+                childMimeType = pair.derivativeJpeg.mimeType,
             )
         }
 
@@ -120,6 +124,10 @@ class LineageViewModel(application: Application) : AndroidViewModel(application)
                 childFilename = edit.editedDerivative.displayName,
                 confidence = edit.confidence,
                 resolver = InPhoneEditResolver.format(edit.editorApp),
+                masterUri = edit.originalMaster.contentUri,
+                childUri = edit.editedDerivative.contentUri,
+                masterMimeType = edit.originalMaster.mimeType,
+                childMimeType = edit.editedDerivative.mimeType,
             )
         }
     }

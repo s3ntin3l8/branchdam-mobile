@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,119 +41,162 @@ fun SyncStatusScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            if (uiState.isServerReachable) "Connected to server" else "Server unreachable",
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    supportingContent = {
-                        if (uiState.isConnected && !uiState.isServerReachable) {
-                            Text(
-                                "Local engine is ready, but server handshake failed.",
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    },
-                    leadingContent = {
-                        PulsingConnectionDot(isReachable = uiState.isServerReachable)
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large
-            ) {
-                Column {
-                    ListItem(
-                        headlineContent = { Text(uiState.workerState) },
-                        overlineContent = { Text("Worker State") },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                // Connection Status Hero Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (uiState.isServerReachable)
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ) {
                     ListItem(
                         headlineContent = {
                             Text(
-                                if (uiState.pendingUploadsCount == 0L) {
-                                    "0 items (All backed up)"
-                                } else {
-                                    "${uiState.pendingUploadsCount} item(s) pending upload"
-                                }
+                                text = if (uiState.isServerReachable) "Connected to server" else "Server unreachable",
+                                fontWeight = FontWeight.Bold,
+                                color = if (uiState.isServerReachable)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onErrorContainer
                             )
                         },
-                        overlineContent = { Text("Pending Uploads") },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ListItem(
-                        headlineContent = {
-                            Text(
-                                if (uiState.lastSyncTime > 0) {
-                                    DateUtils.getRelativeTimeSpanString(
-                                        uiState.lastSyncTime,
-                                        System.currentTimeMillis(),
-                                        DateUtils.MINUTE_IN_MILLIS,
-                                    ).toString()
-                                } else {
-                                    "Never synced"
-                                }
-                            )
+                        supportingContent = {
+                            if (uiState.isConnected && !uiState.isServerReachable) {
+                                Text(
+                                    text = "Local engine ready, but server handshake failed.",
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                         },
-                        overlineContent = { Text("Last Sync") },
+                        leadingContent = {
+                            PulsingConnectionDot(isReachable = uiState.isServerReachable)
+                        },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
-            }
 
-            Spacer(Modifier.weight(1f))
-
-            Button(
-                onClick = { viewModel.triggerSync() },
-                enabled = uiState.isServerReachable && !uiState.isSyncing,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = MaterialTheme.shapes.large
-            ) {
-                AnimatedContent(
-                    targetState = uiState.isSyncing,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "sync_button_content"
-                ) { isSyncing ->
-                    if (isSyncing) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text("Syncing...")
-                        }
-                    } else {
-                        Text("Sync Now")
+                // Sync Metrics Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    )
+                ) {
+                    Column {
+                        ListItem(
+                            headlineContent = { Text(uiState.workerState, fontWeight = FontWeight.SemiBold) },
+                            overlineContent = { Text("Worker State") },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = if (uiState.pendingUploadsCount == 0L) {
+                                        "0 items (All backed up)"
+                                    } else {
+                                        "${uiState.pendingUploadsCount} item(s) pending upload"
+                                    },
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            overlineContent = { Text("Pending Uploads") },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = if (uiState.lastSyncTime > 0) {
+                                        DateUtils.getRelativeTimeSpanString(
+                                            uiState.lastSyncTime,
+                                            System.currentTimeMillis(),
+                                            DateUtils.MINUTE_IN_MILLIS,
+                                        ).toString()
+                                    } else {
+                                        "Never synced"
+                                    },
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            overlineContent = { Text("Last Sync") },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
                     }
                 }
             }
 
-            OutlinedButton(
-                onClick = { viewModel.refresh() },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = MaterialTheme.shapes.large
+            // Action Buttons Fixed at Viewport Bottom
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Refresh Status")
+                Button(
+                    onClick = { viewModel.triggerSync() },
+                    enabled = uiState.isServerReachable && !uiState.isSyncing,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    AnimatedContent(
+                        targetState = uiState.isSyncing,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "sync_button_content"
+                    ) { isSyncing ->
+                        if (isSyncing) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text("Syncing...")
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Sync Now", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = { viewModel.refresh() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Refresh Status")
+                }
             }
         }
     }
@@ -180,7 +226,7 @@ private fun PulsingConnectionDot(isReachable: Boolean) {
 
     val color = if (isReachable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
 
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(24.dp)) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(20.dp)) {
         Surface(
             modifier = Modifier
                 .size(10.dp)

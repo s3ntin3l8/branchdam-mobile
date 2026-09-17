@@ -27,14 +27,16 @@ class UiStateTest {
     @Test
     fun testAuditCandidateModel() {
         val candidate = AuditCandidate(
-            edgeId = "edge-100",
+            edgeId = "content://images/100|content://images/101",
             masterFilename = "PXL_20260829_001.dng",
             childFilename = "PXL_20260829_001.jpg",
             confidence = 1.00,
             resolver = "android_camera_pair"
         )
 
-        assertEquals("edge-100", candidate.edgeId)
+        assertEquals("content://images/100|content://images/101", candidate.edgeId)
         assertEquals(1.00, candidate.confidence, 0.001)
+        assertEquals("content://images/100", candidate.resolvedMasterUri)
+        assertEquals("content://images/101", candidate.resolvedChildUri)
     }
 }
