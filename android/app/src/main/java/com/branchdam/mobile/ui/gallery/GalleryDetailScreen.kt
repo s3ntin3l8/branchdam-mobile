@@ -49,6 +49,7 @@ fun GalleryDetailScreen(
     val scope = rememberCoroutineScope()
 
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showRawPreview by remember { mutableStateOf(false) }
 
     if (showDeleteConfirmDialog && galleryItem != null) {
         AlertDialog(
@@ -200,6 +201,12 @@ fun GalleryDetailScreen(
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
             ) {
+                val activeItem = if (showRawPreview && galleryItem.companionMediaItem != null) {
+                    galleryItem.companionMediaItem!!
+                } else {
+                    galleryItem.primaryMediaItem
+                }
+
                 // Dynamic Aspect Media Preview
                 Box(
                     modifier = Modifier
@@ -208,7 +215,7 @@ fun GalleryDetailScreen(
                         .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (galleryItem.mediaItem.isVideo) {
+                    if (activeItem.isVideo) {
                         Surface(
                             shape = MaterialTheme.shapes.extraLarge,
                             color = Color.Black.copy(alpha = 0.6f),
@@ -224,17 +231,41 @@ fun GalleryDetailScreen(
                             }
                         }
                     } else {
-                        val detailRotation = remember(galleryItem.mediaItem.contentUri) {
-                            ExifOrientationHelper.getExifRotationDegrees(context, galleryItem.mediaItem.contentUri)
+                        val detailRotation = remember(activeItem.contentUri) {
+                            ExifOrientationHelper.getExifRotationDegrees(context, activeItem.contentUri)
                         }
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
-                                .data(Uri.parse(galleryItem.mediaItem.contentUri))
+                                .data(Uri.parse(activeItem.contentUri))
                                 .crossfade(200)
                                 .build(),
-                            contentDescription = galleryItem.mediaItem.displayName,
+                            contentDescription = activeItem.displayName,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxWidth().rotate(detailRotation)
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .rotate(detailRotation)
+                        )
+                    }
+                }
+
+                if (galleryItem.companionMediaItem != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = !showRawPreview,
+                            onClick = { showRawPreview = false },
+                            label = { Text("JPEG (${galleryItem.primaryMediaItem.displayName})") }
+                        )
+                        FilterChip(
+                            selected = showRawPreview,
+                            onClick = { showRawPreview = true },
+                            label = { Text("RAW (${galleryItem.companionMediaItem.displayName})") }
                         )
                     }
                 }
