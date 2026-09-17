@@ -229,4 +229,3 @@ func (q *Queue) GetAllMediaStatuses() (map[string]string, error) {
 
 	return result, nil
 }
-

@@ -326,3 +326,40 @@ func TestEnqueueEvent_PayloadTooLarge(t *testing.T) {
 		t.Fatalf("expected 1 pending event (the OK one), got %d", count)
 	}
 }
+
+func TestMediaStateAndGetMediaStatus(t *testing.T) {
+	q := newTestQueue(t)
+
+	localID := "content://media/external/images/media/2000"
+	blake3 := "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a"
+
+	// 1. Initial GetMediaStatus returns NOT_ENQUEUED
+	st, err := q.GetMediaStatus(localID)
+	if err != nil || st != "NOT_ENQUEUED" {
+		t.Fatalf("expected NOT_ENQUEUED, got %s (err: %v)", st, err)
+	}
+
+	// 2. Record local media without nodeUUID
+	if err := q.RecordLocalMedia(localID, "", blake3, "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia failed: %v", err)
+	}
+
+	// 3. Update local media node UUID
+	if err := q.UpdateLocalMediaNodeUUID(blake3, "node-uuid-123"); err != nil {
+		t.Fatalf("UpdateLocalMediaNodeUUID failed: %v", err)
+	}
+
+	stCompleted, err := q.GetMediaStatus(localID)
+	if err != nil || stCompleted != "COMPLETED" {
+		t.Fatalf("expected COMPLETED after UpdateLocalMediaNodeUUID, got %s", stCompleted)
+	}
+
+	// 4. Test GetAllMediaStatuses
+	allStatuses, err := q.GetAllMediaStatuses()
+	if err != nil {
+		t.Fatalf("GetAllMediaStatuses failed: %v", err)
+	}
+	if allStatuses[localID] != "COMPLETED" {
+		t.Fatalf("expected allStatuses[%s] = COMPLETED, got %s", localID, allStatuses[localID])
+	}
+}

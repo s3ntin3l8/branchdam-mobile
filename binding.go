@@ -340,4 +340,3 @@ func BindingCountPendingUploads() (int64, error) {
 	}
 	return bindingEngine.CountPendingUploads()
 }
-

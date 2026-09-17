@@ -506,4 +506,3 @@ func (e *Engine) GetAllMediaStatuses() (map[string]string, error) {
 func (e *Engine) CountPendingUploads() (int64, error) {
 	return e.q.CountPendingUploads()
 }
-

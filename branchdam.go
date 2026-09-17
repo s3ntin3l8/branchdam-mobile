@@ -623,7 +623,6 @@ func (e *Engine) CountPendingUploads() (int64, error) {
 	return e.engine.CountPendingUploads()
 }
 
-
 // ---------------------------------------------------------------------------
 // Offload flag query
 // ---------------------------------------------------------------------------
