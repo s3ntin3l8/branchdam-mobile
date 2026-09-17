@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.8](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.7...branchdam-mobile-v0.7.8) (2026-09-17)
+
+
+### Bug Fixes
+
+* **engine:** add gallery server pre-screening, fix RAW lineage pairing, and group RAW+JPEG pairs ([#163](https://github.com/s3ntin3l8/branchdam-mobile/issues/163)) ([96bb96e](https://github.com/s3ntin3l8/branchdam-mobile/commit/96bb96e839a2a885430085c952869cc6f5aadf77))
+
 ## [0.7.7](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.6...branchdam-mobile-v0.7.7) (2026-09-13)
 
 
