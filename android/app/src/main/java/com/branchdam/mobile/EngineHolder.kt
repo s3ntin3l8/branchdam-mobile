@@ -21,7 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 object EngineHolder {
     private const val TAG = "EngineHolder"
 
-    private val executor = Executors.newSingleThreadExecutor()
+    private val syncExecutor = Executors.newSingleThreadExecutor()
+    private val queryExecutor = Executors.newFixedThreadPool(2)
 
     @Volatile
     private var isInitialized = false
@@ -47,7 +48,7 @@ object EngineHolder {
     ): Boolean {
         if (!nativeAvailable.get()) return false
         return try {
-            executor.submit(Callable {
+            syncExecutor.submit(Callable {
                 Branchdam.bindingOpen(dbPath, baseURL, apiKey, agentID, version, devCleartextHosts)
             }).get()
             isInitialized = true
@@ -62,7 +63,7 @@ object EngineHolder {
     fun shutdown() {
         if (!nativeAvailable.get()) return
         try {
-            executor.submit(Callable { Branchdam.bindingClose() }).get()
+            syncExecutor.submit(Callable { Branchdam.bindingClose() }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "bindingClose failed: $t")
         }
@@ -77,12 +78,10 @@ object EngineHolder {
         capturedAtUnix: Long,
         localId: String,
     ): Long {
-        // Failure or uninitialized when native engine library is present
         if (nativeAvailable.get() && !isInitialized) return 0L
-        // Test stub fallback simulating a generated ID when native AAR is absent
         if (!nativeAvailable.get()) return 1L
         return try {
-            executor.submit(Callable {
+            queryExecutor.submit(Callable {
                 Branchdam.bindingEnqueueMedia(localPath, filename, localId, "", capturedAtUnix, 0L)
             }).get()
         } catch (t: Throwable) {
@@ -100,7 +99,7 @@ object EngineHolder {
     ): String {
         if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
         return try {
-            executor.submit(Callable {
+            queryExecutor.submit(Callable {
                 Branchdam.bindingEnqueueLineageEvent(parentLocalID, childLocalID, relationshipType, resolver, confidence)
             }).get()
         } catch (t: Throwable) {
@@ -112,7 +111,7 @@ object EngineHolder {
     fun enqueueDeleteEvent(localID: String): String {
         if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
         return try {
-            executor.submit(Callable { Branchdam.bindingEnqueueDeleteEvent(localID) }).get()
+            queryExecutor.submit(Callable { Branchdam.bindingEnqueueDeleteEvent(localID) }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "enqueueDeleteEvent failed: $t")
             ""
@@ -122,7 +121,7 @@ object EngineHolder {
     fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10): Boolean {
         if (!nativeAvailable.get()) return false
         return try {
-            executor.submit(Callable {
+            syncExecutor.submit(Callable {
                 Branchdam.bindingSyncBatch(timeoutSecs.toLong(), batchSize.toLong())
             }).get()
             true
@@ -139,7 +138,7 @@ object EngineHolder {
      */
     fun setCancelFlag() {
         if (!nativeAvailable.get() || !isInitialized) return
-        executor.submit {
+        syncExecutor.submit {
             try {
                 Branchdam.bindingSetCancelFlag()
             } catch (t: Throwable) {
@@ -151,7 +150,7 @@ object EngineHolder {
     fun isMediaOffloaded(localID: String): Boolean {
         if (!nativeAvailable.get() || !isInitialized) return false
         return try {
-            executor.submit(Callable { Branchdam.bindingIsMediaOffloaded(localID) }).get()
+            queryExecutor.submit(Callable { Branchdam.bindingIsMediaOffloaded(localID) }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "isMediaOffloaded failed: $t")
             false
@@ -161,7 +160,7 @@ object EngineHolder {
     fun getMediaStatus(localID: String): String {
         if (!nativeAvailable.get() || !isInitialized) return mockMediaStatusMap[localID] ?: "NOT_ENQUEUED"
         return try {
-            executor.submit(Callable { Branchdam.bindingGetMediaStatus(localID) }).get()
+            queryExecutor.submit(Callable { Branchdam.bindingGetMediaStatus(localID) }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "getMediaStatus failed: $t")
             "NOT_ENQUEUED"
@@ -171,7 +170,7 @@ object EngineHolder {
     fun getAllMediaStatuses(): Map<String, String> {
         if (!nativeAvailable.get() || !isInitialized) return mockMediaStatusMap
         return try {
-            val jsonStr = executor.submit(Callable { Branchdam.bindingGetAllMediaStatuses() }).get()
+            val jsonStr = queryExecutor.submit(Callable { Branchdam.bindingGetAllMediaStatuses() }).get()
             if (jsonStr.isNullOrEmpty() || jsonStr == "{}") return emptyMap()
             val jsonObj = org.json.JSONObject(jsonStr)
             val result = mutableMapOf<String, String>()
@@ -190,7 +189,7 @@ object EngineHolder {
     fun countPendingUploads(): Long {
         if (!nativeAvailable.get() || !isInitialized) return mockPendingUploadsCount
         return try {
-            executor.submit(Callable { Branchdam.bindingCountPendingUploads() }).get()
+            queryExecutor.submit(Callable { Branchdam.bindingCountPendingUploads() }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "countPendingUploads failed: $t")
             0L
@@ -206,7 +205,7 @@ object EngineHolder {
     fun setMediaOffloaded(localID: String, isOffloaded: Boolean): Boolean {
         if (!nativeAvailable.get() || !isInitialized) return true
         return try {
-            executor.submit(Callable {
+            queryExecutor.submit(Callable {
                 Branchdam.bindingSetMediaOffloaded(localID, isOffloaded)
                 true
             }).get()
@@ -219,7 +218,7 @@ object EngineHolder {
     fun fetchNamingTemplate(): String {
         if (!nativeAvailable.get() || !isInitialized) return MOCK_NAMING_TEMPLATE
         return try {
-            executor.submit(Callable { Branchdam.bindingFetchNamingTemplate() }).get()
+            queryExecutor.submit(Callable { Branchdam.bindingFetchNamingTemplate() }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "fetchNamingTemplate failed: $t")
             MOCK_NAMING_TEMPLATE
@@ -237,7 +236,7 @@ object EngineHolder {
     fun testConnection(): Boolean {
         if (!nativeAvailable.get() || !isInitialized) return false
         return try {
-            executor.submit(Callable {
+            queryExecutor.submit(Callable {
                 Branchdam.bindingFetchNamingTemplate()
                 true
             }).get()
@@ -250,7 +249,7 @@ object EngineHolder {
     fun reclaimSafeSpace(localID: String): Boolean {
         if (!nativeAvailable.get()) return false
         return try {
-            executor.submit(Callable {
+            queryExecutor.submit(Callable {
                 Branchdam.bindingReclaimSafeSpace(localID)
                 true
             }).get()
@@ -271,7 +270,7 @@ object EngineHolder {
     fun computeBlake3Hex(localPath: String): String? {
         if (!nativeAvailable.get()) return null
         return try {
-            executor.submit(Callable { Branchdam.bindingComputeHashes(localPath) })
+            queryExecutor.submit(Callable { Branchdam.bindingComputeHashes(localPath) })
                 .get()
         } catch (t: Throwable) {
             Log.w(TAG, "computeBlake3Hex($localPath) failed: $t")
@@ -290,7 +289,7 @@ object EngineHolder {
     fun lookupBlake3ForLocalID(localID: String): String {
         if (!nativeAvailable.get() || localID.isEmpty()) return ""
         return try {
-            executor.submit(Callable { Branchdam.bindingLookupBlake3ForLocalID(localID) })
+            queryExecutor.submit(Callable { Branchdam.bindingLookupBlake3ForLocalID(localID) })
                 .get() ?: ""
         } catch (t: Throwable) {
             Log.w(TAG, "lookupBlake3ForLocalID($localID) failed: $t")

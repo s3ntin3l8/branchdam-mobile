@@ -20,6 +20,15 @@ var (
 	bindingEngine *Engine
 )
 
+func getBindingEngine() (*Engine, error) {
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if bindingEngine == nil {
+		return nil, fmt.Errorf("engine not open")
+	}
+	return bindingEngine, nil
+}
+
 // BindingOpen initialises the engine from primitive parameters.
 // devCleartextHosts is a comma-separated list of hosts allowed over
 // HTTP in debug builds; pass "" in production to require HTTPS.
@@ -81,12 +90,11 @@ func BindingEnqueueMedia(localPath, filename, localID, cameraModel string,
 func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel, sourcePathHash string,
 	capturedAtUnix, sizeBytes int64) (int64, error) {
 
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return 0, fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return 0, err
 	}
-	return bindingEngine.EnqueueMedia(EnqueueMediaOptions{
+	return e.EnqueueMedia(EnqueueMediaOptions{
 		LocalPath:      localPath,
 		Filename:       filename,
 		LocalID:        localID,
@@ -102,103 +110,94 @@ func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel
 func BindingEnqueueLineageEvent(parentLocalID, childLocalID,
 	relationshipType, resolver string, confidence float64) (string, error) {
 
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
 	}
-	return bindingEngine.EnqueueLineageEvent(
+	return e.EnqueueLineageEvent(
 		parentLocalID, childLocalID, relationshipType, resolver,
 		Confidence(confidence))
 }
 
 // BindingEnqueueDeleteEvent enqueues a local-delete lifecycle event.
 func BindingEnqueueDeleteEvent(localID string) (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
 	}
-	return bindingEngine.EnqueueDeleteEvent(localID)
+	return e.EnqueueDeleteEvent(localID)
 }
 
 // BindingSyncBatch runs a sync cycle.
 func BindingSyncBatch(timeoutSecs, batchSize int64) error {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return err
 	}
-	_, err := bindingEngine.SyncBatch(SyncOptions{
+	_, syncErr := e.SyncBatch(SyncOptions{
 		TimeoutSecs:    int(timeoutSecs),
 		BatchSize:      int(batchSize),
 		IncludeEvents:  true,
 		IncludeUploads: true,
 	})
-	return err
+	return syncErr
 }
 
 // BindingIsMediaOffloaded returns the offload flag. On error returns false
 // (fail-closed: shell refuses to delete).
 func BindingIsMediaOffloaded(localID string) (bool, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return false, fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return false, err
 	}
-	return bindingEngine.IsMediaOffloaded(localID)
+	return e.IsMediaOffloaded(localID)
 }
 
 // BindingSetMediaOffloaded sets the offload flag directly.
 func BindingSetMediaOffloaded(localID string, isOffloaded bool) error {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return err
 	}
-	return bindingEngine.SetMediaOffloaded(localID, isOffloaded)
+	return e.SetMediaOffloaded(localID, isOffloaded)
 }
 
 // BindingSetCancelFlag requests cancellation of the current sync batch.
 func BindingSetCancelFlag() error {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return err
 	}
-	bindingEngine.SetCancelFlag()
+	e.SetCancelFlag()
 	return nil
 }
 
 // BindingFetchNamingTemplate fetches the naming template from the server.
 func BindingFetchNamingTemplate() (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
 	}
-	return bindingEngine.FetchNamingTemplate()
+	return e.FetchNamingTemplate()
 }
 
 // BindingReclaimSafeSpace runs the atomic reclaim for a single local ID.
 func BindingReclaimSafeSpace(localID string) error {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return err
 	}
-	_, err := bindingEngine.ReclaimSafeSpace(localID)
-	return err
+	_, reclaimErr := e.ReclaimSafeSpace(localID)
+	return reclaimErr
 }
 
 // BindingCheckSafeSpaceCandidates checks a batch of local IDs for
 // eligibility. localIDs is a comma-separated list. Returns a
 // comma-separated "localID:eligible:reason" string.
 func BindingCheckSafeSpaceCandidates(localIDs string) (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
 	}
 	if localIDs == "" {
 		return "", nil
@@ -208,9 +207,9 @@ func BindingCheckSafeSpaceCandidates(localIDs string) (string, error) {
 	for i, id := range ids {
 		candidates[i] = SafeSpaceCandidate{LocalID: id}
 	}
-	verdicts, err := bindingEngine.CheckSafeSpaceCandidates(candidates)
-	if err != nil {
-		return "", err
+	verdicts, checkErr := e.CheckSafeSpaceCandidates(candidates)
+	if checkErr != nil {
+		return "", checkErr
 	}
 	parts := make([]string, 0, len(verdicts))
 	for _, v := range verdicts {
@@ -236,17 +235,16 @@ func splitIDs(s string) []string {
 // implementation in sync with the upload-side hash. Returns "" on error;
 // callers should treat that as "hash unavailable, defer to upload-side".
 func BindingComputeHashes(localPath string) (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
 	}
 	if localPath == "" {
 		return "", fmt.Errorf("local path is required")
 	}
-	hashes, err := bindingEngine.ComputeHashes(localPath, nil)
-	if err != nil {
-		return "", err
+	hashes, hashErr := e.ComputeHashes(localPath, nil)
+	if hashErr != nil {
+		return "", hashErr
 	}
 	return hashes.Blake3, nil
 }
@@ -260,21 +258,20 @@ func BindingComputeHashes(localPath string) (string, error) {
 // happens but continues with the new hash (the source-of-truth is the file
 // on disk, not the prior queue entry).
 func BindingLookupBlake3ForLocalID(localID string) (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
 	}
 	if localID == "" {
 		return "", nil
 	}
-	state, err := bindingEngine.queue.GetMediaByLocalID(localID)
-	if err != nil {
+	state, lookupErr := e.queue.GetMediaByLocalID(localID)
+	if lookupErr != nil {
 		// sql.ErrNoRows is the "no prior ingest" case; not an error.
-		if strings.Contains(err.Error(), "sql: no rows in result set") {
+		if strings.Contains(lookupErr.Error(), "sql: no rows in result set") {
 			return "", nil
 		}
-		return "", err
+		return "", lookupErr
 	}
 	return state.Blake3Hash, nil
 }
@@ -284,16 +281,15 @@ func BindingLookupBlake3ForLocalID(localID string) (string, error) {
 // Follows the BindingCheckSafeSpaceCandidates pattern for gomobile compatibility.
 // Uses a 30-second timeout to prevent ANR on mobile if the server is slow.
 func BindingCheckContent(fastHash, fullHash string) (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	result, err := bindingEngine.client.CheckContent(ctx, fastHash, fullHash)
-	if err != nil {
-		return "", err
+	result, checkErr := e.client.CheckContent(ctx, fastHash, fullHash)
+	if checkErr != nil {
+		return "", checkErr
 	}
 	b, err := json.Marshal(result)
 	if err != nil {
@@ -305,24 +301,22 @@ func BindingCheckContent(fastHash, fullHash string) (string, error) {
 // BindingGetMediaStatus returns the status of a local media asset.
 // Returns "OFFLOADED", "COMPLETED", "IN_PROGRESS", "PENDING", "FAILED", or "NOT_ENQUEUED".
 func BindingGetMediaStatus(localID string) (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "NOT_ENQUEUED", fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return "NOT_ENQUEUED", err
 	}
-	return bindingEngine.GetMediaStatus(localID)
+	return e.GetMediaStatus(localID)
 }
 
 // BindingGetAllMediaStatuses returns a JSON-encoded map of localID/localPath/srcPathHash -> status.
 func BindingGetAllMediaStatuses() (string, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return "{}", fmt.Errorf("engine not open")
-	}
-	m, err := bindingEngine.GetAllMediaStatuses()
+	e, err := getBindingEngine()
 	if err != nil {
 		return "{}", err
+	}
+	m, statusErr := e.GetAllMediaStatuses()
+	if statusErr != nil {
+		return "{}", statusErr
 	}
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -333,10 +327,9 @@ func BindingGetAllMediaStatuses() (string, error) {
 
 // BindingCountPendingUploads returns the number of pending/in-progress uploads in the queue.
 func BindingCountPendingUploads() (int64, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if bindingEngine == nil {
-		return 0, fmt.Errorf("engine not open")
+	e, err := getBindingEngine()
+	if err != nil {
+		return 0, err
 	}
-	return bindingEngine.CountPendingUploads()
+	return e.CountPendingUploads()
 }
