@@ -1,5 +1,8 @@
 package com.branchdam.mobile.observer
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class MediaItem(
     val id: Long,
     val contentUri: String,

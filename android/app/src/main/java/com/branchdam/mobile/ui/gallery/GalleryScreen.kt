@@ -431,7 +431,11 @@ private fun GalleryItemCard(
     val imageRequest = remember(galleryItem.mediaItem.contentUri) {
         val builder = ImageRequest.Builder(context)
             .data(Uri.parse(galleryItem.mediaItem.contentUri))
-            .crossfade(200)
+            .size(300, 300)
+            .scale(coil.size.Scale.FILL)
+            .precision(coil.size.Precision.INEXACT)
+            .allowHardware(true)
+            .crossfade(150)
         if (galleryItem.mediaItem.isVideo) {
             builder.decoderFactory(VideoFrameDecoder.Factory())
         } else {
@@ -447,13 +451,13 @@ private fun GalleryItemCard(
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) {
-                        onToggleSelect()
+                        currentToggleSelect()
                     } else {
-                        onClick()
+                        currentClick()
                     }
                 },
                 onLongClick = {
-                    onToggleSelect()
+                    currentToggleSelect()
                 }
             ),
         shape = RoundedCornerShape(2.dp),

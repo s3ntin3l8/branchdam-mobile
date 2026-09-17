@@ -3,6 +3,7 @@ package com.branchdam.mobile.ui.gallery
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.branchdam.mobile.EngineHolder
@@ -43,6 +44,7 @@ enum class GallerySortDirection(val label: String) {
 
 const val ALL_FOLDERS = "All Folders"
 
+@Immutable
 data class GalleryItem(
     val primaryMediaItem: MediaItem,
     val companionMediaItem: MediaItem? = null,
