@@ -47,7 +47,10 @@ class LineageViewModel(application: Application) : AndroidViewModel(application)
                     val pairs = PairDetector.findPairs(allItems)
                     val edits = EditCorrelator.findInPhoneEdits(allItems, allItems)
 
-                    val raw = pairs.map { fromPair(it) } + edits.map { fromEdit(it) }
+                    // Filter out 1.00 confidence exact pairs as they are automatically registered
+                    // by the background scanner and do not need manual audit confirmation.
+                    val auditPairs = pairs.filter { it.confidence < 1.00 }
+                    val raw = auditPairs.map { fromPair(it) } + edits.map { fromEdit(it) }
                     dedupeByEdgeId(raw)
                 }
                 _candidates.value = newCandidates

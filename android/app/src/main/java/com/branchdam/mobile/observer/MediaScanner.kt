@@ -35,7 +35,8 @@ object MediaScanner {
             MediaStore.Images.Media.DATA,
             MediaStore.Images.Media.MIME_TYPE,
             MediaStore.Images.Media.SIZE,
-            MediaStore.Images.Media.DATE_TAKEN
+            MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.BUCKET_DISPLAY_NAME
         )
 
         val selection = "${MediaStore.Images.Media.DATE_TAKEN} > ?"
@@ -61,7 +62,8 @@ object MediaScanner {
             MediaStore.Video.Media.DATA,
             MediaStore.Video.Media.MIME_TYPE,
             MediaStore.Video.Media.SIZE,
-            MediaStore.Video.Media.DATE_TAKEN
+            MediaStore.Video.Media.DATE_TAKEN,
+            MediaStore.Video.Media.BUCKET_DISPLAY_NAME
         )
 
         val selection = "${MediaStore.Video.Media.DATE_TAKEN} > ?"
@@ -78,6 +80,31 @@ object MediaScanner {
             isVideo = true,
             limit = limit
         )
+    }
+
+    fun queryAvailableFolders(context: Context): List<String> {
+        val folders = mutableSetOf<String>()
+        val projection = arrayOf(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+        val bundle = buildQueryBundle("", arrayOf(), "${MediaStore.MediaColumns.BUCKET_DISPLAY_NAME} ASC", 200)
+
+        for (uri in listOf(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)) {
+            try {
+                context.contentResolver.query(uri, projection, bundle, null)?.use { cursor ->
+                    val bucketCol = cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+                    if (bucketCol != -1) {
+                        while (cursor.moveToNext()) {
+                            val name = cursor.getString(bucketCol)
+                            if (!name.isNullOrEmpty()) {
+                                folders.add(name)
+                            }
+                        }
+                    }
+                }
+            } catch (e: SecurityException) {
+                Log.w(TAG, "queryAvailableFolders denied", e)
+            }
+        }
+        return folders.sorted()
     }
 
     private fun queryMediaUri(
@@ -97,21 +124,6 @@ object MediaScanner {
         val cursor: Cursor? = try {
             context.contentResolver.query(uri, projection, bundle, null)
         } catch (e: SecurityException) {
-            // Cold launch can race the runtime permission grant: the
-            // ViewModel's `init` fires the query before the user has
-            // tapped "Allow" on the permission dialog. Returning an
-            // empty list lets the UI render its empty state instead of
-            // a red error message; the user can refresh once the
-            // permission is granted (the relevant screens expose a
-            // refresh action, and the MediaStoreObserver re-enqueues
-            // on the next onChange).
-            //
-            // We log the exception (with the URI) so that *other*
-            // SecurityException causes — cross-user URI access, the
-            // Android 14+ photo-picker race, a malformed sub-URI —
-            // remain distinguishable from the cold-launch case in
-            // production telemetry. Silently swallowing this would
-            // make any future "no media found" regression invisible.
             Log.w(TAG, "queryMediaUri($uri) denied; returning empty list", e)
             return emptyList()
         }
@@ -123,6 +135,7 @@ object MediaScanner {
             val mimeColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
             val sizeColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
             val dateColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_TAKEN)
+            val bucketColumn = it.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
 
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
@@ -131,6 +144,7 @@ object MediaScanner {
                 val mimeType = it.getString(mimeColumn) ?: if (isVideo) "video/mp4" else "image/jpeg"
                 val sizeBytes = it.getLong(sizeColumn)
                 val dateTaken = it.getLong(dateColumn) / 1000L
+                val folderName = if (bucketColumn != -1) it.getString(bucketColumn) ?: "Camera" else "Camera"
 
                 val itemUri = ContentUris.withAppendedId(uri, id).toString()
                 val isRaw = displayName.endsWith(".dng", ignoreCase = true) || mimeType == "image/x-adobe-dng"
@@ -144,7 +158,8 @@ object MediaScanner {
                         mimeType = mimeType,
                         sizeBytes = sizeBytes,
                         dateTakenUnix = dateTaken,
-                        isRaw = isRaw
+                        isRaw = isRaw,
+                        folderName = folderName
                     )
                 )
             }

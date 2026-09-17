@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -45,6 +46,38 @@ fun GalleryDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirmDialog && galleryItem != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Delete Photo Permanently?") },
+            text = {
+                Text("This will permanently delete ${galleryItem.mediaItem.displayName} from branchDAM and your local device. This action cannot be undone.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        viewModel.deleteItem(context, galleryItem) {
+                            onNavigateBack()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -65,6 +98,13 @@ fun GalleryDetailScreen(
                 },
                 actions = {
                     if (galleryItem != null) {
+                        IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete item",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                         val icon = when {
                             galleryItem.isBackedUp || galleryItem.isOffloaded -> Icons.Default.CloudDone
                             galleryItem.isPendingUpload -> Icons.Default.CloudSync

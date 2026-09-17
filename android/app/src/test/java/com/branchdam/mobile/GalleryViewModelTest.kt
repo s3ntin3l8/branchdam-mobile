@@ -234,4 +234,114 @@ class GalleryViewModelTest {
         assertNotNull(formatted)
         assertTrue("Date should start with 2024", formatted.startsWith("2024"))
     }
+
+    @Test
+    fun testFilterAndSortAndFolder() = runTest(testDispatcher) {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val photo1 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 1L, contentUri = "content://images/1",
+                filePath = "/sdcard/DCIM/PXL_A.jpg", displayName = "PXL_A.jpg",
+                mimeType = "image/jpeg", sizeBytes = 2_000_000L,
+                dateTakenUnix = 1000L, isRaw = false, folderName = "Camera"
+            )
+        )
+        val video1 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 2L, contentUri = "content://videos/2",
+                filePath = "/sdcard/Movies/PXL_B.mp4", displayName = "PXL_B.mp4",
+                mimeType = "video/mp4", sizeBytes = 10_000_000L,
+                dateTakenUnix = 2000L, isRaw = false, folderName = "Movies"
+            )
+        )
+        val rawItem = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 3L, contentUri = "content://images/3",
+                filePath = "/sdcard/DCIM/PXL_C.dng", displayName = "PXL_C.dng",
+                mimeType = "image/x-adobe-dng", sizeBytes = 25_000_000L,
+                dateTakenUnix = 1500L, isRaw = true, folderName = "Camera"
+            ),
+            lineageStatus = "RAW"
+        )
+
+        viewModel.setItemsForTesting(listOf(photo1, video1, rawItem))
+        advanceUntilIdle()
+
+        // Default: ALL, All Folders, DATE DESC
+        var displayed = viewModel.displayedItems.value
+        assertEquals(3, displayed.size)
+        assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName) // 2000L
+        assertEquals("PXL_C.dng", displayed[1].mediaItem.displayName) // 1500L
+        assertEquals("PXL_A.jpg", displayed[2].mediaItem.displayName) // 1000L
+
+        // Filter: VIDEOS
+        viewModel.setFilter(com.branchdam.mobile.ui.gallery.GalleryFilter.VIDEOS)
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals(1, displayed.size)
+        assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName)
+
+        // Filter: RAW
+        viewModel.setFilter(com.branchdam.mobile.ui.gallery.GalleryFilter.RAW)
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals(1, displayed.size)
+        assertEquals("PXL_C.dng", displayed[0].mediaItem.displayName)
+
+        // Filter: ALL, Folder: Movies
+        viewModel.setFilter(com.branchdam.mobile.ui.gallery.GalleryFilter.ALL)
+        viewModel.setFolder("Movies")
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals(1, displayed.size)
+        assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName)
+
+        // Sort by SIZE DESC
+        viewModel.setFolder("All Folders")
+        viewModel.setSort(com.branchdam.mobile.ui.gallery.GallerySortProperty.SIZE, com.branchdam.mobile.ui.gallery.GallerySortDirection.DESC)
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals("PXL_C.dng", displayed[0].mediaItem.displayName) // 25MB
+        assertEquals("PXL_B.mp4", displayed[1].mediaItem.displayName) // 10MB
+        assertEquals("PXL_A.jpg", displayed[2].mediaItem.displayName) // 2MB
+    }
+
+    @Test
+    fun testDeleteItemAndSelectedItems() = runTest(testDispatcher) {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val item1 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 10L, contentUri = "content://images/10",
+                filePath = "/sdcard/DCIM/PXL_10.jpg", displayName = "PXL_10.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 1000L, isRaw = false
+            )
+        )
+        val item2 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 20L, contentUri = "content://images/20",
+                filePath = "/sdcard/DCIM/PXL_20.jpg", displayName = "PXL_20.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 2000L, isRaw = false
+            )
+        )
+
+        viewModel.setItemsForTesting(listOf(item1, item2))
+        assertEquals(2, viewModel.items.value.size)
+
+        var deleteSuccess = false
+        viewModel.deleteItem(ApplicationProvider.getApplicationContext(), item1) { success ->
+            deleteSuccess = success
+        }
+        advanceUntilIdle()
+
+        assertTrue(deleteSuccess)
+        val remaining = viewModel.items.value
+        assertEquals(1, remaining.size)
+        assertEquals(20L, remaining[0].primaryMediaItem.id)
+    }
 }

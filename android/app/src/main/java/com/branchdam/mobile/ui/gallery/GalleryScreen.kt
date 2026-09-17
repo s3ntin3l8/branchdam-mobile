@@ -5,18 +5,26 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -47,10 +55,19 @@ fun GalleryScreen(
     viewModel: GalleryViewModel = viewModel(),
     onNavigateToDetail: (Long) -> Unit = {},
 ) {
-    val items by viewModel.items.collectAsStateWithLifecycle()
+    val rawItems by viewModel.items.collectAsStateWithLifecycle()
+    val displayedItems by viewModel.displayedItems.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
+
+    val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
+    val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
+    val availableFolders by viewModel.availableFolders.collectAsStateWithLifecycle()
+    val selectedSortProperty by viewModel.selectedSortProperty.collectAsStateWithLifecycle()
+    val selectedSortDirection by viewModel.selectedSortDirection.collectAsStateWithLifecycle()
+
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val state = rememberPullToRefreshState()
@@ -61,7 +78,7 @@ fun GalleryScreen(
 
     LaunchedEffect(loadError) {
         val currentError = loadError
-        if (currentError != null && items.isNotEmpty()) {
+        if (currentError != null && rawItems.isNotEmpty()) {
             scope.launch {
                 snackbarHostState.showSnackbar(
                     message = currentError,
@@ -69,6 +86,40 @@ fun GalleryScreen(
                 )
             }
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Delete Photo(s) Permanently?") },
+            text = {
+                Text(
+                    "This will permanently delete the selected ${selectedItemIds.size} item(s) from branchDAM and your local device. This action cannot be undone."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        viewModel.deleteSelectedItems(context) { count ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Deleted $count item(s) permanently")
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -90,7 +141,7 @@ fun GalleryScreen(
                         }
                     },
                     actions = {
-                        val selectableCount = remember(items) { items.count { !it.isOffloaded } }
+                        val selectableCount = remember(rawItems) { rawItems.count { !it.isOffloaded } }
                         val isAllSelectableSelected = selectableCount > 0 && selectedItemIds.size == selectableCount
                         IconButton(onClick = {
                             if (isAllSelectableSelected) {
@@ -102,6 +153,13 @@ fun GalleryScreen(
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
                                 contentDescription = if (isAllSelectableSelected) "Deselect all" else "Select all"
+                            )
+                        }
+                        IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete selected items",
+                                tint = MaterialTheme.colorScheme.error
                             )
                         }
                         FilledTonalButton(
@@ -132,68 +190,198 @@ fun GalleryScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = isLoading,
-            onRefresh = { viewModel.loadItems() },
-            state = state,
-            modifier = Modifier.padding(padding)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            val currentError = loadError
-            when {
-                isLoading && items.isEmpty() -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 110.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(2.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        userScrollEnabled = false
-                    ) {
-                        items(12) {
-                            Box(
-                                modifier = Modifier
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .shimmer()
+            FilterAndSortBar(
+                selectedFilter = selectedFilter,
+                onSelectFilter = viewModel::setFilter,
+                selectedFolder = selectedFolder,
+                availableFolders = availableFolders,
+                onSelectFolder = viewModel::setFolder,
+                selectedSortProperty = selectedSortProperty,
+                selectedSortDirection = selectedSortDirection,
+                onSelectSort = viewModel::setSort
+            )
+
+            PullToRefreshBox(
+                isRefreshing = isLoading,
+                onRefresh = { viewModel.loadItems() },
+                state = state,
+                modifier = Modifier.weight(1f)
+            ) {
+                val currentError = loadError
+                when {
+                    isLoading && rawItems.isEmpty() -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 110.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(2.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            userScrollEnabled = false
+                        ) {
+                            items(12) {
+                                Box(
+                                    modifier = Modifier
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .shimmer()
+                                )
+                            }
+                        }
+                    }
+                    currentError != null && rawItems.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                currentError,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
-                }
-                currentError != null && items.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            currentError,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                    displayedItems.isEmpty() -> {
+                        EmptyGalleryState()
                     }
-                }
-                items.isEmpty() -> {
-                    EmptyGalleryState()
-                }
-                else -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 110.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(2.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        items(items, key = { it.mediaItem.id }) { galleryItem ->
-                            val isSelected = selectedItemIds.contains(galleryItem.mediaItem.id)
-                            GalleryItemCard(
-                                galleryItem = galleryItem,
-                                isSelected = isSelected,
-                                isSelectionMode = isSelectionMode,
-                                onToggleSelect = { viewModel.toggleSelection(galleryItem.mediaItem.id) },
-                                onClick = { onNavigateToDetail(galleryItem.mediaItem.id) }
-                            )
+                    else -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 110.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(2.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            items(displayedItems, key = { it.mediaItem.id }) { galleryItem ->
+                                val isSelected = selectedItemIds.contains(galleryItem.mediaItem.id)
+                                GalleryItemCard(
+                                    galleryItem = galleryItem,
+                                    isSelected = isSelected,
+                                    isSelectionMode = isSelectionMode,
+                                    onToggleSelect = { viewModel.toggleSelection(galleryItem.mediaItem.id) },
+                                    onClick = { onNavigateToDetail(galleryItem.mediaItem.id) }
+                                )
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterAndSortBar(
+    selectedFilter: GalleryFilter,
+    onSelectFilter: (GalleryFilter) -> Unit,
+    selectedFolder: String,
+    availableFolders: List<String>,
+    onSelectFolder: (String) -> Unit,
+    selectedSortProperty: GallerySortProperty,
+    selectedSortDirection: GallerySortDirection,
+    onSelectSort: (GallerySortProperty, GallerySortDirection) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showFolderMenu by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        GalleryFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onSelectFilter(filter) },
+                label = { Text(filter.label) }
+            )
+        }
+
+        Box {
+            AssistChip(
+                onClick = { showFolderMenu = true },
+                label = { Text(selectedFolder) },
+                leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+            DropdownMenu(
+                expanded = showFolderMenu,
+                onDismissRequest = { showFolderMenu = false }
+            ) {
+                availableFolders.forEach { folder ->
+                    DropdownMenuItem(
+                        text = { Text(folder) },
+                        onClick = {
+                            onSelectFolder(folder)
+                            showFolderMenu = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Box {
+            val sortLabel = "Sort: ${selectedSortProperty.label} (${if (selectedSortDirection == GallerySortDirection.DESC) "Desc" else "Asc"})"
+            AssistChip(
+                onClick = { showSortMenu = true },
+                label = { Text(sortLabel) },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+            DropdownMenu(
+                expanded = showSortMenu,
+                onDismissRequest = { showSortMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Date (Newest First)") },
+                    onClick = {
+                        onSelectSort(GallerySortProperty.DATE, GallerySortDirection.DESC)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Date (Oldest First)") },
+                    onClick = {
+                        onSelectSort(GallerySortProperty.DATE, GallerySortDirection.ASC)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Size (Largest First)") },
+                    onClick = {
+                        onSelectSort(GallerySortProperty.SIZE, GallerySortDirection.DESC)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Size (Smallest First)") },
+                    onClick = {
+                        onSelectSort(GallerySortProperty.SIZE, GallerySortDirection.ASC)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Name (A to Z)") },
+                    onClick = {
+                        onSelectSort(GallerySortProperty.NAME, GallerySortDirection.ASC)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Name (Z to A)") },
+                    onClick = {
+                        onSelectSort(GallerySortProperty.NAME, GallerySortDirection.DESC)
+                        showSortMenu = false
+                    }
+                )
             }
         }
     }

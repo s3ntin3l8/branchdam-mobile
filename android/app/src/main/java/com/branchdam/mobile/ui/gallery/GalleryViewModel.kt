@@ -12,11 +12,35 @@ import com.branchdam.mobile.observer.MediaScanner
 import com.branchdam.mobile.service.SyncScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+enum class GalleryFilter(val label: String) {
+    ALL("All"),
+    PHOTOS("Photos"),
+    VIDEOS("Videos"),
+    RAW("RAW"),
+    BACKED_UP("Backed Up")
+}
+
+enum class GallerySortProperty(val label: String) {
+    DATE("Date"),
+    SIZE("Size"),
+    NAME("Name")
+}
+
+enum class GallerySortDirection(val label: String) {
+    DESC("Descending"),
+    ASC("Ascending")
+}
+
+const val ALL_FOLDERS = "All Folders"
 
 data class GalleryItem(
     val primaryMediaItem: MediaItem,
@@ -37,6 +61,69 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _items = MutableStateFlow<List<GalleryItem>>(emptyList())
     val items: StateFlow<List<GalleryItem>> = _items.asStateFlow()
 
+    private val _selectedFilter = MutableStateFlow(GalleryFilter.ALL)
+    val selectedFilter: StateFlow<GalleryFilter> = _selectedFilter.asStateFlow()
+
+    private val _selectedFolder = MutableStateFlow(ALL_FOLDERS)
+    val selectedFolder: StateFlow<String> = _selectedFolder.asStateFlow()
+
+    private val _availableFolders = MutableStateFlow<List<String>>(listOf(ALL_FOLDERS))
+    val availableFolders: StateFlow<List<String>> = _availableFolders.asStateFlow()
+
+    private val _selectedSortProperty = MutableStateFlow(GallerySortProperty.DATE)
+    val selectedSortProperty: StateFlow<GallerySortProperty> = _selectedSortProperty.asStateFlow()
+
+    private val _selectedSortDirection = MutableStateFlow(GallerySortDirection.DESC)
+    val selectedSortDirection: StateFlow<GallerySortDirection> = _selectedSortDirection.asStateFlow()
+
+    val displayedItems: StateFlow<List<GalleryItem>> = combine(
+        _items,
+        _selectedFilter,
+        _selectedFolder,
+        _selectedSortProperty,
+        _selectedSortDirection
+    ) { rawItems, filter, folder, sortProp, sortDir ->
+        var filtered = rawItems.filter { item ->
+            val passesFilter = when (filter) {
+                GalleryFilter.ALL -> true
+                GalleryFilter.PHOTOS -> !item.primaryMediaItem.isVideo
+                GalleryFilter.VIDEOS -> item.primaryMediaItem.isVideo
+                GalleryFilter.RAW -> item.primaryMediaItem.isDng || item.primaryMediaItem.isRaw || item.companionMediaItem != null
+                GalleryFilter.BACKED_UP -> item.isBackedUp
+            }
+            val passesFolder = if (folder == ALL_FOLDERS) true else {
+                item.primaryMediaItem.folderName.equals(folder, ignoreCase = true) ||
+                    (item.companionMediaItem != null && item.companionMediaItem.folderName.equals(folder, ignoreCase = true))
+            }
+            passesFilter && passesFolder
+        }
+
+        when (sortProp) {
+            GallerySortProperty.DATE -> {
+                filtered = if (sortDir == GallerySortDirection.DESC) {
+                    filtered.sortedByDescending { it.primaryMediaItem.dateTakenUnix }
+                } else {
+                    filtered.sortedBy { it.primaryMediaItem.dateTakenUnix }
+                }
+            }
+            GallerySortProperty.SIZE -> {
+                filtered = if (sortDir == GallerySortDirection.DESC) {
+                    filtered.sortedByDescending { it.primaryMediaItem.sizeBytes + (it.companionMediaItem?.sizeBytes ?: 0L) }
+                } else {
+                    filtered.sortedBy { it.primaryMediaItem.sizeBytes + (it.companionMediaItem?.sizeBytes ?: 0L) }
+                }
+            }
+            GallerySortProperty.NAME -> {
+                filtered = if (sortDir == GallerySortDirection.DESC) {
+                    filtered.sortedByDescending { it.primaryMediaItem.displayName }
+                } else {
+                    filtered.sortedBy { it.primaryMediaItem.displayName }
+                }
+            }
+        }
+        filtered
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -54,7 +141,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val galleryItems = withContext(Dispatchers.IO) {
+                val galleryItems = withContext(ioDispatcher) {
                     val context = getApplication<Application>()
                     val images = MediaScanner.queryRecentImages(context)
                     val videos = MediaScanner.queryRecentVideos(context)
@@ -130,6 +217,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             )
                         }
                     }
+                    val detectedFolders = MediaScanner.queryAvailableFolders(context)
+                    val folderList = mutableListOf(ALL_FOLDERS)
+                    for (f in detectedFolders) {
+                        if (f.isNotBlank() && !folderList.contains(f)) {
+                            folderList.add(f)
+                        }
+                    }
+                    _availableFolders.value = folderList
+
                     resultList
                 }
                 _items.value = galleryItems
@@ -271,6 +367,96 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun getItemById(id: Long): GalleryItem? {
         return _items.value.find { it.primaryMediaItem.id == id || it.companionMediaItem?.id == id }
+    }
+
+    fun setFilter(filter: GalleryFilter) {
+        _selectedFilter.value = filter
+    }
+
+    fun setFolder(folder: String) {
+        _selectedFolder.value = folder
+    }
+
+    fun setSort(property: GallerySortProperty, direction: GallerySortDirection) {
+        _selectedSortProperty.value = property
+        _selectedSortDirection.value = direction
+    }
+
+    fun deleteItem(context: Context, item: GalleryItem, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch(ioDispatcher) {
+            _items.update { list ->
+                list.filter { it.primaryMediaItem.id != item.primaryMediaItem.id }
+            }
+
+            val primaryUri = item.primaryMediaItem.contentUri
+            val companionUri = item.companionMediaItem?.contentUri
+
+            EngineHolder.enqueueDeleteEvent(primaryUri)
+            if (companionUri != null) {
+                EngineHolder.enqueueDeleteEvent(companionUri)
+            }
+
+            try {
+                context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
+                if (companionUri != null) {
+                    context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "deleteItem contentResolver delete failed", e)
+            }
+
+            SyncScheduler.triggerImmediateSync(context)
+
+            withContext(Dispatchers.Main) {
+                onComplete(true)
+            }
+        }
+    }
+
+    fun deleteSelectedItems(context: Context, onComplete: (Int) -> Unit) {
+        val selectedIds = _selectedItemIds.value
+        val itemsToDelete = _items.value.filter { selectedIds.contains(it.mediaItem.id) }
+        if (itemsToDelete.isEmpty()) {
+            clearSelection()
+            onComplete(0)
+            return
+        }
+
+        viewModelScope.launch(ioDispatcher) {
+            _items.update { list ->
+                list.filter { !selectedIds.contains(it.primaryMediaItem.id) }
+            }
+
+            var deletedCount = 0
+            for (item in itemsToDelete) {
+                val primaryUri = item.primaryMediaItem.contentUri
+                val companionUri = item.companionMediaItem?.contentUri
+
+                EngineHolder.enqueueDeleteEvent(primaryUri)
+                if (companionUri != null) {
+                    EngineHolder.enqueueDeleteEvent(companionUri)
+                }
+
+                try {
+                    context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
+                    if (companionUri != null) {
+                        context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "deleteSelectedItems contentResolver delete failed", e)
+                }
+                deletedCount++
+            }
+
+            if (deletedCount > 0) {
+                SyncScheduler.triggerImmediateSync(context)
+            }
+
+            withContext(Dispatchers.Main) {
+                clearSelection()
+                onComplete(deletedCount)
+            }
+        }
     }
 
     @androidx.annotation.VisibleForTesting
