@@ -331,7 +331,7 @@ func TestMediaStateAndGetMediaStatus(t *testing.T) {
 	q := newTestQueue(t)
 
 	localID := "content://media/external/images/media/2000"
-	blake3 := "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a"
+	blake3 := "b3f1c4d9e2a7568013c9a4d2e8f7b1063c5a9d7e2f4b8016938ac1d4e7f2b09a" // pragma: allowlist secret
 
 	// 1. Initial GetMediaStatus returns NOT_ENQUEUED
 	st, err := q.GetMediaStatus(localID)
