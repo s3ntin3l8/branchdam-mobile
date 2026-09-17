@@ -7,8 +7,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -61,8 +64,61 @@ fun GalleryDetailScreen(
                     }
                 },
                 actions = {
-                    if (galleryItem != null && !galleryItem.isOffloaded) {
+                    if (galleryItem != null) {
+                        val icon = when {
+                            galleryItem.isBackedUp || galleryItem.isOffloaded -> Icons.Default.CloudDone
+                            galleryItem.isPendingUpload -> Icons.Default.CloudSync
+                            galleryItem.isUploadFailed -> Icons.Default.Warning
+                            else -> Icons.Default.CloudUpload
+                        }
                         IconButton(onClick = {
+                            if (galleryItem.isBackedUp || galleryItem.isOffloaded) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Item is backed up to branchDAM")
+                                }
+                            } else {
+                                viewModel.uploadItem(context, galleryItem.mediaItem) { success ->
+                                    scope.launch {
+                                        if (success) {
+                                            snackbarHostState.showSnackbar("Enqueued for upload")
+                                        } else {
+                                            snackbarHostState.showSnackbar("Failed to enqueue item for upload")
+                                        }
+                                    }
+                                }
+                            }
+                        }) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = "Upload status"
+                            )
+                        }
+                    }
+                }
+            )
+        },
+        floatingActionButton = {
+            if (galleryItem != null) {
+                val fabIcon = when {
+                    galleryItem.isBackedUp || galleryItem.isOffloaded -> Icons.Default.CloudDone
+                    galleryItem.isPendingUpload -> Icons.Default.CloudSync
+                    galleryItem.isUploadFailed -> Icons.Default.Warning
+                    else -> Icons.Default.CloudUpload
+                }
+                val fabText = when {
+                    galleryItem.isOffloaded -> "Offloaded to branchDAM"
+                    galleryItem.isBackedUp -> "Backed Up to branchDAM"
+                    galleryItem.isPendingUpload -> "Uploading to branchDAM..."
+                    galleryItem.isUploadFailed -> "Retry Upload"
+                    else -> "Upload to branchDAM"
+                }
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        if (galleryItem.isBackedUp || galleryItem.isOffloaded) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Item is backed up to branchDAM")
+                            }
+                        } else {
                             viewModel.uploadItem(context, galleryItem.mediaItem) { success ->
                                 scope.launch {
                                     if (success) {
@@ -72,32 +128,10 @@ fun GalleryDetailScreen(
                                     }
                                 }
                             }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.CloudUpload,
-                                contentDescription = "Upload item"
-                            )
-                        }
-                    }
-                }
-            )
-        },
-        floatingActionButton = {
-            if (galleryItem != null && !galleryItem.isOffloaded) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        viewModel.uploadItem(context, galleryItem.mediaItem) { success ->
-                            scope.launch {
-                                if (success) {
-                                    snackbarHostState.showSnackbar("Enqueued for upload")
-                                } else {
-                                    snackbarHostState.showSnackbar("Failed to enqueue item for upload")
-                                }
-                            }
                         }
                     },
-                    icon = { Icon(Icons.Default.CloudUpload, contentDescription = null) },
-                    text = { Text("Upload to branchDAM") }
+                    icon = { Icon(fabIcon, contentDescription = null) },
+                    text = { Text(fabText) }
                 )
             }
         },
@@ -201,25 +235,42 @@ fun GalleryDetailScreen(
                                     )
                                 }
                             )
+                            val backupChipText = when {
+                                galleryItem.isOffloaded -> "Offloaded"
+                                galleryItem.isBackedUp -> "Backed Up"
+                                galleryItem.isPendingUpload -> "Pending Upload"
+                                galleryItem.isUploadFailed -> "Upload Failed"
+                                else -> "Local Only"
+                            }
                             SuggestionChip(
                                 onClick = {},
-                                label = {
-                                    Text(if (galleryItem.isOffloaded) "Offloaded" else "Local Only")
-                                }
+                                label = { Text(backupChipText) }
                             )
                         }
 
                         HorizontalDivider()
 
-                        DetailRow(label = "File Name", value = galleryItem.mediaItem.displayName)
-                        DetailRow(label = "Date Taken", value = formatDateTaken(galleryItem.mediaItem.dateTakenUnix))
-                        DetailRow(label = "File Size", value = formatFileSize(galleryItem.mediaItem.sizeBytes))
-                        DetailRow(label = "MIME Type", value = galleryItem.mediaItem.mimeType)
-                        if (galleryItem.mediaItem.burstId != null) {
-                            DetailRow(label = "Burst ID", value = galleryItem.mediaItem.burstId)
+                        val backupStatusValue = when {
+                            galleryItem.isOffloaded -> "Offloaded (Stored on branchDAM node)"
+                            galleryItem.isBackedUp -> "Backed up to branchDAM"
+                            galleryItem.isPendingUpload -> "Pending upload to branchDAM"
+                            galleryItem.isUploadFailed -> "Upload failed (Will retry)"
+                            else -> "Not backed up (Local only)"
                         }
-                        DetailRow(label = "Local Path", value = galleryItem.mediaItem.filePath.ifEmpty { "N/A" })
-                        DetailRow(label = "Content URI", value = galleryItem.mediaItem.contentUri)
+                        DetailRow(label = "Backup Status", value = backupStatusValue)
+                        DetailRow(label = "Primary File Name", value = galleryItem.primaryMediaItem.displayName)
+                        if (galleryItem.companionMediaItem != null) {
+                            DetailRow(label = "RAW Master File Name", value = galleryItem.companionMediaItem.displayName)
+                            DetailRow(label = "RAW Master Size", value = formatFileSize(galleryItem.companionMediaItem.sizeBytes))
+                        }
+                        DetailRow(label = "Date Taken", value = formatDateTaken(galleryItem.primaryMediaItem.dateTakenUnix))
+                        DetailRow(label = "File Size", value = formatFileSize(galleryItem.primaryMediaItem.sizeBytes))
+                        DetailRow(label = "MIME Type", value = galleryItem.primaryMediaItem.mimeType)
+                        if (galleryItem.primaryMediaItem.burstId != null) {
+                            DetailRow(label = "Burst ID", value = galleryItem.primaryMediaItem.burstId)
+                        }
+                        DetailRow(label = "Local Path", value = galleryItem.primaryMediaItem.filePath.ifEmpty { "N/A" })
+                        DetailRow(label = "Content URI", value = galleryItem.primaryMediaItem.contentUri)
                     }
                 }
 

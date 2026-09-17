@@ -598,6 +598,31 @@ func (e *Engine) ReclaimSafeSpace(localID string) (SafeSpaceVerdict, error) {
 	return SafeSpaceVerdict{LocalID: localID, Eligible: true}, nil
 }
 
+// GetMediaStatus returns the status of a media asset identified by localID.
+// Returns one of: "OFFLOADED", "COMPLETED", "IN_PROGRESS", "PENDING", "FAILED", or "NOT_ENQUEUED".
+func (e *Engine) GetMediaStatus(localID string) (string, error) {
+	if err := e.requireOpen(); err != nil {
+		return "NOT_ENQUEUED", err
+	}
+	return e.engine.GetMediaStatus(localID)
+}
+
+// GetAllMediaStatuses returns a map of localID/localPath/srcPathHash -> status for all tracked items.
+func (e *Engine) GetAllMediaStatuses() (map[string]string, error) {
+	if err := e.requireOpen(); err != nil {
+		return map[string]string{}, err
+	}
+	return e.engine.GetAllMediaStatuses()
+}
+
+// CountPendingUploads returns the total number of non-completed upload tasks.
+func (e *Engine) CountPendingUploads() (int64, error) {
+	if err := e.requireOpen(); err != nil {
+		return 0, err
+	}
+	return e.engine.CountPendingUploads()
+}
+
 // ---------------------------------------------------------------------------
 // Offload flag query
 // ---------------------------------------------------------------------------
@@ -646,7 +671,9 @@ func (e *Engine) FetchNamingTemplate() (string, error) {
 	if err := e.requireOpen(); err != nil {
 		return "", err
 	}
-	resp, err := e.client.Handshake(context.Background(), "")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	resp, err := e.client.Handshake(ctx, "")
 	if err != nil {
 		return "", errToError(err)
 	}

@@ -6,6 +6,11 @@ struct GalleryItem: Identifiable {
     let asset: PHAsset
     let lineageStatus: String
     let isRaw: Bool
+    let isOffloaded: Bool
+    let backupStatus: String
+
+    var isBackedUp: Bool { backupStatus == "COMPLETED" || isOffloaded }
+    var isPendingUpload: Bool { backupStatus == "PENDING" || backupStatus == "IN_PROGRESS" }
 }
 
 @MainActor
@@ -56,23 +61,59 @@ class GalleryViewModel: ObservableObject {
             .map { (id: $0.id, filename: $0.filename, dateUnix: $0.dateUnix) }
         let pairs = ApplePairDetector.findProRawPairs(masters: raws, derivatives: jpegs)
 
-        var pairedIds = Set<String>()
+        var pairedRawIds = Set<String>()
+        var pairedJpegIds = Set<String>()
         for pair in pairs {
-            pairedIds.insert(pair.masterLocalId)
-            pairedIds.insert(pair.derivativeLocalId)
+            pairedRawIds.insert(pair.masterLocalId)
+            pairedJpegIds.insert(pair.derivativeLocalId)
         }
 
-        return metas.map { meta in
-            let status: String
-            if pairedIds.contains(meta.id) {
-                status = "Paired"
-            } else if meta.isRaw {
-                status = "RAW"
-            } else {
-                status = "Unpaired"
+        let allStatuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
+        var galleryItems = [GalleryItem]()
+
+        for meta in metas {
+            let metaLocalId = "ph://\(meta.id)"
+            if pairedRawIds.contains(meta.id) || pairedRawIds.contains(metaLocalId) {
+                // Grouped under companion JPEG card
+                continue
             }
-            return GalleryItem(id: meta.id, asset: meta.asset, lineageStatus: status, isRaw: meta.isRaw)
+
+            if pairedJpegIds.contains(meta.id) || pairedJpegIds.contains(metaLocalId) {
+                let backupStatus = allStatuses[meta.id]
+                    ?? allStatuses[metaLocalId]
+                    ?? allStatuses[meta.filename]
+                    ?? "NOT_ENQUEUED"
+                let isOffloaded = backupStatus == "OFFLOADED"
+                galleryItems.append(
+                    GalleryItem(
+                        id: meta.id,
+                        asset: meta.asset,
+                        lineageStatus: "RAW+JPEG",
+                        isRaw: false,
+                        isOffloaded: isOffloaded,
+                        backupStatus: backupStatus
+                    )
+                )
+            } else {
+                let status: String = meta.isRaw ? "RAW" : "Unpaired"
+                let backupStatus = allStatuses[meta.id]
+                    ?? allStatuses[metaLocalId]
+                    ?? allStatuses[meta.filename]
+                    ?? "NOT_ENQUEUED"
+                let isOffloaded = backupStatus == "OFFLOADED"
+                galleryItems.append(
+                    GalleryItem(
+                        id: meta.id,
+                        asset: meta.asset,
+                        lineageStatus: status,
+                        isRaw: meta.isRaw,
+                        isOffloaded: isOffloaded,
+                        backupStatus: backupStatus
+                    )
+                )
+            }
         }
+        return galleryItems
     }
 }
 
@@ -193,6 +234,24 @@ public struct GalleryView: View {
                                         .padding(4)
                                 }
                             }
+
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    if item.isBackedUp {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 14))
+                                            .padding(4)
+                                    } else if item.isPendingUpload {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .foregroundColor(.blue)
+                                            .font(.system(size: 14))
+                                            .padding(4)
+                                    }
+                                }
+                                Spacer()
+                            }
                         }
                         .aspectRatio(1, contentMode: .fit)
                         .clipped()
@@ -205,7 +264,7 @@ public struct GalleryView: View {
 
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "Paired": return .green.opacity(0.85)
+        case "RAW+JPEG", "Paired": return .green.opacity(0.85)
         case "RAW": return Color.accentColor.opacity(0.85)
         default: return Color.gray.opacity(0.7)
         }

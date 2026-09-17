@@ -326,13 +326,17 @@ func TestSyncUploads_CancelDoesNotStallNextBatch(t *testing.T) {
 
 	var uploads int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		uploads++
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(client.UploadResponse{
-			OK:       true,
-			NodeUUID: "resume-node-1",
-			Status:   "UPLOADED",
-		})
+		if r.URL.Path == "/api/v1/agent/upload" {
+			uploads++
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(client.UploadResponse{
+				OK:       true,
+				NodeUUID: "resume-node-1",
+				Status:   "UPLOADED",
+			})
+		} else {
+			http.NotFound(w, r)
+		}
 	}))
 	defer server.Close()
 
@@ -543,5 +547,90 @@ func TestEnqueueLocalCapture_SourcePathHash(t *testing.T) {
 	ce, ok := err.(*client.ClientError)
 	if !ok || ce.Code != client.CodeInvalidInput {
 		t.Fatalf("expected CodeInvalidInput, got %v", err)
+	}
+}
+
+func TestSyncUploads_BackgroundPreScreen(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_prescreen_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/agent/check-content" {
+			_ = json.NewEncoder(w).Encode(client.ContentCheckResult{
+				Found:    true,
+				NodeUUID: "prescreened-node-uuid-123",
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "k", AgentID: "a"})
+	eng := New(q, c)
+
+	testFilePath := filepath.Join(tempDir, "PXL_PRESCREEN.dng")
+	if err := os.WriteFile(testFilePath, []byte("prescreen bytes"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_PRESCREEN.dng", 1724000000, "local_uri_prescreen", "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+
+	// Local enqueue is fast and PENDING
+	if item.Status != queue.UploadPending {
+		t.Fatalf("expected Status PENDING on enqueue, got %s", item.Status)
+	}
+
+	// Background sync runs pre-screen and marks completed without streaming bytes
+	completedCount, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil || completedCount != 1 {
+		t.Fatalf("SyncUploads failed: %v, count=%d", err, completedCount)
+	}
+
+	// Verify upload item in queue is completed
+	state, err := q.GetUploadItemByBlake3Hash(item.Blake3Hash)
+	if err != nil || state == nil {
+		t.Fatalf("GetUploadItemByBlake3Hash failed: %v", err)
+	}
+	if state.Status != queue.UploadCompleted || state.NodeUUID != "prescreened-node-uuid-123" {
+		t.Fatalf("unexpected upload state after background pre-screen: %+v", state)
+	}
+}
+
+func TestEngine_GetMediaStatus_And_CountPendingUploads(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_status_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	eng := New(q, nil)
+
+	st, err := eng.GetMediaStatus("unknown-local-id")
+	if err != nil || st != "NOT_ENQUEUED" {
+		t.Fatalf("expected NOT_ENQUEUED, got %s (err: %v)", st, err)
+	}
+
+	count, err := eng.CountPendingUploads()
+	if err != nil || count != 0 {
+		t.Fatalf("expected 0 pending uploads, got %d (err: %v)", count, err)
+	}
+
+	all, err := eng.GetAllMediaStatuses()
+	if err != nil {
+		t.Fatalf("GetAllMediaStatuses failed: %v", err)
+	}
+	if len(all) != 0 {
+		t.Fatalf("expected empty map, got %v", all)
 	}
 }

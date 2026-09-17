@@ -67,7 +67,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _autoImportEnabled = MutableStateFlow(ImportConfirmationNotifier.getAutoImportEnabled(application))
     val autoImportEnabled: StateFlow<Boolean> = _autoImportEnabled.asStateFlow()
 
-    private val _namingTemplate = MutableStateFlow(EngineHolder.fetchNamingTemplate())
+    private val _namingTemplate = MutableStateFlow("{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}")
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
     // Sync settings
@@ -299,6 +299,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         prefs.edit()
             .putString(BranchDamApplication.KEY_SERVER_URL, _serverUrl.value)
             .putString(BranchDamApplication.KEY_API_KEY, _apiKey.value)
+            .putString(BranchDamApplication.KEY_AGENT_ID, _agentId.value)
+            .apply()
+
+        nonSecretPrefs.edit()
+            .putString(BranchDamApplication.KEY_SERVER_URL, _serverUrl.value)
             .putString(BranchDamApplication.KEY_AGENT_ID, _agentId.value)
             .apply()
     }

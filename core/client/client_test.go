@@ -172,6 +172,7 @@ func TestSendTelemetry(t *testing.T) {
 	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1", ClientVersion: "1.2.3"})
 	err := c.SendTelemetry(context.Background(), MobileTelemetry{
 		DeviceID:        "pixel-10-fold",
+		Platform:        "android",
 		TotalBytes:      256000000000,
 		FreeBytes:       128000000000,
 		UsedBytes:       128000000000,

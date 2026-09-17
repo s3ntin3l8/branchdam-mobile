@@ -25,6 +25,7 @@ data class SyncStatusUiState(
     val isSyncing: Boolean = false,
     val lastSyncTime: Long = 0L,
     val workerState: String = "Idle",
+    val pendingUploadsCount: Long = 0L,
 )
 
 /**
@@ -85,11 +86,13 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                 if (state == WorkInfo.State.SUCCEEDED) {
                     prefs.edit().putLong(BranchDamKeys.LAST_SYNC_TIME, lastSyncTime).apply()
                 }
+                val pendingUploads = EngineHolder.countPendingUploads()
                 _uiState.value = _uiState.value.copy(
                     isConnected = EngineHolder.isInitialized(),
                     isSyncing = isSyncing,
                     lastSyncTime = lastSyncTime,
                     workerState = workerState,
+                    pendingUploadsCount = pendingUploads,
                 )
             }
         }
@@ -114,9 +117,11 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
 
     fun refresh() {
         checkConnection()
+        val pendingUploads = EngineHolder.countPendingUploads()
         _uiState.value = _uiState.value.copy(
             isConnected = EngineHolder.isInitialized(),
             lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
+            pendingUploadsCount = pendingUploads,
         )
     }
 

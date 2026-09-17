@@ -2,9 +2,15 @@ package branchdam
 
 import (
 	"crypto/rand"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/s3ntin3l8/branchdam-mobile/core/client"
 )
 
 // TestBindingComputeHashes_HasFile verifies that BindingComputeHashes returns
@@ -189,4 +195,194 @@ func TestBindingEnqueueMediaWithSourceHash(t *testing.T) {
 	if _, err := BindingEnqueueMediaWithSourceHash(p1, "sample1.jpg", "local-3", "Canon-R5", "invalid-hash", 1724000000, 7); err == nil {
 		t.Fatalf("expected error for invalid sourcePathHash in BindingEnqueueMediaWithSourceHash, got nil")
 	}
+}
+
+func TestBindingGetMediaStatusAndCountPendingUploads(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test_status.db")
+
+	if err := BindingOpen(dbPath, "http://localhost", "", "test", "0.2.0", "localhost"); err != nil {
+		t.Fatalf("BindingOpen: %v", err)
+	}
+	defer BindingClose()
+
+	// Initial status for un-enqueued item
+	status, err := BindingGetMediaStatus("local-test-1")
+	if err != nil {
+		t.Fatalf("BindingGetMediaStatus: %v", err)
+	}
+	if status != "NOT_ENQUEUED" {
+		t.Fatalf("expected NOT_ENQUEUED, got %q", status)
+	}
+
+	count, err := BindingCountPendingUploads()
+	if err != nil {
+		t.Fatalf("BindingCountPendingUploads: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 pending, got %d", count)
+	}
+
+	// Enqueue item
+	sampleFile := filepath.Join(dir, "sample.jpg")
+	if err := os.WriteFile(sampleFile, []byte("sample bytes"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	id, err := BindingEnqueueMedia(sampleFile, "sample.jpg", "local-test-1", "Pixel", 1724000000, 12)
+	if err != nil || id <= 0 {
+		t.Fatalf("BindingEnqueueMedia failed: %v, id=%d", err, id)
+	}
+
+	status, err = BindingGetMediaStatus("local-test-1")
+	if err != nil {
+		t.Fatalf("BindingGetMediaStatus after enqueue: %v", err)
+	}
+	if status != "PENDING" {
+		t.Fatalf("expected PENDING, got %q", status)
+	}
+
+	count, err = BindingCountPendingUploads()
+	if err != nil {
+		t.Fatalf("BindingCountPendingUploads: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 pending, got %d", count)
+	}
+
+	// Mark completed
+	if err := bindingEngine.queue.MarkUploadComplete(id, "node-uuid-123"); err != nil {
+		t.Fatalf("MarkUploadComplete: %v", err)
+	}
+
+	status, err = BindingGetMediaStatus("local-test-1")
+	if err != nil {
+		t.Fatalf("BindingGetMediaStatus after complete: %v", err)
+	}
+	if status != "COMPLETED" {
+		t.Fatalf("expected COMPLETED, got %q", status)
+	}
+
+	count, err = BindingCountPendingUploads()
+	if err != nil {
+		t.Fatalf("BindingCountPendingUploads: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 pending after completion, got %d", count)
+	}
+}
+
+func TestBindingGetAllMediaStatuses(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test_all_statuses.db")
+
+	if err := BindingOpen(dbPath, "http://localhost", "", "test", "0.2.0", "localhost"); err != nil {
+		t.Fatalf("BindingOpen: %v", err)
+	}
+	defer BindingClose()
+
+	sampleFile := filepath.Join(dir, "status.jpg")
+	if err := os.WriteFile(sampleFile, []byte("status bytes"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	id, err := BindingEnqueueMedia(sampleFile, "status.jpg", "local-status-1", "Pixel", 1724000000, 12)
+	if err != nil || id <= 0 {
+		t.Fatalf("BindingEnqueueMedia failed: %v", err)
+	}
+
+	jsonStr, err := BindingGetAllMediaStatuses()
+	if err != nil {
+		t.Fatalf("BindingGetAllMediaStatuses failed: %v", err)
+	}
+	if jsonStr == "" || jsonStr == "{}" {
+		t.Fatalf("expected non-empty JSON string, got %q", jsonStr)
+	}
+}
+
+func TestBindingOffloadAndReclaimAndLineage(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test_offload_reclaim.db")
+
+	if err := BindingOpen(dbPath, "http://localhost", "", "test", "0.2.0", "localhost"); err != nil {
+		t.Fatalf("BindingOpen: %v", err)
+	}
+	defer BindingClose()
+
+	// Offload flag
+	offloaded, err := BindingIsMediaOffloaded("loc-1")
+	if err != nil || offloaded {
+		t.Fatalf("expected false for new item offloaded status")
+	}
+
+	if err := BindingSetMediaOffloaded("loc-1", true); err != nil {
+		t.Fatalf("BindingSetMediaOffloaded failed: %v", err)
+	}
+
+	offloadedAfter, err := BindingIsMediaOffloaded("loc-1")
+	if err != nil || !offloadedAfter {
+		t.Fatalf("expected true for offloaded status")
+	}
+
+	// Lineage event
+	uuid, err := BindingEnqueueLineageEvent("parent-1", "child-1", "DERIVED_FROM", "test_resolver", 1.0)
+	if err != nil || uuid == "" {
+		t.Fatalf("BindingEnqueueLineageEvent failed: %v, uuid=%s", err, uuid)
+	}
+
+	// Delete event
+	delUuid, err := BindingEnqueueDeleteEvent("del-loc-1")
+	if err != nil || delUuid == "" {
+		t.Fatalf("BindingEnqueueDeleteEvent failed: %v, delUuid=%s", err, delUuid)
+	}
+
+	// Candidates check
+	verdicts, err := BindingCheckSafeSpaceCandidates("loc-1,loc-2")
+	if err != nil {
+		t.Fatalf("BindingCheckSafeSpaceCandidates failed: %v", err)
+	}
+	if verdicts == "" {
+		t.Fatalf("expected non-empty verdicts string")
+	}
+}
+
+func TestBindingSyncBatchAndCheckContent(t *testing.T) {
+	dir := t.TempDir()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/agent/check-content") {
+			_ = json.NewEncoder(w).Encode(client.ContentCheckResult{Found: true, NodeUUID: "found-123"})
+			return
+		}
+		if r.URL.Path == "/api/v1/agent/handshake" {
+			_ = json.NewEncoder(w).Encode(client.HandshakeResponse{OK: true, NamingTemplate: "tpl"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	if err := BindingOpen(filepath.Join(dir, "engine.db"), server.URL, "key", "test", "0.2.0", "127.0.0.1,localhost"); err != nil {
+		t.Fatalf("BindingOpen: %v", err)
+	}
+	defer BindingClose()
+
+	// CheckContent
+	resStr, err := BindingCheckContent("fast1", "full1")
+	if err != nil || !strings.Contains(resStr, "found-123") {
+		t.Fatalf("BindingCheckContent failed: %v, res=%s", err, resStr)
+	}
+
+	// Fetch naming template
+	tpl, err := BindingFetchNamingTemplate()
+	if err != nil || tpl != "tpl" {
+		t.Fatalf("BindingFetchNamingTemplate failed: %v, tpl=%s", err, tpl)
+	}
+
+	// Cancel flag
+	if err := BindingSetCancelFlag(); err != nil {
+		t.Fatalf("BindingSetCancelFlag failed: %v", err)
+	}
+
+	// Sync batch
+	_ = BindingSyncBatch(10, 5)
 }

@@ -81,4 +81,35 @@ class PairDetectorTest {
         assertEquals(1, pairs.size)
         assertEquals(0.95, pairs[0].confidence, 0.001)
     }
+
+    @Test
+    fun testPixelRawSuffixStemPairing() {
+        val raw = MediaItem(
+            id = 20L,
+            contentUri = "content://images/20",
+            filePath = "/sdcard/DCIM/Camera/PXL_20260912_185506763.RAW-02.ORIGINAL.dng",
+            displayName = "PXL_20260912_185506763.RAW-02.ORIGINAL.dng",
+            mimeType = "image/x-adobe-dng",
+            sizeBytes = 25_000_000L,
+            dateTakenUnix = 1724000200L,
+            isRaw = true
+        )
+
+        val jpeg = MediaItem(
+            id = 21L,
+            contentUri = "content://images/21",
+            filePath = "/sdcard/DCIM/Camera/PXL_20260912_185506763.RAW-01.jpg",
+            displayName = "PXL_20260912_185506763.RAW-01.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = 4_000_000L,
+            dateTakenUnix = 1724000200L,
+            isRaw = false
+        )
+
+        val pairs = PairDetector.findPairs(listOf(raw, jpeg))
+        assertEquals(1, pairs.size)
+        assertEquals(raw.id, pairs[0].masterRaw.id)
+        assertEquals(jpeg.id, pairs[0].derivativeJpeg.id)
+        assertEquals(1.00, pairs[0].confidence, 0.001)
+    }
 }

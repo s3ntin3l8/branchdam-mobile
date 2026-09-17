@@ -88,7 +88,7 @@ class GalleryViewModelTest {
             mimeType = "image/jpeg", sizeBytes = 4_000_000L,
             dateTakenUnix = 1724000000L, isRaw = false,
         )
-        val item = GalleryItem(localMedia, lineageStatus = "Unpaired", isOffloaded = false)
+        val item = GalleryItem(primaryMediaItem = localMedia, lineageStatus = "Unpaired", isOffloaded = false)
         viewModel.setItemsForTesting(listOf(item))
 
         val result = viewModel.getItemById(50L)
@@ -102,7 +102,7 @@ class GalleryViewModelTest {
     fun testSelectAll_excludesOffloadedItems() {
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
         val localItem = GalleryItem(
-            mediaItem = MediaItem(
+            primaryMediaItem = MediaItem(
                 id = 101L, contentUri = "content://images/101",
                 filePath = "/sdcard/DCIM/PXL_101.jpg", displayName = "PXL_101.jpg",
                 mimeType = "image/jpeg", sizeBytes = 1000L,
@@ -112,7 +112,7 @@ class GalleryViewModelTest {
             isOffloaded = false
         )
         val offloadedItem = GalleryItem(
-            mediaItem = MediaItem(
+            primaryMediaItem = MediaItem(
                 id = 102L, contentUri = "content://images/102",
                 filePath = "/sdcard/DCIM/PXL_102.jpg", displayName = "PXL_102.jpg",
                 mimeType = "image/jpeg", sizeBytes = 1000L,
@@ -135,7 +135,7 @@ class GalleryViewModelTest {
     fun testUploadSelectedItems_filtersOutOffloadedItems() = runTest(testDispatcher) {
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
         val localItem = GalleryItem(
-            mediaItem = MediaItem(
+            primaryMediaItem = MediaItem(
                 id = 201L, contentUri = "content://images/201",
                 filePath = "/sdcard/DCIM/PXL_201.jpg", displayName = "PXL_201.jpg",
                 mimeType = "image/jpeg", sizeBytes = 1000L,
@@ -145,7 +145,7 @@ class GalleryViewModelTest {
             isOffloaded = false
         )
         val offloadedItem = GalleryItem(
-            mediaItem = MediaItem(
+            primaryMediaItem = MediaItem(
                 id = 202L, contentUri = "content://images/202",
                 filePath = "/sdcard/DCIM/PXL_202.jpg", displayName = "PXL_202.jpg",
                 mimeType = "image/jpeg", sizeBytes = 1000L,
@@ -181,6 +181,38 @@ class GalleryViewModelTest {
 
         assertEquals("Empty selection should return 0", 0, callbackCount)
         assertTrue("Selection should remain empty", viewModel.selectedItemIds.value.isEmpty())
+    }
+
+    @Test
+    fun testGalleryItem_backupStatusProperties() {
+        val notEnqueued = GalleryItem(
+            primaryMediaItem = MediaItem(1L, "uri1", "path1", "name1", "image/jpeg", 100L, 1000L, false),
+            lineageStatus = "Unpaired",
+            backupStatus = "NOT_ENQUEUED"
+        )
+        assertFalse(notEnqueued.isBackedUp)
+        assertFalse(notEnqueued.isPendingUpload)
+        assertFalse(notEnqueued.isUploadFailed)
+
+        val pending = notEnqueued.copy(backupStatus = "PENDING")
+        assertFalse(pending.isBackedUp)
+        assertTrue(pending.isPendingUpload)
+        assertFalse(pending.isUploadFailed)
+
+        val completed = notEnqueued.copy(backupStatus = "COMPLETED")
+        assertTrue(completed.isBackedUp)
+        assertFalse(completed.isPendingUpload)
+        assertFalse(completed.isUploadFailed)
+
+        val offloaded = notEnqueued.copy(isOffloaded = true, backupStatus = "OFFLOADED")
+        assertTrue(offloaded.isBackedUp)
+        assertFalse(offloaded.isPendingUpload)
+        assertFalse(offloaded.isUploadFailed)
+
+        val failed = notEnqueued.copy(backupStatus = "FAILED")
+        assertFalse(failed.isBackedUp)
+        assertFalse(failed.isPendingUpload)
+        assertTrue(failed.isUploadFailed)
     }
 
     @Test

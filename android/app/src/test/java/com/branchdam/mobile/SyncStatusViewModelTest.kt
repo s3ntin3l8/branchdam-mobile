@@ -158,4 +158,15 @@ class SyncStatusViewModelTest {
             viewModel.uiState.value.isServerReachable,
         )
     }
+
+    @Test
+    fun testPendingUploadsCountInUiState() = runTest(testDispatcher) {
+        EngineHolder.mockPendingUploadsCount = 3L
+        SyncStatusViewModel.testConnectionFn = { true }
+
+        val viewModel = SyncStatusViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        assertEquals(3L, viewModel.uiState.value.pendingUploadsCount)
+    }
 }

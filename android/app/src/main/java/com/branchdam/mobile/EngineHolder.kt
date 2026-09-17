@@ -149,7 +149,7 @@ object EngineHolder {
     }
 
     fun isMediaOffloaded(localID: String): Boolean {
-        if (!nativeAvailable.get()) return false
+        if (!nativeAvailable.get() || !isInitialized) return false
         return try {
             executor.submit(Callable { Branchdam.bindingIsMediaOffloaded(localID) }).get()
         } catch (t: Throwable) {
@@ -158,8 +158,53 @@ object EngineHolder {
         }
     }
 
+    fun getMediaStatus(localID: String): String {
+        if (!nativeAvailable.get() || !isInitialized) return mockMediaStatusMap[localID] ?: "NOT_ENQUEUED"
+        return try {
+            executor.submit(Callable { Branchdam.bindingGetMediaStatus(localID) }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "getMediaStatus failed: $t")
+            "NOT_ENQUEUED"
+        }
+    }
+
+    fun getAllMediaStatuses(): Map<String, String> {
+        if (!nativeAvailable.get() || !isInitialized) return mockMediaStatusMap
+        return try {
+            val jsonStr = executor.submit(Callable { Branchdam.bindingGetAllMediaStatuses() }).get()
+            if (jsonStr.isNullOrEmpty() || jsonStr == "{}") return emptyMap()
+            val jsonObj = org.json.JSONObject(jsonStr)
+            val result = mutableMapOf<String, String>()
+            val keys = jsonObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                result[key] = jsonObj.getString(key)
+            }
+            result
+        } catch (t: Throwable) {
+            Log.w(TAG, "getAllMediaStatuses failed: $t")
+            emptyMap()
+        }
+    }
+
+    fun countPendingUploads(): Long {
+        if (!nativeAvailable.get() || !isInitialized) return mockPendingUploadsCount
+        return try {
+            executor.submit(Callable { Branchdam.bindingCountPendingUploads() }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "countPendingUploads failed: $t")
+            0L
+        }
+    }
+
+    @androidx.annotation.VisibleForTesting
+    internal val mockMediaStatusMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    @androidx.annotation.VisibleForTesting
+    internal var mockPendingUploadsCount: Long = 0L
+
     fun setMediaOffloaded(localID: String, isOffloaded: Boolean): Boolean {
-        if (!nativeAvailable.get()) return true
+        if (!nativeAvailable.get() || !isInitialized) return true
         return try {
             executor.submit(Callable {
                 Branchdam.bindingSetMediaOffloaded(localID, isOffloaded)
@@ -172,7 +217,7 @@ object EngineHolder {
     }
 
     fun fetchNamingTemplate(): String {
-        if (!nativeAvailable.get()) return MOCK_NAMING_TEMPLATE
+        if (!nativeAvailable.get() || !isInitialized) return MOCK_NAMING_TEMPLATE
         return try {
             executor.submit(Callable { Branchdam.bindingFetchNamingTemplate() }).get()
         } catch (t: Throwable) {
@@ -190,7 +235,7 @@ object EngineHolder {
      * round-trip takes.
      */
     fun testConnection(): Boolean {
-        if (!nativeAvailable.get()) return false
+        if (!nativeAvailable.get() || !isInitialized) return false
         return try {
             executor.submit(Callable {
                 Branchdam.bindingFetchNamingTemplate()

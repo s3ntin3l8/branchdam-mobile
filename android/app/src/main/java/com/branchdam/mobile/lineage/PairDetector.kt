@@ -72,8 +72,10 @@ object PairDetector {
         return count
     }
 
-    private fun extractStem(filename: String): String {
-        val dotIdx = filename.lastIndexOf('.')
-        return if (dotIdx != -1) filename.substring(0, dotIdx) else filename
+    internal fun extractStem(filename: String): String {
+        var stem = if (filename.contains('.')) filename.substringBeforeLast('.') else filename
+        // Normalize Pixel and Android camera suffixes like .RAW-01, .RAW-02.ORIGINAL, .ORIGINAL, .COVER, .MP
+        stem = stem.replace(Regex("""(\.RAW-\d+|\.ORIGINAL|\.COVER|\.MP)+""", RegexOption.IGNORE_CASE), "")
+        return stem.trim()
     }
 }

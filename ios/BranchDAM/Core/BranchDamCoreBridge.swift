@@ -319,6 +319,27 @@ public class BranchDamCoreBridge {
         #endif
     }
 
+    public func getAllMediaStatuses() -> [String: String] {
+        #if canImport(branchdam)
+        guard isInitialized else { return [:] }
+        var result: [String: String] = [:]
+        workQueue.sync {
+            do {
+                let jsonStr = try branchdam.bindingGetAllMediaStatuses()
+                if let data = jsonStr.data(using: .utf8),
+                   let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+                    result = dict
+                }
+            } catch {
+                NSLog("getAllMediaStatuses failed: %@", String(describing: error))
+            }
+        }
+        return result
+        #else
+        return [:]
+        #endif
+    }
+
     /// E.4: Sets the in-process cancel flag. The next SyncUploads/SyncEvents
     /// call will observe the flag and return early. Called by the BGTask
     /// expiration handler so the Go engine stops HTTP transfers promptly.

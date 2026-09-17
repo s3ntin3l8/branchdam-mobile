@@ -13,7 +13,9 @@ func (q *Queue) EnqueueUpload(item *UploadItem) (int64, error) {
 	now := nowUnix()
 	item.CreatedAtUnix = now
 	item.UpdatedAtUnix = now
-	item.Status = UploadPending
+	if item.Status == "" {
+		item.Status = UploadPending
+	}
 
 	query := `
 	INSERT INTO upload_queue (

@@ -213,6 +213,21 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 			return completedCount, ctx.Err()
 		}
 
+		// Background pre-screen: check if server already has this content by hash before streaming file payload
+		if e.c != nil {
+			checkRes, checkErr := e.c.CheckContent(ctx, item.FastHash, item.Blake3Hash)
+			if checkErr == nil && checkRes.Found && checkRes.NodeUUID != "" {
+				slog.Info("engine: background sync pre-screen dedup — content already exists on server",
+					"nodeUUID", checkRes.NodeUUID, "localPath", item.LocalPath)
+				_ = e.q.MarkUploadComplete(item.ID, checkRes.NodeUUID)
+				if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, checkRes.NodeUUID); err != nil {
+					slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
+				}
+				completedCount++
+				continue
+			}
+		}
+
 		// B.2.5: Stat before Open so a missing file surfaces as IO_ERROR.
 		if _, statErr := os.Stat(item.LocalPath); statErr != nil {
 			_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file stat failed: %v", statErr), 5)
@@ -275,6 +290,9 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 
 		if err := e.q.MarkUploadComplete(item.ID, resp.NodeUUID); err != nil {
 			continue
+		}
+		if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, resp.NodeUUID); err != nil {
+			slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
 		}
 
 		completedCount++
@@ -459,4 +477,19 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 			fmt.Errorf("%w: %v", ErrLocalFlagSetFailed, err)
 	}
 	return SafeSpaceVerdict{LocalID: localID, Eligible: true}, nil
+}
+
+// GetMediaStatus returns the backup status of a media item by localID.
+func (e *Engine) GetMediaStatus(localID string) (string, error) {
+	return e.q.GetMediaStatus(localID)
+}
+
+// GetAllMediaStatuses returns a map of localID/localPath/srcPathHash -> status for all tracked items.
+func (e *Engine) GetAllMediaStatuses() (map[string]string, error) {
+	return e.q.GetAllMediaStatuses()
+}
+
+// CountPendingUploads returns the number of pending/in-progress uploads in the queue.
+func (e *Engine) CountPendingUploads() (int64, error) {
+	return e.q.CountPendingUploads()
 }
