@@ -56,6 +56,7 @@ fun SettingsScreen(
     when (currentPage) {
         SettingsPage.Categories -> {
             val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
+            val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
             val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
             Scaffold(
@@ -73,32 +74,41 @@ fun SettingsScreen(
                         .fillMaxSize()
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
-                        .padding(bottom = 24.dp),
+                        .padding(bottom = 16.dp),
                 ) {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     // Status Card
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 12.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                         ),
-                        shape = MaterialTheme.shapes.large
+                        shape = MaterialTheme.shapes.medium
                     ) {
                         ListItem(
                             headlineContent = {
                                 Text(
-                                    if (isConnected) "Connected to server" else "Disconnected",
+                                    text = if (isConnected) "Connected to server" else "Disconnected",
                                     color = if (isConnected) MaterialTheme.colorScheme.primary
                                            else MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.Bold
                                 )
                             },
+                            supportingContent = {
+                                if (serverUrl.isNotBlank()) {
+                                    Text(
+                                        text = serverUrl,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
                             leadingContent = {
                                 Surface(
-                                    modifier = Modifier.size(12.dp),
+                                    modifier = Modifier.size(10.dp),
                                     shape = CircleShape,
                                     color = if (isConnected) MaterialTheme.colorScheme.primary
                                            else MaterialTheme.colorScheme.error,
@@ -112,13 +122,13 @@ fun SettingsScreen(
                     SettingsGroup {
                         SettingsCategoryRow(
                             title = "Connection",
-                            subtitle = "Server URL, API key, and pairing",
+                            subtitle = if (serverUrl.isNotBlank()) serverUrl else "Server URL, API key, and pairing",
                             icon = Icons.Default.Link,
                             iconColor = MaterialTheme.colorScheme.primary,
                             onClick = { currentPage = SettingsPage.Connection },
                         )
                         HorizontalDivider(
-                            modifier = Modifier.padding(start = 64.dp),
+                            modifier = Modifier.padding(start = 56.dp),
                             thickness = 0.5.dp,
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
@@ -130,7 +140,7 @@ fun SettingsScreen(
                             onClick = { currentPage = SettingsPage.Sync },
                         )
                         HorizontalDivider(
-                            modifier = Modifier.padding(start = 64.dp),
+                            modifier = Modifier.padding(start = 56.dp),
                             thickness = 0.5.dp,
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
@@ -153,7 +163,7 @@ fun SettingsScreen(
                             onClick = { currentPage = SettingsPage.Appearance },
                         )
                         HorizontalDivider(
-                            modifier = Modifier.padding(start = 64.dp),
+                            modifier = Modifier.padding(start = 56.dp),
                             thickness = 0.5.dp,
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
@@ -166,33 +176,31 @@ fun SettingsScreen(
                         )
                     }
 
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(16.dp))
 
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val hasLog = viewModel.hasDiagnosticLog()
 
-                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    Box(modifier = Modifier.padding(horizontal = 12.dp)) {
                         Button(
                             onClick = { viewModel.shareDiagnosticLog(context) },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
                             enabled = hasLog,
-                            shape = MaterialTheme.shapes.extraLarge,
+                            shape = MaterialTheme.shapes.medium,
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null)
-                            Spacer(Modifier.width(12.dp))
-                            Text("Share Diagnostic Log")
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Share Diagnostic Log", fontWeight = FontWeight.Bold)
                         }
                     }
 
-                    Spacer(Modifier.weight(1f))
-
                     Text(
-                        text = "branchDAM Mobile ${viewModel.versionName}\nBuild ${viewModel.versionCode}",
+                        text = "branchDAM Mobile ${viewModel.versionName} • Build ${viewModel.versionCode}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 32.dp, bottom = 16.dp),
+                            .padding(top = 20.dp, bottom = 8.dp),
                         textAlign = TextAlign.Center,
                         lineHeight = 16.sp
                     )
@@ -243,11 +251,11 @@ private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        shape = MaterialTheme.shapes.large
+        shape = MaterialTheme.shapes.medium
     ) {
         Column(content = content)
     }
@@ -262,7 +270,7 @@ private fun SettingsCategoryHeader(title: String) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
     )
 }
 
@@ -276,10 +284,10 @@ private fun SettingsCategoryRow(
 ) {
     ListItem(
         headlineContent = { Text(title, fontWeight = FontWeight.Medium) },
-        supportingContent = { Text(subtitle) },
+        supportingContent = { Text(subtitle, maxLines = 1) },
         leadingContent = {
             Surface(
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(36.dp),
                 shape = CircleShape,
                 color = iconColor.copy(alpha = 0.12f)
             ) {
@@ -287,7 +295,7 @@ private fun SettingsCategoryRow(
                     Icon(
                         icon,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                         tint = iconColor
                     )
                 }
@@ -297,7 +305,8 @@ private fun SettingsCategoryRow(
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(20.dp)
             )
         },
         modifier = Modifier
