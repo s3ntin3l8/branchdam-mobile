@@ -34,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -396,6 +397,11 @@ private fun GalleryItemCard(
     onToggleSelect: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val rotation = remember(galleryItem.mediaItem.contentUri) {
+        ExifOrientationHelper.getExifRotationDegrees(context, galleryItem.mediaItem.contentUri)
+    }
+
     Card(
         modifier = Modifier
             .aspectRatio(1f)
@@ -423,7 +429,7 @@ private fun GalleryItemCard(
                     .build(),
                 contentDescription = galleryItem.mediaItem.displayName,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().rotate(rotation),
             )
 
             if (isSelected) {

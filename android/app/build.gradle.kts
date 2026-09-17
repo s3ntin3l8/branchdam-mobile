@@ -163,6 +163,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     // QR code scanning via CameraX + ML Kit (bundled, no network needed).
     val cameraxVersion = "1.4.1"

@@ -17,7 +17,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import com.branchdam.mobile.ui.components.ExifOrientationHelper
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -222,6 +224,9 @@ fun GalleryDetailScreen(
                             }
                         }
                     } else {
+                        val detailRotation = remember(galleryItem.mediaItem.contentUri) {
+                            ExifOrientationHelper.getExifRotationDegrees(context, galleryItem.mediaItem.contentUri)
+                        }
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(Uri.parse(galleryItem.mediaItem.contentUri))
@@ -229,7 +234,7 @@ fun GalleryDetailScreen(
                                 .build(),
                             contentDescription = galleryItem.mediaItem.displayName,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().rotate(detailRotation)
                         )
                     }
                 }

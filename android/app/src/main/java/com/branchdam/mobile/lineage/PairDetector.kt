@@ -74,8 +74,8 @@ object PairDetector {
 
     internal fun extractStem(filename: String): String {
         var stem = if (filename.contains('.')) filename.substringBeforeLast('.') else filename
-        // Normalize Pixel and Android camera suffixes like .RAW-01, .RAW-02.ORIGINAL, .ORIGINAL, .COVER, .MP
-        stem = stem.replace(Regex("""(\.RAW-\d+|\.ORIGINAL|\.COVER|\.MP)+""", RegexOption.IGNORE_CASE), "")
+        // Normalize Pixel and Android camera suffixes like .RAW-01, .RAW-02.ORIGINAL, .ORIGINAL, .COVER, .MP, _RAW
+        stem = stem.replace(Regex("""[\._]?(RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*)+""", RegexOption.IGNORE_CASE), "")
         return stem.trim()
     }
 }
