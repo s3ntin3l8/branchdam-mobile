@@ -1,8 +1,23 @@
 package com.branchdam.mobile.ui.components
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
+import coil.request.ImageRequest
+import coil.size.Size
+import coil.transform.Transformation
+
+class RotateTransformation(private val degrees: Float) : Transformation {
+    override val cacheKey: String = "RotateTransformation_$degrees"
+
+    override suspend fun transform(input: Bitmap, size: Size): Bitmap {
+        if (degrees == 0f) return input
+        val matrix = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(input, 0, 0, input.width, input.height, matrix, true)
+    }
+}
 
 object ExifOrientationHelper {
 
@@ -25,9 +40,27 @@ object ExifOrientationHelper {
                     ExifInterface.ORIENTATION_TRANSVERSE -> 270f
                     else -> 0f
                 }
-            }
+            } ?: 0f
         } catch (_: Throwable) {
             0f
         }
+    }
+
+    /**
+     * Applies EXIF auto-rotation to a Coil [ImageRequest.Builder] using
+     * [RotateTransformation] so Coil rotates the bitmap before layout
+     * measurement. This ensures [ContentScale.Crop] and [ContentScale.Fit]
+     * measure the already-rotated bitmap dimensions.
+     */
+    fun applyExifOrientation(
+        builder: ImageRequest.Builder,
+        context: Context,
+        contentUriString: String?
+    ): ImageRequest.Builder {
+        val degrees = getExifRotationDegrees(context, contentUriString)
+        if (degrees != 0f) {
+            builder.transformations(RotateTransformation(degrees))
+        }
+        return builder
     }
 }
