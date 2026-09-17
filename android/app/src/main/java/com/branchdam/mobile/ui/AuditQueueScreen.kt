@@ -10,10 +10,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -109,30 +107,22 @@ private fun AuditCard(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            text = "Verify Lineage Match",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f, fill = false)
+                .weight(1f)
         ) {
             val isWideLayout = maxWidth > 500.dp
 
             if (isWideLayout) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AssetPreviewCard(
                         roleLabel = "MASTER",
@@ -141,7 +131,9 @@ private fun AuditCard(
                         mimeType = candidate.masterMimeType,
                         isMaster = true,
                         onInspect = { inspectUri = candidate.resolvedMasterUri },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
 
                     LineageConnector(
@@ -157,14 +149,16 @@ private fun AuditCard(
                         mimeType = candidate.childMimeType,
                         isMaster = false,
                         onInspect = { inspectUri = candidate.resolvedChildUri },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
                 }
             } else {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     AssetPreviewCard(
                         roleLabel = "MASTER",
@@ -173,7 +167,9 @@ private fun AuditCard(
                         mimeType = candidate.masterMimeType,
                         isMaster = true,
                         onInspect = { inspectUri = candidate.resolvedMasterUri },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     )
 
                     LineageConnector(
@@ -189,26 +185,30 @@ private fun AuditCard(
                         mimeType = candidate.childMimeType,
                         isMaster = false,
                         onInspect = { inspectUri = candidate.resolvedChildUri },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             FilledTonalButton(
                 onClick = onReject,
-                modifier = Modifier.weight(1f).height(56.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 ),
-                shape = MaterialTheme.shapes.large
+                shape = MaterialTheme.shapes.medium
             ) {
                 Icon(Icons.Default.Close, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
@@ -217,11 +217,13 @@ private fun AuditCard(
 
             Button(
                 onClick = onConfirm,
-                modifier = Modifier.weight(1f).height(56.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
-                shape = MaterialTheme.shapes.large
+                shape = MaterialTheme.shapes.medium
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
@@ -254,19 +256,16 @@ private fun AssetPreviewCard(
 
     Card(
         modifier = modifier
-            .clip(MaterialTheme.shapes.large)
+            .clip(MaterialTheme.shapes.medium)
             .clickable(enabled = uri != null, onClick = onInspect),
-        shape = MaterialTheme.shapes.large,
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
             if (uri != null) {
@@ -298,7 +297,7 @@ private fun AssetPreviewCard(
                             Icon(
                                 imageVector = Icons.Default.Image,
                                 contentDescription = null,
-                                modifier = Modifier.size(36.dp),
+                                modifier = Modifier.size(40.dp),
                                 tint = MaterialTheme.colorScheme.outline
                             )
                             Spacer(Modifier.height(4.dp))
@@ -319,7 +318,7 @@ private fun AssetPreviewCard(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
                         contentDescription = null,
-                        modifier = Modifier.size(36.dp),
+                        modifier = Modifier.size(40.dp),
                         tint = MaterialTheme.colorScheme.outline
                     )
                     Spacer(Modifier.height(4.dp))
@@ -339,11 +338,11 @@ private fun AssetPreviewCard(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.75f)
+                                Color.Black.copy(alpha = 0.8f)
                             )
                         )
                     )
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = filename,
@@ -351,22 +350,22 @@ private fun AssetPreviewCard(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(8.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = if (isMaster) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.secondaryContainer,
+                    .padding(6.dp),
+                shape = RoundedCornerShape(6.dp),
+                color = if (isMaster) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
+                        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
                 contentColor = if (isMaster) MaterialTheme.colorScheme.onPrimaryContainer
                                else MaterialTheme.colorScheme.onSecondaryContainer
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -387,7 +386,7 @@ private fun AssetPreviewCard(
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp),
+                        .padding(6.dp),
                     shape = CircleShape,
                     color = Color.Black.copy(alpha = 0.5f),
                     contentColor = Color.White
@@ -396,7 +395,7 @@ private fun AssetPreviewCard(
                         imageVector = Icons.Default.ZoomIn,
                         contentDescription = "Inspect image",
                         modifier = Modifier
-                            .padding(6.dp)
+                            .padding(5.dp)
                             .size(16.dp)
                     )
                 }
@@ -417,7 +416,7 @@ private fun LineageConnector(
 
     if (isHorizontal) {
         Column(
-            modifier = modifier.padding(horizontal = 12.dp),
+            modifier = modifier.padding(horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
         ) {
@@ -472,7 +471,7 @@ private fun LineageConnector(
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
@@ -484,7 +483,7 @@ private fun LineageConnector(
                     text = resolver,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -498,13 +497,13 @@ private fun LineageConnector(
                     imageVector = Icons.Default.Link,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Icon(
                     imageVector = Icons.Default.ArrowDownward,
                     contentDescription = "Lineage direction",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -519,7 +518,7 @@ private fun LineageConnector(
                     fontWeight = FontWeight.ExtraBold,
                     color = if (isHighConfidence) MaterialTheme.colorScheme.onPrimaryContainer
                             else MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }
         }
@@ -543,15 +542,15 @@ private fun FullImageComparisonDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            shape = MaterialTheme.shapes.extraLarge,
+                .padding(8.dp),
+            shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -570,7 +569,7 @@ private fun FullImageComparisonDialog(
 
                 TabRow(
                     selectedTabIndex = selectedTab,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    modifier = Modifier.padding(vertical = 4.dp)
                 ) {
                     Tab(
                         selected = selectedTab == 0,
@@ -584,13 +583,13 @@ private fun FullImageComparisonDialog(
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.large)
+                        .clip(MaterialTheme.shapes.medium)
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                     contentAlignment = Alignment.Center
                 ) {
@@ -616,7 +615,7 @@ private fun FullImageComparisonDialog(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
