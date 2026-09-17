@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -126,6 +127,10 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyMsg := strings.TrimSpace(string(respBody))
+		if bodyMsg != "" {
+			slog.Warn("client: upload rejected by server", "status", resp.StatusCode, "response", bodyMsg)
+		}
 		return nil, &ClientError{
 			Code:    CodeNetworkError,
 			Message: fmt.Sprintf("upload rejected with status %d", resp.StatusCode),
