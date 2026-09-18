@@ -69,8 +69,8 @@ class RawPreviewFetcher(
 
             if (scheme == "content") {
                 try {
-                    val mimeType = context.contentResolver.getType(uri)?.lowercase()
-                    if (mimeType != null && (mimeType.contains("dng") || mimeType.contains("raw") || mimeType.contains("adobe"))) {
+                    val mimeType = context.contentResolver.getType(uri)?.lowercase() ?: ""
+                    if (mimeType.contains("dng") || mimeType.contains("raw") || mimeType.contains("adobe")) {
                         return true
                     }
                 } catch (_: Throwable) {
