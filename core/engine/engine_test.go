@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
 	"github.com/s3ntin3l8/branchdam-mobile/core/queue"
@@ -632,5 +633,92 @@ func TestEngine_GetMediaStatus_And_CountPendingUploads(t *testing.T) {
 	}
 	if len(all) != 0 {
 		t.Fatalf("expected empty map, got %v", all)
+	}
+}
+
+func TestEngine_ActiveUploadProgress_FirstSampleAndSpeed(t *testing.T) {
+	eng := New(nil, nil)
+	eng.setActiveUpload(1, "test.dng", 1000000, 1, 1)
+
+	p, err := eng.GetActiveUploadProgress()
+	if err != nil || p == nil {
+		t.Fatalf("GetActiveUploadProgress returned nil")
+	}
+	if p.BytesSent != 0 || p.SpeedBytesPerSec != 0 {
+		t.Fatalf("initial progress: bytesSent=%d speed=%f", p.BytesSent, p.SpeedBytesPerSec)
+	}
+
+	// First callback: seeds lastProgressSent, speed stays 0
+	eng.updateActiveUploadProgress(100000, 1000000)
+	p, _ = eng.GetActiveUploadProgress()
+	if p.BytesSent != 100000 || p.SpeedBytesPerSec != 0 {
+		t.Fatalf("first sample progress: bytesSent=%d speed=%f (want speed 0)", p.BytesSent, p.SpeedBytesPerSec)
+	}
+
+	// Simulate time passing by altering internal lastProgressTime
+	eng.activeMu.Lock()
+	eng.lastProgressTime = eng.lastProgressTime.Add(-1 * time.Second)
+	eng.activeMu.Unlock()
+
+	// Second sample after 1s: 200,000 additional bytes in 1s = 200,000 B/s
+	eng.updateActiveUploadProgress(300000, 1000000)
+	p, _ = eng.GetActiveUploadProgress()
+	if p.BytesSent != 300000 {
+		t.Fatalf("second sample bytesSent=%d", p.BytesSent)
+	}
+	if p.SpeedBytesPerSec < 190000 || p.SpeedBytesPerSec > 210000 {
+		t.Fatalf("second sample speed = %f, want ~200000", p.SpeedBytesPerSec)
+	}
+}
+
+func TestEngine_ResetUploadByBlake3Hash_UpdatesPath(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_reset_path_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	eng := New(q, nil)
+
+	file1 := filepath.Join(tempDir, "file1.dng")
+	testData := []byte("recaptured asset content")
+	if err := os.WriteFile(file1, testData, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	item1, err := eng.EnqueueLocalCapture(file1, "file1.dng", 1000, "local-1", "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture 1: %v", err)
+	}
+
+	// Mark item as FAILED (maxRetries = 1 so retry_count = 1 >= maxRetries sets FAILED)
+	if err := q.MarkUploadFailed(item1.ID, "simulated failure", 1); err != nil {
+		t.Fatalf("MarkUploadFailed: %v", err)
+	}
+
+	// Re-enqueue at a new location file2 (same content/hash)
+	file2 := filepath.Join(tempDir, "file2.dng")
+	if err := os.WriteFile(file2, testData, 0644); err != nil {
+		t.Fatalf("WriteFile 2: %v", err)
+	}
+
+	item2, err := eng.EnqueueLocalCapture(file2, "file2.dng", 1000, "local-2", "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture 2: %v", err)
+	}
+
+	if item1.ID != item2.ID {
+		t.Fatalf("item IDs should match: %d != %d", item1.ID, item2.ID)
+	}
+
+	// Verify local_path in queue row updated to file2
+	items, err := q.ClaimPendingUploads(1, 0, 5)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("ClaimPendingUploads: %v, len=%d", err, len(items))
+	}
+	if items[0].LocalPath != file2 {
+		t.Fatalf("LocalPath = %q, want %q", items[0].LocalPath, file2)
 	}
 }

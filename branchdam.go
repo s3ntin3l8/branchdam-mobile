@@ -511,6 +511,22 @@ func (e *Engine) SetCancelFlag() error {
 	return nil
 }
 
+// ResetFailedUploads resets all FAILED upload items back to PENDING.
+func (e *Engine) ResetFailedUploads() (int64, error) {
+	if err := e.requireOpen(); err != nil {
+		return 0, err
+	}
+	return e.engine.ResetFailedUploads()
+}
+
+// GetActiveUploadProgress returns current active upload metrics, or nil if no upload active.
+func (e *Engine) GetActiveUploadProgress() (*engine.ActiveUploadProgress, error) {
+	if err := e.requireOpen(); err != nil {
+		return nil, err
+	}
+	return e.engine.GetActiveUploadProgress()
+}
+
 // ---------------------------------------------------------------------------
 // Safe space reclaim
 // ---------------------------------------------------------------------------

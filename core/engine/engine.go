@@ -10,7 +10,9 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/s3ntin3l8/branchdam-mobile/core/client"
 	"github.com/s3ntin3l8/branchdam-mobile/core/hasher"
@@ -39,6 +41,16 @@ var ErrLocalFlagSetFailed = errors.New("local flag set failed")
 // verdict that an ErrNoRows "not found" produces.
 var ErrLocalReadFailed = errors.New("local read failed")
 
+type ActiveUploadProgress struct {
+	ID               int64   `json:"id"`
+	Filename         string  `json:"filename"`
+	BytesSent        int64   `json:"bytesSent"`
+	TotalBytes       int64   `json:"totalBytes"`
+	SpeedBytesPerSec float64 `json:"speedBytesPerSec"`
+	ItemIndex        int     `json:"itemIndex"`
+	TotalItems       int     `json:"totalItems"`
+}
+
 type Engine struct {
 	q *queue.Queue
 	c *client.Client
@@ -49,6 +61,71 @@ type Engine struct {
 	// SQLite column) so a single cancel never persists across
 	// syncs — this was the critical bug Hermes flagged in B.2.2.
 	cancelRequested atomic.Bool
+
+	activeMu         sync.Mutex
+	activeUpload     *ActiveUploadProgress
+	lastProgressTime time.Time
+	lastProgressSent int64
+}
+
+func (e *Engine) setActiveUpload(id int64, filename string, totalBytes int64, itemIndex int, totalItems int) {
+	e.activeMu.Lock()
+	defer e.activeMu.Unlock()
+	now := time.Now()
+	e.activeUpload = &ActiveUploadProgress{
+		ID:               id,
+		Filename:         filename,
+		BytesSent:        0,
+		TotalBytes:       totalBytes,
+		SpeedBytesPerSec: 0,
+		ItemIndex:        itemIndex,
+		TotalItems:       totalItems,
+	}
+	e.lastProgressTime = now
+	e.lastProgressSent = -1
+}
+
+func (e *Engine) updateActiveUploadProgress(bytesSent int64, totalBytes int64) {
+	e.activeMu.Lock()
+	defer e.activeMu.Unlock()
+	if e.activeUpload == nil {
+		return
+	}
+	now := time.Now()
+	if e.lastProgressSent < 0 {
+		e.lastProgressTime = now
+		e.lastProgressSent = bytesSent
+	} else {
+		dt := now.Sub(e.lastProgressTime).Seconds()
+		if dt >= 0.2 {
+			dBytes := bytesSent - e.lastProgressSent
+			if dBytes > 0 && dt > 0 {
+				e.activeUpload.SpeedBytesPerSec = float64(dBytes) / dt
+			}
+			e.lastProgressTime = now
+			e.lastProgressSent = bytesSent
+		}
+	}
+	e.activeUpload.BytesSent = bytesSent
+	if totalBytes > 0 {
+		e.activeUpload.TotalBytes = totalBytes
+	}
+}
+
+func (e *Engine) clearActiveUpload() {
+	e.activeMu.Lock()
+	defer e.activeMu.Unlock()
+	e.activeUpload = nil
+}
+
+func (e *Engine) GetActiveUploadProgress() (*ActiveUploadProgress, error) {
+	e.activeMu.Lock()
+	defer e.activeMu.Unlock()
+	if e.activeUpload == nil {
+		return nil, nil
+	}
+	cp := *e.activeUpload
+	return &cp, nil
 }
 
 // RequestCancel sets the in-process cancel flag. The next
@@ -132,6 +209,9 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 		}
 	}
 
+	// Reset any previous FAILED entry for this file so re-enqueueing recovers it
+	_ = e.q.ResetUploadByBlake3Hash(fullHash, localPath, sizeBytes)
+
 	// Dedup gate: check if this blake3Hash is already queued or uploaded
 	if existing, err := e.q.GetUploadItemByBlake3Hash(fullHash); err == nil && existing != nil {
 		if localID != "" {
@@ -202,8 +282,10 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		return 0, fmt.Errorf("claim uploads failed: %w", err)
 	}
 
+	defer e.clearActiveUpload()
+
 	completedCount := 0
-	for _, item := range items {
+	for i, item := range items {
 		// B.2.2: also check the flag between items so a
 		// SetCancelFlag mid-batch halts gracefully.
 		if e.cancelRequested.Load() {
@@ -212,6 +294,8 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		if ctx.Err() != nil {
 			return completedCount, ctx.Err()
 		}
+
+		e.setActiveUpload(item.ID, item.TargetFilename, item.SizeBytes, i+1, len(items))
 
 		// Background pre-screen: check if server already has this content by hash before streaming file payload
 		if e.c != nil {
@@ -224,6 +308,7 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 					slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
 				}
 				completedCount++
+				e.clearActiveUpload()
 				continue
 			}
 		}
@@ -231,12 +316,14 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 		// B.2.5: Stat before Open so a missing file surfaces as IO_ERROR.
 		if _, statErr := os.Stat(item.LocalPath); statErr != nil {
 			_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file stat failed: %v", statErr), 5)
+			e.clearActiveUpload()
 			continue
 		}
 
 		file, openErr := os.Open(item.LocalPath)
 		if openErr != nil {
 			_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file open failed: %v", openErr), 5)
+			e.clearActiveUpload()
 			continue
 		}
 
@@ -251,12 +338,16 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 			Blake3Hash:     item.Blake3Hash,
 			SourcePathHash: item.SourcePathHash,
 			CapturedAtUnix: item.CapturedAtUnix,
+			ProgressFn: func(bytesSent int64, totalBytes int64) {
+				e.updateActiveUploadProgress(bytesSent, totalBytes)
+			},
 		}
 
 		resp, uploadErr := e.c.UploadStream(ctx, file, item.SizeBytes, item.TargetFilename, uploadOpts)
 		// B.2.5: file close moved to defer (declared inside the loop) so
 		// the close always runs even if a panic occurs in UploadStream.
 		file.Close()
+		e.clearActiveUpload()
 
 		if uploadErr != nil {
 			// B.2.6: handle the new structured dedup / hash-mismatch
@@ -492,4 +583,9 @@ func (e *Engine) GetAllMediaStatuses() (map[string]string, error) {
 // CountPendingUploads returns the number of pending/in-progress uploads in the queue.
 func (e *Engine) CountPendingUploads() (int64, error) {
 	return e.q.CountPendingUploads()
+}
+
+// ResetFailedUploads resets all FAILED upload items back to PENDING.
+func (e *Engine) ResetFailedUploads() (int64, error) {
+	return e.q.ResetFailedUploads()
 }

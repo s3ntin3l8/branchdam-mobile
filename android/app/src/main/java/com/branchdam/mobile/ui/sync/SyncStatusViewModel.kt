@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.branchdam.mobile.ActiveUploadProgress
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.service.SyncScheduler
@@ -15,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -22,33 +25,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class SyncStatusUiState(
     val isConnected: Boolean = false,
     val isServerReachable: Boolean = false,
+    val connectionError: String? = null,
     val isSyncing: Boolean = false,
     val lastSyncTime: Long = 0L,
     val workerState: String = "Idle",
     val pendingUploadsCount: Long = 0L,
+    val activeUploadProgress: ActiveUploadProgress? = null,
 )
 
-/**
- * Test seam for the reachability check. Production defaults to a call
- * into [EngineHolder.testConnection] (which dispatches through the
- * gomobile binding and can block on an HTTP round-trip). Tests pass a
- * pure lambda to drive success / failure / hang paths without loading
- * the AAR.
- *
- * The blocking call is the original concern from the PR #131 review:
- * `EngineHolder.testConnection` runs on the single-threaded executor
- * shared by every other `EngineHolder.*` binding, so a slow handshake
- * holds up `syncBatch` for the duration of the TCP timeout. The
- * `withTimeoutOrNull` wrapper in [SyncStatusViewModel.checkConnection]
- * bounds the wait to [reachabilityTimeoutMs] and treats a timeout
- * the same as a failure.
- *
- * Marked `suspend` so the test seam can use `delay` (a suspending
- * function) in the synthetic-hang test; production callers don't
- * actually suspend — `EngineHolder.testConnection` returns when
- * the gomobile binding returns.
- */
 typealias TestConnectionFn = suspend () -> Boolean
+typealias TestConnectionDetailedFn = suspend () -> String?
 
 class SyncStatusViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -58,9 +44,40 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     private val _uiState = MutableStateFlow(SyncStatusUiState())
     val uiState: StateFlow<SyncStatusUiState> = _uiState.asStateFlow()
 
+    private var pollJob: kotlinx.coroutines.Job? = null
+
     init {
         observeWorker()
         checkConnection()
+        pollActiveUploadProgress()
+    }
+
+    fun pollActiveUploadProgress() {
+        if (pollJob?.isActive == true) return
+        pollJob = viewModelScope.launch {
+            while (isActive) {
+                val activeProgress = withContext(ioDispatcher) {
+                    EngineHolder.getActiveUploadProgress()
+                }
+                val pendingCount = if (activeProgress != null || _uiState.value.isSyncing) {
+                    withContext(ioDispatcher) { EngineHolder.countPendingUploads() }
+                } else {
+                    _uiState.value.pendingUploadsCount
+                }
+
+                _uiState.update { current ->
+                    current.copy(
+                        activeUploadProgress = activeProgress,
+                        pendingUploadsCount = pendingCount
+                    )
+                }
+
+                if (!_uiState.value.isSyncing && activeProgress == null) {
+                    break
+                }
+                kotlinx.coroutines.delay(500L)
+            }
+        }
     }
 
     private fun observeWorker() {
@@ -87,45 +104,71 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                     prefs.edit().putLong(BranchDamKeys.LAST_SYNC_TIME, lastSyncTime).apply()
                 }
                 val pendingUploads = EngineHolder.countPendingUploads()
-                _uiState.value = _uiState.value.copy(
-                    isConnected = EngineHolder.isInitialized(),
-                    isSyncing = isSyncing,
-                    lastSyncTime = lastSyncTime,
-                    workerState = workerState,
-                    pendingUploadsCount = pendingUploads,
-                )
+                _uiState.update { current ->
+                    current.copy(
+                        isConnected = EngineHolder.isInitialized(),
+                        isSyncing = isSyncing,
+                        lastSyncTime = lastSyncTime,
+                        workerState = workerState,
+                        pendingUploadsCount = pendingUploads,
+                    )
+                }
+                if (isSyncing) {
+                    pollActiveUploadProgress()
+                }
             }
         }
     }
 
     fun checkConnection() {
         viewModelScope.launch {
-            // Bound the handshake so a misconfigured server's TCP
-            // timeout can't lock the UI or the single-threaded
-            // EngineHolder executor that backs the gomobile binding.
-            // Treat a timeout the same as a failed handshake — the UI
-            // shows "Server unreachable" and the Sync Now button
-            // stays disabled; the user can hit Refresh to retry.
             val isReachable = withContext(ioDispatcher) {
                 withTimeoutOrNull(reachabilityTimeoutMs) {
                     testConnectionFn()
                 } ?: false
             }
-            _uiState.value = _uiState.value.copy(isServerReachable = isReachable)
+            val formattedError = if (!isReachable) {
+                val rawError = withContext(ioDispatcher) {
+                    withTimeoutOrNull(reachabilityTimeoutMs) {
+                        testConnectionDetailedFn()
+                    } ?: "Connection timed out"
+                } ?: "Server unreachable"
+
+                when {
+                    rawError.contains("401") -> "Authentication Failed (HTTP 401) — Check API Key in Settings"
+                    rawError.contains("403") -> "Access Denied (HTTP 403) — Forbidden by server"
+                    rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
+                    else -> rawError
+                }
+            } else {
+                null
+            }
+
+            _uiState.update { current ->
+                current.copy(
+                    isServerReachable = isReachable,
+                    connectionError = formattedError
+                )
+            }
         }
     }
 
     fun refresh() {
         checkConnection()
+        pollActiveUploadProgress()
         val pendingUploads = EngineHolder.countPendingUploads()
-        _uiState.value = _uiState.value.copy(
-            isConnected = EngineHolder.isInitialized(),
-            lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
-            pendingUploadsCount = pendingUploads,
-        )
+        _uiState.update { current ->
+            current.copy(
+                isConnected = EngineHolder.isInitialized(),
+                lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
+                pendingUploadsCount = pendingUploads,
+            )
+        }
     }
 
     fun triggerSync() {
+        EngineHolder.resetFailedUploads()
+        pollActiveUploadProgress()
         val request = OneTimeWorkRequestBuilder<SyncWorker>().build()
         workManager.enqueueUniqueWork(SyncScheduler.IMMEDIATE_WORK_TAG, ExistingWorkPolicy.REPLACE, request)
     }
@@ -153,7 +196,10 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
          * paths without instantiating a real gomobile engine.
          */
         @androidx.annotation.VisibleForTesting
-        var testConnectionFn: TestConnectionFn = { EngineHolder.testConnection() }
+        var testConnectionFn: TestConnectionFn = { testConnectionDetailedFn() == null }
+
+        @androidx.annotation.VisibleForTesting
+        var testConnectionDetailedFn: TestConnectionDetailedFn = { EngineHolder.testConnectionDetailed() }
 
         /**
          * Test seam: the dispatcher used for the blocking handshake.
