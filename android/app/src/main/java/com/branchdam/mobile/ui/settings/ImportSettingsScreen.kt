@@ -139,10 +139,10 @@ fun ImportSettingsScreen(
                                     trailingContent = {
                                         Switch(
                                             checked = isChecked,
-                                            onCheckedChange = { viewModel.toggleFolderIncluded(folder) }
+                                            onCheckedChange = { viewModel.toggleFolderIncluded(folder, discoveredFolders) }
                                         )
                                     },
-                                    modifier = Modifier.clickable { viewModel.toggleFolderIncluded(folder) },
+                                    modifier = Modifier.clickable { viewModel.toggleFolderIncluded(folder, discoveredFolders) },
                                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                                 )
                                 if (index < discoveredFolders.size - 1) {

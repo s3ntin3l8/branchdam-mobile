@@ -197,15 +197,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         ImportConfirmationNotifier.setAutoImportEnabled(getApplication(), enabled)
     }
 
-    fun toggleFolderIncluded(folder: String) {
-        val current = _includedFolders.value.toMutableSet()
-        if (current.contains(folder)) {
-            current.remove(folder)
+    fun toggleFolderIncluded(folder: String, availableFolders: List<String> = emptyList()) {
+        val currentStored = _includedFolders.value
+        val effectiveAvailable = if (availableFolders.isNotEmpty()) {
+            availableFolders
         } else {
-            current.add(folder)
+            listOf(folder)
         }
-        nonSecretPrefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, current).apply()
-        _includedFolders.value = current
+
+        val currentlySelected = if (currentStored.isEmpty()) {
+            effectiveAvailable.toSet()
+        } else {
+            currentStored
+        }
+
+        val updated = if (currentlySelected.contains(folder)) {
+            currentlySelected - folder
+        } else {
+            currentlySelected + folder
+        }
+
+        val normalized = if (updated.isEmpty() || updated.containsAll(effectiveAvailable)) {
+            emptySet()
+        } else {
+            updated
+        }
+
+        nonSecretPrefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, normalized).apply()
+        _includedFolders.value = normalized
     }
 
     fun setSyncIntervalMinutes(minutes: Int) {

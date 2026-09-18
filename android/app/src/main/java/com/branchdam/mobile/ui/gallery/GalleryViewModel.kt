@@ -151,102 +151,128 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val galleryItems = withContext(ioDispatcher) {
+                // Phase 1: Fast initial query (top 100 recent items) for <30ms time-to-first-frame
+                val initialItems = withContext(ioDispatcher) {
                     val context = getApplication<Application>()
-                    val images = MediaScanner.queryRecentImages(context)
-                    val videos = MediaScanner.queryRecentVideos(context)
-                    val allItems = images + videos
-
-                    val pairs = PairDetector.findPairs(allItems)
-                    val pairedRawIds = mutableSetOf<Long>()
-                    val pairedJpegIds = mutableSetOf<Long>()
-                    val pairMapByJpegId = mutableMapOf<Long, com.branchdam.mobile.lineage.LineagePair>()
-
-                    for (pair in pairs) {
-                        pairedRawIds.add(pair.masterRaw.id)
-                        pairedJpegIds.add(pair.derivativeJpeg.id)
-                        pairMapByJpegId[pair.derivativeJpeg.id] = pair
-                    }
-
-                    val allStatuses = EngineHolder.getAllMediaStatuses()
-                    val resultList = mutableListOf<GalleryItem>()
-
-                    for (item in allItems) {
-                        if (pairedRawIds.contains(item.id)) {
-                            // Grouped under companion JPEG card
-                            continue
-                        }
-
-                        if (pairedJpegIds.contains(item.id)) {
-                            val pair = pairMapByJpegId[item.id]
-                            val companionRaw = pair?.masterRaw
-
-                            val jpegStatus = allStatuses[item.contentUri]
-                                ?: allStatuses[item.filePath]
-                                ?: allStatuses[item.displayName]
-                                ?: "NOT_ENQUEUED"
-                            val rawStatus = companionRaw?.let {
-                                allStatuses[it.contentUri]
-                                    ?: allStatuses[it.filePath]
-                                    ?: allStatuses[it.displayName]
-                            } ?: "NOT_ENQUEUED"
-
-                            val combinedStatus = when {
-                                jpegStatus == "FAILED" || rawStatus == "FAILED" -> "FAILED"
-                                jpegStatus == "PENDING" || rawStatus == "PENDING" || jpegStatus == "IN_PROGRESS" || rawStatus == "IN_PROGRESS" -> "PENDING"
-                                jpegStatus == "OFFLOADED" || rawStatus == "OFFLOADED" -> "OFFLOADED"
-                                jpegStatus == "COMPLETED" || rawStatus == "COMPLETED" -> "COMPLETED"
-                                else -> "NOT_ENQUEUED"
-                            }
-                            val isOffloaded = combinedStatus == "OFFLOADED"
-
-                            resultList.add(
-                                GalleryItem(
-                                    primaryMediaItem = item,
-                                    companionMediaItem = companionRaw,
-                                    lineageStatus = "RAW+JPEG",
-                                    isOffloaded = isOffloaded,
-                                    backupStatus = combinedStatus,
-                                )
-                            )
-                        } else {
-                            val backupStatus = allStatuses[item.contentUri]
-                                ?: allStatuses[item.filePath]
-                                ?: allStatuses[item.displayName]
-                                ?: "NOT_ENQUEUED"
-                            val isOffloaded = backupStatus == "OFFLOADED"
-                            val status = if (item.isDng) "RAW" else "Unpaired"
-                            resultList.add(
-                                GalleryItem(
-                                    primaryMediaItem = item,
-                                    companionMediaItem = null,
-                                    lineageStatus = status,
-                                    isOffloaded = isOffloaded,
-                                    backupStatus = backupStatus,
-                                )
-                            )
-                        }
-                    }
-                    val detectedFolders = MediaScanner.queryAvailableFolders(context)
-                    val folderList = mutableListOf(ALL_FOLDERS)
-                    for (f in detectedFolders) {
-                        if (f.isNotBlank() && !folderList.contains(f)) {
-                            folderList.add(f)
-                        }
-                    }
-                    _availableFolders.value = folderList
-
-                    resultList
+                    val fastImages = MediaScanner.queryRecentImages(context, limit = 100)
+                    val fastVideos = MediaScanner.queryRecentVideos(context, limit = 30)
+                    val fastAll = fastImages + fastVideos
+                    val statuses = EngineHolder.getAllMediaStatuses()
+                    val (fastResult, fastFolders) = processMediaItems(fastAll, statuses)
+                    _availableFolders.value = fastFolders
+                    fastResult
                 }
-                _items.value = galleryItems
+                _items.value = initialItems
+                _isLoading.value = false
                 _loadError.value = null
+
+                // Phase 2: Full background scan for complete gallery history
+                withContext(ioDispatcher) {
+                    val context = getApplication<Application>()
+                    val fullImages = MediaScanner.queryRecentImages(context, limit = 5000)
+                    val fullVideos = MediaScanner.queryRecentVideos(context, limit = 1000)
+                    val fullAll = fullImages + fullVideos
+                    if (fullAll.size > initialItems.size) {
+                        val statuses = EngineHolder.getAllMediaStatuses()
+                        val (fullResult, fullFolders) = processMediaItems(fullAll, statuses)
+                        _availableFolders.value = fullFolders
+                        _items.value = fullResult
+                    }
+                }
             } catch (t: Throwable) {
                 Log.w(TAG, "loadItems failed", t)
-                _loadError.value = t.message ?: "Failed to load media"
+                if (_items.value.isEmpty()) {
+                    _loadError.value = t.message ?: "Failed to load media"
+                }
             } finally {
                 _isLoading.value = false
             }
         }
+    }
+
+    private fun processMediaItems(
+        allItems: List<MediaItem>,
+        allStatuses: Map<String, String>
+    ): Pair<List<GalleryItem>, List<String>> {
+        val pairs = PairDetector.findPairs(allItems)
+        val pairedRawIds = mutableSetOf<Long>()
+        val pairedJpegIds = mutableSetOf<Long>()
+        val pairMapByJpegId = mutableMapOf<Long, com.branchdam.mobile.lineage.LineagePair>()
+
+        for (pair in pairs) {
+            pairedRawIds.add(pair.masterRaw.id)
+            pairedJpegIds.add(pair.derivativeJpeg.id)
+            pairMapByJpegId[pair.derivativeJpeg.id] = pair
+        }
+
+        val resultList = mutableListOf<GalleryItem>()
+
+        for (item in allItems) {
+            if (pairedRawIds.contains(item.id)) {
+                // Grouped under companion JPEG card
+                continue
+            }
+
+            if (pairedJpegIds.contains(item.id)) {
+                val pair = pairMapByJpegId[item.id]
+                val companionRaw = pair?.masterRaw
+
+                val jpegStatus = allStatuses[item.contentUri]
+                    ?: allStatuses[item.filePath]
+                    ?: allStatuses[item.displayName]
+                    ?: "NOT_ENQUEUED"
+                val rawStatus = companionRaw?.let {
+                    allStatuses[it.contentUri]
+                        ?: allStatuses[it.filePath]
+                        ?: allStatuses[it.displayName]
+                } ?: "NOT_ENQUEUED"
+
+                val combinedStatus = when {
+                    jpegStatus == "FAILED" || rawStatus == "FAILED" -> "FAILED"
+                    jpegStatus == "PENDING" || rawStatus == "PENDING" || jpegStatus == "IN_PROGRESS" || rawStatus == "IN_PROGRESS" -> "PENDING"
+                    jpegStatus == "OFFLOADED" || rawStatus == "OFFLOADED" -> "OFFLOADED"
+                    jpegStatus == "COMPLETED" || rawStatus == "COMPLETED" -> "COMPLETED"
+                    else -> "NOT_ENQUEUED"
+                }
+                val isOffloaded = combinedStatus == "OFFLOADED"
+
+                resultList.add(
+                    GalleryItem(
+                        primaryMediaItem = item,
+                        companionMediaItem = companionRaw,
+                        lineageStatus = "RAW+JPEG",
+                        isOffloaded = isOffloaded,
+                        backupStatus = combinedStatus,
+                    )
+                )
+            } else {
+                val backupStatus = allStatuses[item.contentUri]
+                    ?: allStatuses[item.filePath]
+                    ?: allStatuses[item.displayName]
+                    ?: "NOT_ENQUEUED"
+                val isOffloaded = backupStatus == "OFFLOADED"
+                val status = if (item.isDng) "RAW" else "Unpaired"
+                resultList.add(
+                    GalleryItem(
+                        primaryMediaItem = item,
+                        companionMediaItem = null,
+                        lineageStatus = status,
+                        isOffloaded = isOffloaded,
+                        backupStatus = backupStatus,
+                    )
+                )
+            }
+        }
+
+        val folderList = mutableListOf(ALL_FOLDERS)
+        val itemFolders = resultList.map { it.primaryMediaItem.folderName }.filter { it.isNotBlank() }
+        for (f in itemFolders.toSet().sorted()) {
+            if (!folderList.contains(f)) {
+                folderList.add(f)
+            }
+        }
+
+        return Pair(resultList, folderList)
     }
 
     fun toggleSelection(id: Long) {

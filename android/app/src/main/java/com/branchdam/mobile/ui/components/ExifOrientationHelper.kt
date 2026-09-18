@@ -85,6 +85,16 @@ object ExifOrientationHelper {
      */
     fun applyExifOrientation(
         builder: ImageRequest.Builder,
+        orientationDegrees: Int
+    ): ImageRequest.Builder {
+        if (orientationDegrees != 0) {
+            builder.transformations(RotateTransformation(orientationDegrees.toFloat()))
+        }
+        return builder
+    }
+
+    fun applyExifOrientation(
+        builder: ImageRequest.Builder,
         context: Context,
         contentUriString: String?,
         mimeType: String? = null
