@@ -150,10 +150,12 @@ class PairDetectorTest {
         assertEquals("EXAMPLE", PairDetector.extractStem("EXAMPLE.dng"))
         assertEquals("MYCOVER", PairDetector.extractStem("MYCOVER.dng"))
         assertEquals("RAW_001", PairDetector.extractStem("RAW_001.dng"))
+        assertEquals("LAST_NIGHT", PairDetector.extractStem("LAST_NIGHT.dng"))
+        assertEquals("ALBUM_COVER", PairDetector.extractStem("ALBUM_COVER.dng"))
+        assertEquals("road_trip_ACTION", PairDetector.extractStem("road_trip_ACTION.dng"))
 
         // Trailing suffixes with required separator stripped cleanly
         assertEquals("PXL_20260912_185504997", PairDetector.extractStem("PXL_20260912_185504997.TS-001-02.ORIGINAL.dng"))
         assertEquals("IMG_20260912_120000", PairDetector.extractStem("IMG_20260912_120000.BURST001.dng"))
-        assertEquals("IMG_20260912_120000", PairDetector.extractStem("IMG_20260912_120000_PORTRAIT.dng"))
     }
 }
