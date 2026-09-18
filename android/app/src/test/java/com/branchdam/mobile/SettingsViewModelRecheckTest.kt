@@ -278,8 +278,8 @@ class SettingsViewModelRecheckTest {
         viewModel.toggleFolderIncluded("Download", availableFolders)
         assertEquals(setOf("Pictures"), viewModel.includedFolders.value)
 
-        // Unchecking the last remaining checked folder resets to emptySet (default)
+        // Unchecking the last remaining checked folder sets NO_FOLDERS_SENTINEL to suppress all folders
         viewModel.toggleFolderIncluded("Pictures", availableFolders)
-        assertEquals(emptySet<String>(), viewModel.includedFolders.value)
+        assertEquals(setOf(SettingsViewModel.NO_FOLDERS_SENTINEL), viewModel.includedFolders.value)
     }
 }

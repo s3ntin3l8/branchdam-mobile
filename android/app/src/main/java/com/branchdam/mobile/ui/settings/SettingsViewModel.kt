@@ -217,10 +217,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             currentlySelected + folder
         }
 
-        val normalized = if (updated.isEmpty() || updated.containsAll(effectiveAvailable)) {
-            emptySet()
-        } else {
-            updated
+        val normalized = when {
+            updated.isEmpty() -> setOf(NO_FOLDERS_SENTINEL)
+            updated.containsAll(effectiveAvailable) -> emptySet()
+            else -> updated
         }
 
         nonSecretPrefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, normalized).apply()
