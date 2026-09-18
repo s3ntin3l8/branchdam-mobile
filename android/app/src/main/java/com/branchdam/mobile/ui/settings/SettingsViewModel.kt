@@ -68,6 +68,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _autoImportEnabled = MutableStateFlow(ImportConfirmationNotifier.getAutoImportEnabled(application))
     val autoImportEnabled: StateFlow<Boolean> = _autoImportEnabled.asStateFlow()
 
+    private val _includedFolders = MutableStateFlow<Set<String>>(
+        nonSecretPrefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+    )
+    val includedFolders: StateFlow<Set<String>> = _includedFolders.asStateFlow()
+
     private val _namingTemplate = MutableStateFlow("{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}")
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
@@ -190,6 +195,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setAutoImportEnabled(enabled: Boolean) {
         _autoImportEnabled.value = enabled
         ImportConfirmationNotifier.setAutoImportEnabled(getApplication(), enabled)
+    }
+
+    fun toggleFolderIncluded(folder: String) {
+        val current = _includedFolders.value.toMutableSet()
+        if (current.contains(folder)) {
+            current.remove(folder)
+        } else {
+            current.add(folder)
+        }
+        nonSecretPrefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, current).apply()
+        _includedFolders.value = current
     }
 
     fun setSyncIntervalMinutes(minutes: Int) {

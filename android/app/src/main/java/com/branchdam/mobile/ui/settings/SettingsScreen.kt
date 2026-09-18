@@ -150,8 +150,8 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         SettingsCategoryRow(
-                            title = "Import",
-                            subtitle = "Camera roll auto-import",
+                            title = "Import & Folders",
+                            subtitle = "Auto-import & Gallery folders",
                             icon = Icons.Default.CloudUpload,
                             iconColor = MaterialTheme.colorScheme.tertiary,
                             onClick = { currentPage = SettingsPage.Import },
