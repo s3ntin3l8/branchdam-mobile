@@ -38,30 +38,48 @@ class LineageViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val newCandidates = withContext(Dispatchers.IO) {
+                // Phase 1: Fast initial query (top 100 recent items) for <30ms initial render
+                val initialCandidates = withContext(Dispatchers.IO) {
                     val context = getApplication<Application>()
-                    val images = MediaScanner.queryRecentImages(context)
-                    val videos = MediaScanner.queryRecentVideos(context)
-                    val allItems = images + videos
-
-                    val pairs = PairDetector.findPairs(allItems)
-                    val edits = EditCorrelator.findInPhoneEdits(allItems, allItems)
-
-                    // Filter out 1.00 confidence exact pairs as they are automatically registered
-                    // by the background scanner and do not need manual audit confirmation.
-                    val auditPairs = pairs.filter { it.confidence < 1.00 }
-                    val raw = auditPairs.map { fromPair(it) } + edits.map { fromEdit(it) }
-                    dedupeByEdgeId(raw)
+                    val images = MediaScanner.queryRecentImages(context, limit = 100)
+                    val videos = MediaScanner.queryRecentVideos(context, limit = 30)
+                    val fastAll = images + videos
+                    processCandidates(fastAll)
                 }
-                _candidates.value = newCandidates
+                _candidates.value = initialCandidates
+                _isLoading.value = false
                 _loadError.value = null
+
+                // Phase 2: Full background scan
+                withContext(Dispatchers.IO) {
+                    val context = getApplication<Application>()
+                    val fullImages = MediaScanner.queryRecentImages(context, limit = 5000)
+                    val fullVideos = MediaScanner.queryRecentVideos(context, limit = 1000)
+                    val fullAll = fullImages + fullVideos
+                    if (fullAll.size > 130) {
+                        _candidates.value = processCandidates(fullAll)
+                    }
+                }
             } catch (t: Throwable) {
                 Log.w(TAG, "loadCandidates failed", t)
-                _loadError.value = t.message ?: "Failed to load media"
+                if (_candidates.value.isEmpty()) {
+                    _loadError.value = t.message ?: "Failed to load media"
+                }
             } finally {
                 _isLoading.value = false
             }
         }
+    }
+
+    private fun processCandidates(allItems: List<com.branchdam.mobile.observer.MediaItem>): List<AuditCandidate> {
+        val pairs = PairDetector.findPairs(allItems)
+        val edits = EditCorrelator.findInPhoneEdits(allItems, allItems)
+
+        // Filter out 1.00 confidence exact pairs as they are automatically registered
+        // by the background scanner and do not need manual audit confirmation.
+        val auditPairs = pairs.filter { it.confidence < 1.00 }
+        val raw = auditPairs.map { fromPair(it) } + edits.map { fromEdit(it) }
+        return dedupeByEdgeId(raw)
     }
 
     fun confirm(candidate: AuditCandidate) {

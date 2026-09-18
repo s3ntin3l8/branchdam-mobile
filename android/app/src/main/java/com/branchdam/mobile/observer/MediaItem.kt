@@ -10,7 +10,8 @@ data class MediaItem(
     val dateTakenUnix: Long,
     val isRaw: Boolean,
     val burstId: String? = null,
-    val folderName: String = "Camera"
+    val folderName: String = "Camera",
+    val orientationDegrees: Int = 0
 ) {
     val isVideo: Boolean
         get() = mimeType.startsWith("video/")

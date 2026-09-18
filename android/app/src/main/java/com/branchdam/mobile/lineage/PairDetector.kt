@@ -13,41 +13,60 @@ data class LineagePair(
 
 object PairDetector {
 
+    private val STEM_SUFFIX_REGEX = Regex(
+        """[\._]?(RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*)+""",
+        RegexOption.IGNORE_CASE
+    )
+
     /**
      * Finds companion RAW (DNG) and JPEG pairs from recent media items.
      * Google Pixel and Android flagships shoot companion DNG and JPEG files sharing
      * the timestamp stem (e.g., PXL_20260829_051500.dng & PXL_20260829_051500.jpg)
      * or created within 2 seconds of each other.
+     * Uses O(N) HashMap indexing for stem matches.
      */
     fun findPairs(items: List<MediaItem>): List<LineagePair> {
         val raws = items.filter { it.isDng || it.isRaw }
         val jpegs = items.filter { !it.isDng && !it.isRaw && !it.isVideo }
 
+        if (raws.isEmpty() || jpegs.isEmpty()) return emptyList()
+
+        // Index JPEGs by computed stem for O(1) hash map lookup
+        val jpegsByStem = HashMap<String, MutableList<MediaItem>>(jpegs.size)
+        for (jpeg in jpegs) {
+            val stem = extractStem(jpeg.displayName)
+            jpegsByStem.getOrPut(stem) { mutableListOf() }.add(jpeg)
+        }
+
         val pairs = mutableListOf<LineagePair>()
-        val matchedJpegs = mutableSetOf<Long>()
+        val matchedJpegIds = HashSet<Long>(raws.size)
+
+        val unmatchedRaws = mutableListOf<MediaItem>()
 
         for (raw in raws) {
             val rawStem = extractStem(raw.displayName)
-
-            // Exact stem match
-            val exactMatch = jpegs.firstOrNull { jpeg ->
-                !matchedJpegs.contains(jpeg.id) && extractStem(jpeg.displayName) == rawStem
-            }
+            val candidates = jpegsByStem[rawStem]
+            val exactMatch = candidates?.firstOrNull { !matchedJpegIds.contains(it.id) }
 
             if (exactMatch != null) {
                 pairs.add(LineagePair(masterRaw = raw, derivativeJpeg = exactMatch, confidence = 1.00))
-                matchedJpegs.add(exactMatch.id)
-                continue
+                matchedJpegIds.add(exactMatch.id)
+            } else {
+                unmatchedRaws.add(raw)
             }
+        }
 
-            // Timestamp proximity match (within 2 seconds)
-            val timeMatch = jpegs.firstOrNull { jpeg ->
-                !matchedJpegs.contains(jpeg.id) && abs(jpeg.dateTakenUnix - raw.dateTakenUnix) <= 2
-            }
-
-            if (timeMatch != null) {
-                pairs.add(LineagePair(masterRaw = raw, derivativeJpeg = timeMatch, confidence = 0.95))
-                matchedJpegs.add(timeMatch.id)
+        // Timestamp proximity match for remaining unmatched RAWs (within 2 seconds)
+        if (unmatchedRaws.isNotEmpty()) {
+            val remainingJpegs = jpegs.filter { !matchedJpegIds.contains(it.id) }
+            for (raw in unmatchedRaws) {
+                val timeMatch = remainingJpegs.firstOrNull { jpeg ->
+                    !matchedJpegIds.contains(jpeg.id) && abs(jpeg.dateTakenUnix - raw.dateTakenUnix) <= 2
+                }
+                if (timeMatch != null) {
+                    pairs.add(LineagePair(masterRaw = raw, derivativeJpeg = timeMatch, confidence = 0.95))
+                    matchedJpegIds.add(timeMatch.id)
+                }
             }
         }
 
@@ -73,9 +92,7 @@ object PairDetector {
     }
 
     internal fun extractStem(filename: String): String {
-        var stem = if (filename.contains('.')) filename.substringBeforeLast('.') else filename
-        // Normalize Pixel and Android camera suffixes like .RAW-01, .RAW-02.ORIGINAL, .ORIGINAL, .COVER, .MP, _RAW
-        stem = stem.replace(Regex("""[\._]?(RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*)+""", RegexOption.IGNORE_CASE), "")
-        return stem.trim()
+        val stem = if (filename.contains('.')) filename.substringBeforeLast('.') else filename
+        return stem.replace(STEM_SUFFIX_REGEX, "").trim()
     }
 }
