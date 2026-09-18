@@ -366,6 +366,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
+        const val NO_FOLDERS_SENTINEL = "__NONE__"
+
         /**
          * Default upper bound on the time `checkConnection` will wait
          * for the server handshake before treating it as unreachable.
