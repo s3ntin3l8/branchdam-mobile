@@ -76,13 +76,36 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedSortDirection = MutableStateFlow(GallerySortDirection.DESC)
     val selectedSortDirection: StateFlow<GallerySortDirection> = _selectedSortDirection.asStateFlow()
 
+    private val prefs = getApplication<Application>()
+        .getSharedPreferences(com.branchdam.mobile.BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _includedFolders = MutableStateFlow(
+        prefs.getStringSet(com.branchdam.mobile.BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+    )
+
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == com.branchdam.mobile.BranchDamKeys.INCLUDED_GALLERY_FOLDERS) {
+            _includedFolders.value = prefs.getStringSet(com.branchdam.mobile.BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+        }
+    }
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
+    }
+
     val displayedItems: StateFlow<List<GalleryItem>> = combine(
         _items,
         _selectedFilter,
         _selectedFolder,
         _selectedSortProperty,
-        _selectedSortDirection
-    ) { rawItems, filter, folder, sortProp, sortDir ->
+        _selectedSortDirection,
+        _includedFolders
+    ) { rawItems, filter, folder, sortProp, sortDir, configuredIncludedFolders ->
         var filtered = rawItems.filter { item ->
             val passesFilter = when (filter) {
                 GalleryFilter.ALL -> true
@@ -91,14 +114,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 GalleryFilter.RAW -> item.primaryMediaItem.isDng || item.primaryMediaItem.isRaw || item.companionMediaItem != null
                 GalleryFilter.BACKED_UP -> item.isBackedUp
             }
-            val configuredIncludedFolders = getApplication<Application>()
-                .getSharedPreferences(com.branchdam.mobile.BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
-                .getStringSet(com.branchdam.mobile.BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
 
             val passesFolder = if (folder == ALL_FOLDERS) {
-                if (configuredIncludedFolders.isEmpty()) true
-                else configuredIncludedFolders.contains(item.primaryMediaItem.folderName) ||
-                        (item.companionMediaItem != null && configuredIncludedFolders.contains(item.companionMediaItem.folderName))
+                when {
+                    configuredIncludedFolders.contains(com.branchdam.mobile.ui.settings.SettingsViewModel.NO_FOLDERS_SENTINEL) -> false
+                    configuredIncludedFolders.isEmpty() -> true
+                    else -> configuredIncludedFolders.contains(item.primaryMediaItem.folderName) ||
+                            (item.companionMediaItem != null && configuredIncludedFolders.contains(item.companionMediaItem.folderName))
+                }
             } else {
                 item.primaryMediaItem.folderName.equals(folder, ignoreCase = true) ||
                     (item.companionMediaItem != null && item.companionMediaItem.folderName.equals(folder, ignoreCase = true))

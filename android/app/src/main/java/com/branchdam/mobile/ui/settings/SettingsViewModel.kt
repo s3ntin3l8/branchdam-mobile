@@ -178,6 +178,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SyncScheduler.setSyncOnMobileData(getApplication(), enabled)
     }
 
+    private val _discoveredFolders = MutableStateFlow<List<String>>(emptyList())
+    val discoveredFolders: StateFlow<List<String>> = _discoveredFolders.asStateFlow()
+
+    fun loadDiscoveredFolders(context: Context) {
+        viewModelScope.launch(testIoDispatcher) {
+            val folders = MediaScanner.queryAvailableFolders(context)
+            _discoveredFolders.value = folders
+        }
+    }
+
     fun setAutoImportEnabled(enabled: Boolean) {
         _autoImportEnabled.value = enabled
         ImportConfirmationNotifier.setAutoImportEnabled(getApplication(), enabled)
@@ -191,10 +201,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             listOf(folder)
         }
 
-        val currentlySelected = if (currentStored.isEmpty()) {
-            effectiveAvailable.toSet()
-        } else {
-            currentStored
+        val currentlySelected = when {
+            currentStored.isEmpty() -> effectiveAvailable.toSet()
+            currentStored.contains(NO_FOLDERS_SENTINEL) -> emptySet()
+            else -> currentStored
         }
 
         val updated = if (currentlySelected.contains(folder)) {
@@ -203,10 +213,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             currentlySelected + folder
         }
 
-        val normalized = if (updated.isEmpty() || updated.containsAll(effectiveAvailable)) {
-            emptySet()
-        } else {
-            updated
+        val normalized = when {
+            updated.isEmpty() -> setOf(NO_FOLDERS_SENTINEL)
+            updated.containsAll(effectiveAvailable) -> emptySet()
+            else -> updated
         }
 
         nonSecretPrefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, normalized).apply()
@@ -344,6 +354,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
+        const val NO_FOLDERS_SENTINEL = "__NONE__"
+
         /**
          * Default upper bound on the time `checkConnection` will wait
          * for the server handshake before treating it as unreachable.

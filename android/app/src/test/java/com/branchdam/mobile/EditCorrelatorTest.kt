@@ -50,4 +50,34 @@ class EditCorrelatorTest {
         val registered = EditCorrelator.registerEditLineage(edits)
         assertEquals(2, registered)
     }
+
+    @Test
+    fun testVariantStemEditCorrelationFallback() {
+        val master = MediaItem(
+            id = 100L,
+            contentUri = "content://images/100",
+            filePath = "/sdcard/DCIM/Camera/PXL_0500.jpg",
+            displayName = "PXL_0500.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = 4_000_000L,
+            dateTakenUnix = 1724000000L,
+            isRaw = false
+        )
+
+        val variantEdit = MediaItem(
+            id = 101L,
+            contentUri = "content://images/101",
+            filePath = "/sdcard/Pictures/Edited/PXL_0500v2_edited.jpg",
+            displayName = "PXL_0500v2_edited.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = 4_500_000L,
+            dateTakenUnix = 1724000060L,
+            isRaw = false
+        )
+
+        val edits = EditCorrelator.findInPhoneEdits(listOf(master), listOf(variantEdit))
+        assertEquals(1, edits.size)
+        assertEquals(master.id, edits[0].originalMaster.id)
+        assertEquals(variantEdit.id, edits[0].editedDerivative.id)
+    }
 }

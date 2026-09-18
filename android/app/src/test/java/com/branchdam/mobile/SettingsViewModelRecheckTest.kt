@@ -265,7 +265,7 @@ class SettingsViewModelRecheckTest {
     }
 
     @Test
-    fun testToggleFolderIncluded_whenLastRemainingFolderToggled_resetsToEmptySet() = runTest(testDispatcher) {
+    fun testToggleFolderIncluded_whenLastRemainingFolderToggled_setsNoFoldersSentinel() = runTest(testDispatcher) {
         SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
         SettingsViewModel.testConnectionFn = { true }
 
@@ -278,8 +278,8 @@ class SettingsViewModelRecheckTest {
         viewModel.toggleFolderIncluded("Download", availableFolders)
         assertEquals(setOf("Pictures"), viewModel.includedFolders.value)
 
-        // Unchecking the last remaining checked folder resets to emptySet (default)
+        // Unchecking the last remaining checked folder sets NO_FOLDERS_SENTINEL ("__NONE__")
         viewModel.toggleFolderIncluded("Pictures", availableFolders)
-        assertEquals(emptySet<String>(), viewModel.includedFolders.value)
+        assertEquals(setOf(SettingsViewModel.NO_FOLDERS_SENTINEL), viewModel.includedFolders.value)
     }
 }

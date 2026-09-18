@@ -28,10 +28,11 @@ fun ImportSettingsScreen(
 ) {
     val autoImportEnabled by viewModel.autoImportEnabled.collectAsStateWithLifecycle()
     val includedFolders by viewModel.includedFolders.collectAsStateWithLifecycle()
+    val discoveredFolders by viewModel.discoveredFolders.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    val discoveredFolders = remember(context) {
-        MediaScanner.queryAvailableFolders(context)
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.loadDiscoveredFolders(context)
     }
 
     Scaffold(
@@ -123,7 +124,11 @@ fun ImportSettingsScreen(
                             )
                         } else {
                             discoveredFolders.forEachIndexed { index, folder ->
-                                val isChecked = includedFolders.isEmpty() || includedFolders.contains(folder)
+                                val isChecked = when {
+                                    includedFolders.contains(SettingsViewModel.NO_FOLDERS_SENTINEL) -> false
+                                    includedFolders.isEmpty() -> true
+                                    else -> includedFolders.contains(folder)
+                                }
                                 ListItem(
                                     headlineContent = { Text(folder, fontWeight = FontWeight.Medium) },
                                     leadingContent = {
