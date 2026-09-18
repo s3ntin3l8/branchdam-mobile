@@ -395,26 +395,27 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val primaryUri = item.primaryMediaItem.contentUri
             val companionUri = item.companionMediaItem?.contentUri
 
-            var success = false
+            var primarySuccess = false
+            var companionSuccess = false
             try {
                 val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
                 if (primaryDeleted > 0) {
+                    primarySuccess = true
                     if (companionUri != null) {
                         try {
-                            context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                            companionSuccess = context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null) > 0
                         } catch (e: Exception) {
                             Log.w(TAG, "deleteItem companion contentResolver delete failed", e)
                         }
                     }
-                    success = true
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "deleteItem contentResolver delete failed", e)
             }
 
-            if (success) {
+            if (primarySuccess) {
                 EngineHolder.enqueueDeleteEvent(primaryUri)
-                if (companionUri != null) {
+                if (companionUri != null && companionSuccess) {
                     EngineHolder.enqueueDeleteEvent(companionUri)
                 }
                 try {
@@ -429,7 +430,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
 
             withContext(Dispatchers.Main) {
-                onComplete(success)
+                onComplete(primarySuccess)
             }
         }
     }
@@ -455,26 +456,27 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val primaryUri = item.primaryMediaItem.contentUri
                 val companionUri = item.companionMediaItem?.contentUri
 
-                var localSuccess = false
+                var primarySuccess = false
+                var companionSuccess = false
                 try {
                     val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
                     if (primaryDeleted > 0) {
+                        primarySuccess = true
                         if (companionUri != null) {
                             try {
-                                context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                                companionSuccess = context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null) > 0
                             } catch (e: Exception) {
                                 Log.w(TAG, "deleteSelectedItems companion contentResolver delete failed", e)
                             }
                         }
-                        localSuccess = true
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "deleteSelectedItems contentResolver delete failed", e)
                 }
 
-                if (localSuccess) {
+                if (primarySuccess) {
                     EngineHolder.enqueueDeleteEvent(primaryUri)
-                    if (companionUri != null) {
+                    if (companionUri != null && companionSuccess) {
                         EngineHolder.enqueueDeleteEvent(companionUri)
                     }
                     deletedCount++
