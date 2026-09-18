@@ -14,7 +14,7 @@ data class LineagePair(
 object PairDetector {
 
     private val STEM_SUFFIX_REGEX = Regex(
-        """[\._]?(RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*|TS(-\d+)*)+""",
+        """([._](RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*|TS(-\d+)*))+$""",
         RegexOption.IGNORE_CASE
     )
 

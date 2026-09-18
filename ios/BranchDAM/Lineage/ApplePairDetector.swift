@@ -94,7 +94,7 @@ public class ApplePairDetector {
 
     internal static func extractStem(_ filename: String) -> String {
         var stem = (filename as NSString).deletingPathExtension
-        if let regex = try? NSRegularExpression(pattern: "(\\.RAW-\\d+|\\.ORIGINAL|\\.COVER|\\.MP|\\.TS(-\\d+)*)+", options: .caseInsensitive) {
+        if let regex = try? NSRegularExpression(pattern: "([._](RAW(-\\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\\d*|TS(-\\d+)*))+$", options: .caseInsensitive) {
             let range = NSRange(location: 0, length: stem.utf16.count)
             stem = regex.stringByReplacingMatches(in: stem, options: [], range: range, withTemplate: "")
         }
