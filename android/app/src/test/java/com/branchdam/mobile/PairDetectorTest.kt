@@ -112,4 +112,35 @@ class PairDetectorTest {
         assertEquals(jpeg.id, pairs[0].derivativeJpeg.id)
         assertEquals(1.00, pairs[0].confidence, 0.001)
     }
+
+    @Test
+    fun testPixelTopShotSuffixStemPairing() {
+        val raw = MediaItem(
+            id = 30L,
+            contentUri = "content://images/30",
+            filePath = "/sdcard/DCIM/Camera/PXL_20260912_185504997.TS-001-02.ORIGINAL.dng",
+            displayName = "PXL_20260912_185504997.TS-001-02.ORIGINAL.dng",
+            mimeType = "image/x-adobe-dng",
+            sizeBytes = 25_000_000L,
+            dateTakenUnix = 1724000300L,
+            isRaw = true
+        )
+
+        val jpeg = MediaItem(
+            id = 31L,
+            contentUri = "content://images/31",
+            filePath = "/sdcard/DCIM/Camera/PXL_20260912_185504997.TS-001-01.jpg",
+            displayName = "PXL_20260912_185504997.TS-001-01.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = 4_000_000L,
+            dateTakenUnix = 1724000300L,
+            isRaw = false
+        )
+
+        val pairs = PairDetector.findPairs(listOf(raw, jpeg))
+        assertEquals(1, pairs.size)
+        assertEquals(raw.id, pairs[0].masterRaw.id)
+        assertEquals(jpeg.id, pairs[0].derivativeJpeg.id)
+        assertEquals(1.00, pairs[0].confidence, 0.001)
+    }
 }
