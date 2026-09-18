@@ -124,6 +124,11 @@ fun AppNavGraph(
                     navController.navigate(Screen.GalleryDetail.createRoute(mediaId)) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToSafeSpace = {
+                    navController.navigate(Screen.SafeSpace.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }

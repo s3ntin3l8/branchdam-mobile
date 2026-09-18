@@ -193,9 +193,17 @@ object MediaScanner {
         sortOrder: String,
         limit: Int,
     ): android.os.Bundle = android.os.Bundle().apply {
-        putString(QUERY_ARG_SQL_SELECTION, selection)
-        putStringArray(QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
-        putString(QUERY_ARG_SQL_SORT_ORDER, sortOrder)
-        putInt(QUERY_ARG_LIMIT, limit)
+        if (selection.isNotBlank()) {
+            putString(QUERY_ARG_SQL_SELECTION, selection)
+            if (selectionArgs.isNotEmpty()) {
+                putStringArray(QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
+            }
+        }
+        if (sortOrder.isNotBlank()) {
+            putString(QUERY_ARG_SQL_SORT_ORDER, sortOrder)
+        }
+        if (limit > 0) {
+            putInt(QUERY_ARG_LIMIT, limit)
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.branchdam.mobile.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -51,6 +52,10 @@ fun SettingsScreen(
             currentPage = SettingsPage.Categories
             lastProcessedResetTrigger = resetTrigger
         }
+    }
+
+    BackHandler(enabled = currentPage != SettingsPage.Categories) {
+        currentPage = SettingsPage.Categories
     }
 
     when (currentPage) {

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
@@ -54,6 +55,7 @@ fun GalleryScreen(
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
     onNavigateToDetail: (Long) -> Unit = {},
+    onNavigateToSafeSpace: () -> Unit = {},
 ) {
     val rawItems by viewModel.items.collectAsStateWithLifecycle()
     val displayedItems by viewModel.displayedItems.collectAsStateWithLifecycle()
@@ -327,6 +329,13 @@ fun GalleryScreen(
                                     }
                                 )
                             }
+                        }
+
+                        IconButton(onClick = onNavigateToSafeSpace) {
+                            Icon(
+                                imageVector = Icons.Default.CleaningServices,
+                                contentDescription = "Free Up Storage (Safe Space)"
+                            )
                         }
                     }
                 )
