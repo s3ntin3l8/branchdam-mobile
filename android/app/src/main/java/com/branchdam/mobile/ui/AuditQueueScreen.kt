@@ -238,6 +238,8 @@ private fun AuditCard(
         FullImageComparisonDialog(
             candidate = candidate,
             initialUri = inspectUri,
+            onConfirm = onConfirm,
+            onReject = onReject,
             onDismiss = { inspectUri = null }
         )
     }
@@ -536,6 +538,8 @@ private fun LineageConnector(
 private fun FullImageComparisonDialog(
     candidate: AuditCandidate,
     initialUri: String?,
+    onConfirm: () -> Unit,
+    onReject: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selectedTab by remember { mutableIntStateOf(if (initialUri == candidate.resolvedChildUri) 1 else 0) }
@@ -608,6 +612,10 @@ private fun FullImageComparisonDialog(
                         val dialogRequest = remember(activeUri) {
                             val builder = ImageRequest.Builder(dialogContext)
                                 .data(Uri.parse(activeUri))
+                                .size(1000, 1000)
+                                .scale(coil.size.Scale.FIT)
+                                .precision(coil.size.Precision.INEXACT)
+                                .allowHardware(true)
                                 .crossfade(true)
                             ExifOrientationHelper.applyExifOrientation(builder, dialogContext, activeUri)
                             builder.build()
@@ -629,18 +637,53 @@ private fun FullImageComparisonDialog(
 
                 Spacer(Modifier.height(8.dp))
 
+                Text(
+                    text = "Match Confidence: ${(candidate.confidence * 100).toInt()}% (${candidate.resolver})",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(8.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(
-                        text = "Match Confidence: ${(candidate.confidence * 100).toInt()}% (${candidate.resolver})",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    TextButton(onClick = onDismiss) {
-                        Text("Done")
+                    FilledTonalButton(
+                        onClick = {
+                            onReject()
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Reject")
+                    }
+
+                    Button(
+                        onClick = {
+                            onConfirm()
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Confirm")
                     }
                 }
             }

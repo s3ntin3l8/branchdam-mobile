@@ -27,7 +27,7 @@ import com.branchdam.mobile.ui.theme.BranchDamTheme
 @Composable
 fun LineageScreen(
     windowSizeClass: WindowSizeClass,
-    onNavigateToSafeSpace: () -> Unit,
+    onNavigateToSafeSpace: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: LineageViewModel = viewModel(),
 ) {
@@ -46,10 +46,7 @@ fun LineageScreen(
                     title = { Text("Lineage Audit") },
                     actions = {
                         IconButton(onClick = { viewModel.loadCandidates() }) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                        }
-                        IconButton(onClick = onNavigateToSafeSpace) {
-                            Icon(Icons.Filled.DeleteSweep, contentDescription = "Safe Space")
+                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh candidates")
                         }
                     },
                     scrollBehavior = scrollBehavior
