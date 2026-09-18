@@ -51,7 +51,13 @@ object EditCorrelator {
             }
 
             val editedStem = extractEditedBaseStem(edited.displayName)
-            val matchingMaster = masterStemMap[editedStem]
+            var matchingMaster = masterStemMap[editedStem]
+            if (matchingMaster == null && editedStem.isNotBlank()) {
+                matchingMaster = masters.firstOrNull { master ->
+                    val masterStem = extractBaseStem(master.displayName)
+                    masterStem.isNotBlank() && editedStem.startsWith(masterStem)
+                }
+            }
 
             if (matchingMaster != null && matchingMaster.id != edited.id) {
                 edits.add(
