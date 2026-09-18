@@ -13,6 +13,11 @@ data class LineagePair(
 
 object PairDetector {
 
+    private val STEM_SUFFIX_REGEX = Regex(
+        """(\.(RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*|TS(-\d+)*))+$""",
+        RegexOption.IGNORE_CASE
+    )
+
     /**
      * Finds companion RAW (DNG) and JPEG pairs from recent media items.
      * Google Pixel and Android flagships shoot companion DNG and JPEG files sharing
@@ -74,8 +79,7 @@ object PairDetector {
 
     internal fun extractStem(filename: String): String {
         var stem = if (filename.contains('.')) filename.substringBeforeLast('.') else filename
-        // Normalize Pixel and Android camera suffixes like .RAW-01, .RAW-02.ORIGINAL, .ORIGINAL, .COVER, .MP
-        stem = stem.replace(Regex("""(\.RAW-\d+|\.ORIGINAL|\.COVER|\.MP)+""", RegexOption.IGNORE_CASE), "")
+        stem = stem.replace(STEM_SUFFIX_REGEX, "")
         return stem.trim()
     }
 }
