@@ -1,5 +1,6 @@
-package com.branchdam.mobile
-
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
@@ -26,6 +27,10 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -43,6 +48,7 @@ class GalleryViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         GalleryViewModel.ioDispatcher = testDispatcher
+        GalleryViewModel.defaultDispatcher = testDispatcher
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val config = Configuration.Builder()
@@ -55,6 +61,7 @@ class GalleryViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         GalleryViewModel.ioDispatcher = Dispatchers.IO
+        GalleryViewModel.defaultDispatcher = Dispatchers.Default
     }
 
     @Test
@@ -99,8 +106,10 @@ class GalleryViewModelTest {
     }
 
     @Test
-    fun testSelectAll_excludesOffloadedItems() {
+    fun testSelectAll_excludesOffloadedItems() = runTest(testDispatcher) {
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
         val localItem = GalleryItem(
             primaryMediaItem = MediaItem(
                 id = 101L, contentUri = "content://images/101",
@@ -123,6 +132,8 @@ class GalleryViewModelTest {
         )
 
         viewModel.setItemsForTesting(listOf(localItem, offloadedItem))
+        advanceUntilIdle()
+
         viewModel.selectAll()
 
         val selected = viewModel.selectedItemIds.value
@@ -310,10 +321,8 @@ class GalleryViewModelTest {
 
     @Test
     fun testDeleteItemAndSelectedItems() = runTest(testDispatcher) {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val shadowResolver = org.robolectric.Shadows.shadowOf(context.contentResolver)
-
-        val viewModel = GalleryViewModel(context)
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val viewModel = GalleryViewModel(app)
         advanceUntilIdle()
 
         val item1 = GalleryItem(
@@ -334,11 +343,17 @@ class GalleryViewModelTest {
         )
 
         viewModel.setItemsForTesting(listOf(item1, item2))
+        advanceUntilIdle()
         assertEquals(2, viewModel.items.value.size)
 
-        // Test failed delete: contentResolver returns 0 rows
+        // Test failed delete: contentResolver returns 0
+        val failResolver = mock<ContentResolver>()
+        whenever(failResolver.delete(eq(Uri.parse("content://images/10")), anyOrNull(), anyOrNull())).thenReturn(0)
+        val failContext = mock<Context>()
+        whenever(failContext.contentResolver).thenReturn(failResolver)
+
         var deleteSuccess = true
-        viewModel.deleteItem(context, item1) { success ->
+        viewModel.deleteItem(failContext, item1) { success ->
             deleteSuccess = success
         }
         advanceUntilIdle()
@@ -346,10 +361,13 @@ class GalleryViewModelTest {
         assertFalse("Delete should fail when contentResolver returns 0 rows", deleteSuccess)
         assertEquals("Item should be restored to items list when delete fails", 2, viewModel.items.value.size)
 
-        // Register contentResolver delete success for item1
-        shadowResolver.registerDeleteResult(android.net.Uri.parse("content://images/10"), 1, null, null)
+        // Test successful delete: contentResolver returns 1
+        val successResolver = mock<ContentResolver>()
+        whenever(successResolver.delete(eq(Uri.parse("content://images/10")), anyOrNull(), anyOrNull())).thenReturn(1)
+        val successContext = mock<Context>()
+        whenever(successContext.contentResolver).thenReturn(successResolver)
 
-        viewModel.deleteItem(context, item1) { success ->
+        viewModel.deleteItem(successContext, item1) { success ->
             deleteSuccess = success
         }
         advanceUntilIdle()

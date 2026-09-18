@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -122,7 +123,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         filtered
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(defaultDispatcher)
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -415,7 +417,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 if (companionUri != null) {
                     EngineHolder.enqueueDeleteEvent(companionUri)
                 }
-                SyncScheduler.triggerImmediateSync(context)
+                try {
+                    SyncScheduler.triggerImmediateSync(context)
+                } catch (e: Exception) {
+                    Log.w(TAG, "triggerImmediateSync failed", e)
+                }
             } else {
                 _items.update { list ->
                     if (list.none { it.primaryMediaItem.id == item.primaryMediaItem.id }) list + item else list
@@ -484,7 +490,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
 
             if (deletedCount > 0) {
-                SyncScheduler.triggerImmediateSync(context)
+                try {
+                    SyncScheduler.triggerImmediateSync(context)
+                } catch (e: Exception) {
+                    Log.w(TAG, "triggerImmediateSync failed", e)
+                }
             }
 
             withContext(Dispatchers.Main) {
@@ -504,5 +514,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         @androidx.annotation.VisibleForTesting
         internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+
+        @androidx.annotation.VisibleForTesting
+        internal var defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default
     }
 }
