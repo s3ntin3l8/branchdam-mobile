@@ -246,7 +246,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun selectAll() {
-        _selectedItemIds.value = _items.value.filter { !it.isOffloaded }.map { it.mediaItem.id }.toSet()
+        _selectedItemIds.value = displayedItems.value.filter { !it.isOffloaded }.map { it.mediaItem.id }.toSet()
     }
 
     fun clearSelection() {
@@ -370,10 +370,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setFilter(filter: GalleryFilter) {
+        clearSelection()
         _selectedFilter.value = filter
     }
 
     fun setFolder(folder: String) {
+        clearSelection()
         _selectedFolder.value = folder
     }
 
@@ -391,24 +393,37 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val primaryUri = item.primaryMediaItem.contentUri
             val companionUri = item.companionMediaItem?.contentUri
 
-            EngineHolder.enqueueDeleteEvent(primaryUri)
-            if (companionUri != null) {
-                EngineHolder.enqueueDeleteEvent(companionUri)
-            }
-
+            var success = false
             try {
-                context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
-                if (companionUri != null) {
-                    context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
+                if (primaryDeleted > 0) {
+                    if (companionUri != null) {
+                        try {
+                            context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "deleteItem companion contentResolver delete failed", e)
+                        }
+                    }
+                    success = true
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "deleteItem contentResolver delete failed", e)
             }
 
-            SyncScheduler.triggerImmediateSync(context)
+            if (success) {
+                EngineHolder.enqueueDeleteEvent(primaryUri)
+                if (companionUri != null) {
+                    EngineHolder.enqueueDeleteEvent(companionUri)
+                }
+                SyncScheduler.triggerImmediateSync(context)
+            } else {
+                _items.update { list ->
+                    if (list.none { it.primaryMediaItem.id == item.primaryMediaItem.id }) list + item else list
+                }
+            }
 
             withContext(Dispatchers.Main) {
-                onComplete(true)
+                onComplete(success)
             }
         }
     }
@@ -428,24 +443,44 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
 
             var deletedCount = 0
+            val failedItems = mutableListOf<GalleryItem>()
+
             for (item in itemsToDelete) {
                 val primaryUri = item.primaryMediaItem.contentUri
                 val companionUri = item.companionMediaItem?.contentUri
 
-                EngineHolder.enqueueDeleteEvent(primaryUri)
-                if (companionUri != null) {
-                    EngineHolder.enqueueDeleteEvent(companionUri)
-                }
-
+                var localSuccess = false
                 try {
-                    context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
-                    if (companionUri != null) {
-                        context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                    val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
+                    if (primaryDeleted > 0) {
+                        if (companionUri != null) {
+                            try {
+                                context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "deleteSelectedItems companion contentResolver delete failed", e)
+                            }
+                        }
+                        localSuccess = true
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "deleteSelectedItems contentResolver delete failed", e)
                 }
-                deletedCount++
+
+                if (localSuccess) {
+                    EngineHolder.enqueueDeleteEvent(primaryUri)
+                    if (companionUri != null) {
+                        EngineHolder.enqueueDeleteEvent(companionUri)
+                    }
+                    deletedCount++
+                } else {
+                    failedItems.add(item)
+                }
+            }
+
+            if (failedItems.isNotEmpty()) {
+                _items.update { list ->
+                    list + failedItems.filter { failed -> list.none { it.primaryMediaItem.id == failed.primaryMediaItem.id } }
+                }
             }
 
             if (deletedCount > 0) {

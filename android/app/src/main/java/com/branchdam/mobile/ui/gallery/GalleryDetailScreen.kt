@@ -206,8 +206,16 @@ fun GalleryDetailScreen(
                             }
                         }
 
-                        DisposableEffect(exoPlayer) {
+                        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                        DisposableEffect(exoPlayer, lifecycleOwner) {
+                            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                                    exoPlayer.playWhenReady = false
+                                }
+                            }
+                            lifecycleOwner.lifecycle.addObserver(observer)
                             onDispose {
+                                lifecycleOwner.lifecycle.removeObserver(observer)
                                 exoPlayer.release()
                             }
                         }
@@ -265,7 +273,7 @@ fun GalleryDetailScreen(
                             val builder = ImageRequest.Builder(context)
                                 .data(Uri.parse(activeItem.contentUri))
                                 .crossfade(200)
-                            ExifOrientationHelper.applyExifOrientation(builder, context, activeItem.contentUri)
+                            ExifOrientationHelper.applyExifOrientation(builder, context, activeItem.contentUri, activeItem.mimeType)
                             builder.build()
                         }
                         AsyncImage(
@@ -464,16 +472,4 @@ private fun DetailTopBar(
             }
         }
     )
-}
-
-private fun launchVideoPlayback(context: android.content.Context, item: com.branchdam.mobile.observer.MediaItem) {
-    try {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(item.contentUri), item.mimeType.ifEmpty { "video/*" })
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        Toast.makeText(context, "No video player application found", Toast.LENGTH_SHORT).show()
-    }
 }

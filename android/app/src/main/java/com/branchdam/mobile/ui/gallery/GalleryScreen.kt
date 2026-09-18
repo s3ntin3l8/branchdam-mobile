@@ -141,7 +141,7 @@ fun GalleryScreen(
                         }
                     },
                     actions = {
-                        val selectableCount = remember(rawItems) { rawItems.count { !it.isOffloaded } }
+                        val selectableCount = remember(displayedItems) { displayedItems.count { !it.isOffloaded } }
                         val isAllSelectableSelected = selectableCount > 0 && selectedItemIds.size == selectableCount
                         IconButton(onClick = {
                             if (isAllSelectableSelected) {
@@ -426,7 +426,7 @@ private fun GalleryItemCard(
         if (galleryItem.mediaItem.isVideo) {
             builder.decoderFactory(VideoFrameDecoder.Factory())
         } else {
-            ExifOrientationHelper.applyExifOrientation(builder, context, galleryItem.mediaItem.contentUri)
+            ExifOrientationHelper.applyExifOrientation(builder, context, galleryItem.mediaItem.contentUri, galleryItem.mediaItem.mimeType)
         }
         builder.build()
     }

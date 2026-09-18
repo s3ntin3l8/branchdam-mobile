@@ -310,7 +310,10 @@ class GalleryViewModelTest {
 
     @Test
     fun testDeleteItemAndSelectedItems() = runTest(testDispatcher) {
-        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val shadowResolver = org.robolectric.Shadows.shadowOf(context.contentResolver)
+
+        val viewModel = GalleryViewModel(context)
         advanceUntilIdle()
 
         val item1 = GalleryItem(
@@ -333,8 +336,20 @@ class GalleryViewModelTest {
         viewModel.setItemsForTesting(listOf(item1, item2))
         assertEquals(2, viewModel.items.value.size)
 
-        var deleteSuccess = false
-        viewModel.deleteItem(ApplicationProvider.getApplicationContext(), item1) { success ->
+        // Test failed delete: contentResolver returns 0 rows
+        var deleteSuccess = true
+        viewModel.deleteItem(context, item1) { success ->
+            deleteSuccess = success
+        }
+        advanceUntilIdle()
+
+        assertFalse("Delete should fail when contentResolver returns 0 rows", deleteSuccess)
+        assertEquals("Item should be restored to items list when delete fails", 2, viewModel.items.value.size)
+
+        // Register contentResolver delete success for item1
+        shadowResolver.registerDeleteResult(android.net.Uri.parse("content://images/10"), 1, null, null)
+
+        viewModel.deleteItem(context, item1) { success ->
             deleteSuccess = success
         }
         advanceUntilIdle()
