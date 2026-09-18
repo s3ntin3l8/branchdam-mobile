@@ -129,6 +129,9 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		bodyMsg := strings.TrimSpace(string(respBody))
 		if bodyMsg != "" {
+			if len(bodyMsg) > 256 {
+				bodyMsg = bodyMsg[:256] + "..."
+			}
 			slog.Warn("client: upload rejected by server", "status", resp.StatusCode, "response", bodyMsg)
 		}
 		return nil, &ClientError{

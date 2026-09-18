@@ -82,7 +82,7 @@ func (e *Engine) setActiveUpload(id int64, filename string, totalBytes int64, it
 		TotalItems:       totalItems,
 	}
 	e.lastProgressTime = now
-	e.lastProgressSent = 0
+	e.lastProgressSent = -1
 }
 
 func (e *Engine) updateActiveUploadProgress(bytesSent int64, totalBytes int64) {
@@ -92,14 +92,19 @@ func (e *Engine) updateActiveUploadProgress(bytesSent int64, totalBytes int64) {
 		return
 	}
 	now := time.Now()
-	dt := now.Sub(e.lastProgressTime).Seconds()
-	if dt >= 0.2 {
-		dBytes := bytesSent - e.lastProgressSent
-		if dBytes > 0 && dt > 0 {
-			e.activeUpload.SpeedBytesPerSec = float64(dBytes) / dt
-		}
+	if e.lastProgressSent < 0 {
 		e.lastProgressTime = now
 		e.lastProgressSent = bytesSent
+	} else {
+		dt := now.Sub(e.lastProgressTime).Seconds()
+		if dt >= 0.2 {
+			dBytes := bytesSent - e.lastProgressSent
+			if dBytes > 0 && dt > 0 {
+				e.activeUpload.SpeedBytesPerSec = float64(dBytes) / dt
+			}
+			e.lastProgressTime = now
+			e.lastProgressSent = bytesSent
+		}
 	}
 	e.activeUpload.BytesSent = bytesSent
 	if totalBytes > 0 {
@@ -205,7 +210,7 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 	}
 
 	// Reset any previous FAILED entry for this file so re-enqueueing recovers it
-	_ = e.q.ResetUploadByBlake3Hash(fullHash)
+	_ = e.q.ResetUploadByBlake3Hash(fullHash, localPath, sizeBytes)
 
 	// Dedup gate: check if this blake3Hash is already queued or uploaded
 	if existing, err := e.q.GetUploadItemByBlake3Hash(fullHash); err == nil && existing != nil {

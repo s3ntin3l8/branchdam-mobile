@@ -43,6 +43,8 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     private val _uiState = MutableStateFlow(SyncStatusUiState())
     val uiState: StateFlow<SyncStatusUiState> = _uiState.asStateFlow()
 
+    private var pollJob: kotlinx.coroutines.Job? = null
+
     init {
         observeWorker()
         checkConnection()
@@ -50,21 +52,29 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun pollActiveUploadProgress() {
-        viewModelScope.launch {
-            val activeProgress = withContext(ioDispatcher) {
-                EngineHolder.getActiveUploadProgress()
-            }
-            val pendingCount = if (activeProgress != null || _uiState.value.isSyncing) {
-                withContext(ioDispatcher) { EngineHolder.countPendingUploads() }
-            } else {
-                _uiState.value.pendingUploadsCount
-            }
+        if (pollJob?.isActive == true) return
+        pollJob = viewModelScope.launch {
+            while (kotlinx.coroutines.isActive) {
+                val activeProgress = withContext(ioDispatcher) {
+                    EngineHolder.getActiveUploadProgress()
+                }
+                val pendingCount = if (activeProgress != null || _uiState.value.isSyncing) {
+                    withContext(ioDispatcher) { EngineHolder.countPendingUploads() }
+                } else {
+                    _uiState.value.pendingUploadsCount
+                }
 
-            _uiState.update { current ->
-                current.copy(
-                    activeUploadProgress = activeProgress,
-                    pendingUploadsCount = pendingCount
-                )
+                _uiState.update { current ->
+                    current.copy(
+                        activeUploadProgress = activeProgress,
+                        pendingUploadsCount = pendingCount
+                    )
+                }
+
+                if (!_uiState.value.isSyncing && activeProgress == null) {
+                    break
+                }
+                kotlinx.coroutines.delay(500L)
             }
         }
     }
@@ -101,6 +111,9 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                         workerState = workerState,
                         pendingUploadsCount = pendingUploads,
                     )
+                }
+                if (isSyncing) {
+                    pollActiveUploadProgress()
                 }
             }
         }
@@ -141,7 +154,6 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
 
     fun refresh() {
         checkConnection()
-        EngineHolder.resetFailedUploads()
         pollActiveUploadProgress()
         val pendingUploads = EngineHolder.countPendingUploads()
         _uiState.update { current ->

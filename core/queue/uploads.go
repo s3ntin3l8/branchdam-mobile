@@ -198,11 +198,13 @@ func (q *Queue) ResetFailedUploads() (int64, error) {
 }
 
 // ResetUploadByBlake3Hash resets a FAILED upload item matching blake3Hash back to PENDING.
-func (q *Queue) ResetUploadByBlake3Hash(hash string) error {
+// Updates localPath and sizeBytes so that re-enqueueing a moved/recovered asset targets the new path.
+func (q *Queue) ResetUploadByBlake3Hash(hash string, localPath string, sizeBytes int64) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	now := nowUnix()
-	_, err := q.db.Exec(`UPDATE upload_queue SET status = 'PENDING', retry_count = 0, last_attempt_unix = 0, error_msg = '', updated_at_unix = ? WHERE blake3_hash = ? AND status = 'FAILED'`, now, hash)
+	query := `UPDATE upload_queue SET status = 'PENDING', retry_count = 0, last_attempt_unix = 0, error_msg = '', local_path = ?, size_bytes = ?, updated_at_unix = ? WHERE blake3_hash = ? AND status = 'FAILED'`
+	_, err := q.db.Exec(query, localPath, sizeBytes, now, hash)
 	return err
 }

@@ -134,11 +134,12 @@ object EngineHolder {
     /**
      * Signals an in-flight [syncBatch] to abort at the next per-item
      * checkpoint. Fire-and-forget signal that does not block the
-     * caller. (B.2.2)
+     * caller. Dispatched via [queryExecutor] so it isn't blocked behind
+     * an active [syncBatch] on [syncExecutor]. (B.2.2)
      */
     fun setCancelFlag() {
         if (!nativeAvailable.get() || !isInitialized) return
-        syncExecutor.submit {
+        queryExecutor.submit {
             try {
                 Branchdam.bindingSetCancelFlag()
             } catch (t: Throwable) {
