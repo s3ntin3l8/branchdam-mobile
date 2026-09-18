@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -54,7 +55,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     fun pollActiveUploadProgress() {
         if (pollJob?.isActive == true) return
         pollJob = viewModelScope.launch {
-            while (kotlinx.coroutines.isActive) {
+            while (isActive) {
                 val activeProgress = withContext(ioDispatcher) {
                     EngineHolder.getActiveUploadProgress()
                 }
