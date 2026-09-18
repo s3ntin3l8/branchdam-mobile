@@ -40,8 +40,11 @@ final class ApplePairDetectorTests: XCTestCase {
         XCTAssertEqual(ApplePairDetector.extractStem("EXAMPLE.dng"), "EXAMPLE")
         XCTAssertEqual(ApplePairDetector.extractStem("MYCOVER.dng"), "MYCOVER")
         XCTAssertEqual(ApplePairDetector.extractStem("RAW_001.dng"), "RAW_001")
+        XCTAssertEqual(ApplePairDetector.extractStem("LAST_NIGHT.dng"), "LAST_NIGHT")
+        XCTAssertEqual(ApplePairDetector.extractStem("ALBUM_COVER.dng"), "ALBUM_COVER")
+        XCTAssertEqual(ApplePairDetector.extractStem("road_trip_ACTION.dng"), "road_trip_ACTION")
+        XCTAssertEqual(ApplePairDetector.extractStem("IMG_20260912_120000_PORTRAIT.dng"), "IMG_20260912_120000_PORTRAIT")
         XCTAssertEqual(ApplePairDetector.extractStem("PXL_20260912_185504997.TS-001-02.ORIGINAL.dng"), "PXL_20260912_185504997")
         XCTAssertEqual(ApplePairDetector.extractStem("IMG_20260912_120000.BURST001.dng"), "IMG_20260912_120000")
-        XCTAssertEqual(ApplePairDetector.extractStem("IMG_20260912_120000_PORTRAIT.dng"), "IMG_20260912_120000")
     }
 }

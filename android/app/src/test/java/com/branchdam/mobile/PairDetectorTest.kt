@@ -153,6 +153,7 @@ class PairDetectorTest {
         assertEquals("LAST_NIGHT", PairDetector.extractStem("LAST_NIGHT.dng"))
         assertEquals("ALBUM_COVER", PairDetector.extractStem("ALBUM_COVER.dng"))
         assertEquals("road_trip_ACTION", PairDetector.extractStem("road_trip_ACTION.dng"))
+        assertEquals("IMG_20260912_120000_PORTRAIT", PairDetector.extractStem("IMG_20260912_120000_PORTRAIT.dng"))
 
         // Trailing suffixes with required separator stripped cleanly
         assertEquals("PXL_20260912_185504997", PairDetector.extractStem("PXL_20260912_185504997.TS-001-02.ORIGINAL.dng"))
