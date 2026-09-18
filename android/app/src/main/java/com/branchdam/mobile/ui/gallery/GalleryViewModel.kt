@@ -6,11 +6,14 @@ import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.SharedPreferences
+import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.lineage.PairDetector
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.observer.MediaScanner
 import com.branchdam.mobile.service.SyncScheduler
+import com.branchdam.mobile.ui.settings.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +64,19 @@ data class GalleryItem(
 
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val prefs = application.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _includedFolders = MutableStateFlow<Set<String>>(
+        prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+    )
+    val includedFolders: StateFlow<Set<String>> = _includedFolders.asStateFlow()
+
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == BranchDamKeys.INCLUDED_GALLERY_FOLDERS) {
+            _includedFolders.value = prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+        }
+    }
+
     private val _items = MutableStateFlow<List<GalleryItem>>(emptyList())
     val items: StateFlow<List<GalleryItem>> = _items.asStateFlow()
 
@@ -80,12 +96,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val selectedSortDirection: StateFlow<GallerySortDirection> = _selectedSortDirection.asStateFlow()
 
     val displayedItems: StateFlow<List<GalleryItem>> = combine(
-        _items,
-        _selectedFilter,
-        _selectedFolder,
-        _selectedSortProperty,
-        _selectedSortDirection
-    ) { rawItems, filter, folder, sortProp, sortDir ->
+        combine(_items, _selectedFilter, _selectedFolder) { items, filter, folder -> Triple(items, filter, folder) },
+        combine(_selectedSortProperty, _selectedSortDirection, _includedFolders) { sortProp, sortDir, folders -> Triple(sortProp, sortDir, folders) }
+    ) { (rawItems, filter, folder), (sortProp, sortDir, configuredIncludedFolders) ->
         var filtered = rawItems.filter { item ->
             val passesFilter = when (filter) {
                 GalleryFilter.ALL -> true
@@ -94,12 +107,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 GalleryFilter.RAW -> item.primaryMediaItem.isDng || item.primaryMediaItem.isRaw || item.companionMediaItem != null
                 GalleryFilter.BACKED_UP -> item.isBackedUp
             }
-            val configuredIncludedFolders = getApplication<Application>()
-                .getSharedPreferences(com.branchdam.mobile.BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
-                .getStringSet(com.branchdam.mobile.BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
 
             val passesFolder = if (folder == ALL_FOLDERS) {
-                if (configuredIncludedFolders.isEmpty()) true
+                if (configuredIncludedFolders.contains(SettingsViewModel.NO_FOLDERS_SENTINEL)) false
+                else if (configuredIncludedFolders.isEmpty()) true
                 else configuredIncludedFolders.contains(item.primaryMediaItem.folderName) ||
                         (item.companionMediaItem != null && configuredIncludedFolders.contains(item.companionMediaItem.folderName))
             } else {
@@ -146,7 +157,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val selectedItemIds: StateFlow<Set<Long>> = _selectedItemIds.asStateFlow()
 
     init {
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
         loadItems()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
     }
 
     fun loadItems() {

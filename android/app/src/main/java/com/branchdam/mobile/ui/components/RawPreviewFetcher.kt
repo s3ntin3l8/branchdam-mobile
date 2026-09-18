@@ -104,7 +104,25 @@ class RawPreviewFetcher(
                     if (exif.hasThumbnail()) {
                         val thumbBytes = exif.thumbnailBytes
                         if (thumbBytes != null) {
-                            val bitmap = BitmapFactory.decodeByteArray(thumbBytes, 0, thumbBytes.size)
+                            val targetW = (options.size.width as? Dimension.Pixels)?.px ?: 1024
+                            val targetH = (options.size.height as? Dimension.Pixels)?.px ?: 1024
+
+                            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeByteArray(thumbBytes, 0, thumbBytes.size, boundsOpts)
+
+                            var sampleSize = 1
+                            val rawW = boundsOpts.outWidth
+                            val rawH = boundsOpts.outHeight
+                            if (rawH > targetH || rawW > targetW) {
+                                val halfH = rawH / 2
+                                val halfW = rawW / 2
+                                while ((halfH / sampleSize) >= targetH && (halfW / sampleSize) >= targetW) {
+                                    sampleSize *= 2
+                                }
+                            }
+
+                            val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                            val bitmap = BitmapFactory.decodeByteArray(thumbBytes, 0, thumbBytes.size, decodeOpts)
                             if (bitmap != null) {
                                 val rotation = exif.rotationDegrees
                                 return if (rotation != 0) {

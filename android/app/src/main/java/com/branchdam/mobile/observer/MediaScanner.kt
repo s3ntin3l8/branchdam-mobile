@@ -142,6 +142,7 @@ object MediaScanner {
         val cursor: Cursor? = try {
             context.contentResolver.query(uri, projection, bundle, null)
         } catch (e: SecurityException) {
+            // Cold-launch permission race: when app starts up before READ_MEDIA_IMAGES permission is granted by the system, query throws SecurityException. Return empty list so scanning fails gracefully without crashing.
             Log.w(TAG, "queryMediaUri($uri) denied; returning empty list", e)
             return emptyList()
         }
