@@ -91,7 +91,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 GalleryFilter.RAW -> item.primaryMediaItem.isDng || item.primaryMediaItem.isRaw || item.companionMediaItem != null
                 GalleryFilter.BACKED_UP -> item.isBackedUp
             }
-            val passesFolder = if (folder == ALL_FOLDERS) true else {
+            val configuredIncludedFolders = getApplication<Application>()
+                .getSharedPreferences(com.branchdam.mobile.BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+                .getStringSet(com.branchdam.mobile.BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+
+            val passesFolder = if (folder == ALL_FOLDERS) {
+                if (configuredIncludedFolders.isEmpty()) true
+                else configuredIncludedFolders.contains(item.primaryMediaItem.folderName) ||
+                        (item.companionMediaItem != null && configuredIncludedFolders.contains(item.companionMediaItem.folderName))
+            } else {
                 item.primaryMediaItem.folderName.equals(folder, ignoreCase = true) ||
                     (item.companionMediaItem != null && item.companionMediaItem.folderName.equals(folder, ignoreCase = true))
             }
