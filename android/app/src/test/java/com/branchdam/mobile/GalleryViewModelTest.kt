@@ -43,6 +43,7 @@ class GalleryViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         GalleryViewModel.ioDispatcher = testDispatcher
+        GalleryViewModel.defaultDispatcher = testDispatcher
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val config = Configuration.Builder()
@@ -55,6 +56,7 @@ class GalleryViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         GalleryViewModel.ioDispatcher = Dispatchers.IO
+        GalleryViewModel.defaultDispatcher = Dispatchers.Default
     }
 
     @Test

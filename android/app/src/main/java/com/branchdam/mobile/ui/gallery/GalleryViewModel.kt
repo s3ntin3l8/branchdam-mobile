@@ -2,6 +2,7 @@ package com.branchdam.mobile.ui.gallery
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -98,6 +100,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
     }
 
+    @Suppress("UNCHECKED_CAST")
     val displayedItems: StateFlow<List<GalleryItem>> = combine(
         _items,
         _selectedFilter,
@@ -105,7 +108,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         _selectedSortProperty,
         _selectedSortDirection,
         _includedFolders
-    ) { rawItems, filter, folder, sortProp, sortDir, configuredIncludedFolders ->
+    ) { flows ->
+        val rawItems = flows[0] as List<GalleryItem>
+        val filter = flows[1] as GalleryFilter
+        val folder = flows[2] as String
+        val sortProp = flows[3] as GallerySortProperty
+        val sortDir = flows[4] as GallerySortDirection
+        val configuredIncludedFolders = flows[5] as Set<String>
+
         var filtered = rawItems.filter { item ->
             val passesFilter = when (filter) {
                 GalleryFilter.ALL -> true
@@ -526,5 +536,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         @androidx.annotation.VisibleForTesting
         internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+
+        @androidx.annotation.VisibleForTesting
+        internal var defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default
     }
 }

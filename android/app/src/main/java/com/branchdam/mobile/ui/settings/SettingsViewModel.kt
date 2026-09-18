@@ -12,6 +12,7 @@ import com.branchdam.mobile.EncryptedPrefs
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.defaultEngineDbPath
+import com.branchdam.mobile.observer.MediaScanner
 import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncLogger
 import com.branchdam.mobile.service.SyncScheduler
