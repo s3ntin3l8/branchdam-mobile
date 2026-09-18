@@ -115,6 +115,9 @@ android {
 
     kotlinOptions {
         jvmTarget = "21"
+        freeCompilerArgs += listOf(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        )
     }
 
     // F plan: unit tests for Android framework-touching code
@@ -163,6 +166,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-video:2.7.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // Media3 / ExoPlayer for inline video playback
+    val media3Version = "1.4.1"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
 
     // QR code scanning via CameraX + ML Kit (bundled, no network needed).
     val cameraxVersion = "1.4.1"

@@ -5,18 +5,24 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -26,6 +32,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import com.branchdam.mobile.ui.components.*
 import com.branchdam.mobile.ui.theme.*
@@ -47,10 +55,19 @@ fun GalleryScreen(
     viewModel: GalleryViewModel = viewModel(),
     onNavigateToDetail: (Long) -> Unit = {},
 ) {
-    val items by viewModel.items.collectAsStateWithLifecycle()
+    val rawItems by viewModel.items.collectAsStateWithLifecycle()
+    val displayedItems by viewModel.displayedItems.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
+
+    val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
+    val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
+    val availableFolders by viewModel.availableFolders.collectAsStateWithLifecycle()
+    val selectedSortProperty by viewModel.selectedSortProperty.collectAsStateWithLifecycle()
+    val selectedSortDirection by viewModel.selectedSortDirection.collectAsStateWithLifecycle()
+
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val state = rememberPullToRefreshState()
@@ -61,7 +78,7 @@ fun GalleryScreen(
 
     LaunchedEffect(loadError) {
         val currentError = loadError
-        if (currentError != null && items.isNotEmpty()) {
+        if (currentError != null && rawItems.isNotEmpty()) {
             scope.launch {
                 snackbarHostState.showSnackbar(
                     message = currentError,
@@ -69,6 +86,40 @@ fun GalleryScreen(
                 )
             }
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Delete Photo(s) Permanently?") },
+            text = {
+                Text(
+                    "This will permanently delete the selected ${selectedItemIds.size} item(s) from branchDAM and your local device. This action cannot be undone."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        viewModel.deleteSelectedItems(context) { count ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Deleted $count item(s) permanently")
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -90,7 +141,7 @@ fun GalleryScreen(
                         }
                     },
                     actions = {
-                        val selectableCount = remember(items) { items.count { !it.isOffloaded } }
+                        val selectableCount = remember(displayedItems) { displayedItems.count { !it.isOffloaded } }
                         val isAllSelectableSelected = selectableCount > 0 && selectedItemIds.size == selectableCount
                         IconButton(onClick = {
                             if (isAllSelectableSelected) {
@@ -102,6 +153,13 @@ fun GalleryScreen(
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
                                 contentDescription = if (isAllSelectableSelected) "Deselect all" else "Select all"
+                            )
+                        }
+                        IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete selected items",
+                                tint = MaterialTheme.colorScheme.error
                             )
                         }
                         FilledTonalButton(
@@ -125,72 +183,224 @@ fun GalleryScreen(
                     }
                 )
             } else {
-                CenterAlignedTopAppBar(title = { Text("Gallery") })
+                var showFilterMenu by remember { mutableStateOf(false) }
+                var showSortMenu by remember { mutableStateOf(false) }
+                val isFilterActive = selectedFilter != GalleryFilter.ALL || selectedFolder != "All Folders"
+
+                CenterAlignedTopAppBar(
+                    title = { Text("Gallery") },
+                    actions = {
+                        Box {
+                            IconButton(onClick = { showFilterMenu = true }) {
+                                if (isFilterActive) {
+                                    BadgedBox(
+                                        badge = { Badge() }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Tune,
+                                            contentDescription = "Filter media",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Tune,
+                                        contentDescription = "Filter media"
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showFilterMenu,
+                                onDismissRequest = { showFilterMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Folder", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                                    enabled = false,
+                                    onClick = {}
+                                )
+                                availableFolders.forEach { folder ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (folder == selectedFolder) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    Spacer(Modifier.width(16.dp))
+                                                }
+                                                Text(folder)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.setFolder(folder)
+                                            showFilterMenu = false
+                                        }
+                                    )
+                                }
+
+                                HorizontalDivider()
+
+                                DropdownMenuItem(
+                                    text = { Text("Media Type", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                                    enabled = false,
+                                    onClick = {}
+                                )
+                                GalleryFilter.entries.forEach { filter ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (selectedFilter == filter) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    Spacer(Modifier.width(16.dp))
+                                                }
+                                                Text(filter.label)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.setFilter(filter)
+                                            showFilterMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Box {
+                            IconButton(onClick = { showSortMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = "Sort media"
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Date (Newest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.DATE, GallerySortDirection.DESC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Date (Oldest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.DATE, GallerySortDirection.ASC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Size (Largest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.SIZE, GallerySortDirection.DESC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Size (Smallest First)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.SIZE, GallerySortDirection.ASC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Name (A to Z)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.NAME, GallerySortDirection.ASC)
+                                        showSortMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Name (Z to A)") },
+                                    onClick = {
+                                        viewModel.setSort(GallerySortProperty.NAME, GallerySortDirection.DESC)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = isLoading,
-            onRefresh = { viewModel.loadItems() },
-            state = state,
-            modifier = Modifier.padding(padding)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            val currentError = loadError
-            when {
-                isLoading && items.isEmpty() -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 110.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(2.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        userScrollEnabled = false
-                    ) {
-                        items(12) {
-                            Box(
-                                modifier = Modifier
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .shimmer()
+            PullToRefreshBox(
+                isRefreshing = isLoading,
+                onRefresh = { viewModel.loadItems() },
+                state = state,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val currentError = loadError
+                when {
+                    isLoading && rawItems.isEmpty() -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 110.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(2.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            userScrollEnabled = false
+                        ) {
+                            items(12) {
+                                Box(
+                                    modifier = Modifier
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .shimmer()
+                                )
+                            }
+                        }
+                    }
+                    currentError != null && rawItems.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                currentError,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
-                }
-                currentError != null && items.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            currentError,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                    displayedItems.isEmpty() -> {
+                        EmptyGalleryState()
                     }
-                }
-                items.isEmpty() -> {
-                    EmptyGalleryState()
-                }
-                else -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 110.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(2.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        items(items, key = { it.mediaItem.id }) { galleryItem ->
-                            val isSelected = selectedItemIds.contains(galleryItem.mediaItem.id)
-                            GalleryItemCard(
-                                galleryItem = galleryItem,
-                                isSelected = isSelected,
-                                isSelectionMode = isSelectionMode,
-                                onToggleSelect = { viewModel.toggleSelection(galleryItem.mediaItem.id) },
-                                onClick = { onNavigateToDetail(galleryItem.mediaItem.id) }
-                            )
+                    else -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 110.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(2.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            items(displayedItems, key = { it.mediaItem.id }) { galleryItem ->
+                                val isSelected = selectedItemIds.contains(galleryItem.mediaItem.id)
+                                GalleryItemCard(
+                                    galleryItem = galleryItem,
+                                    isSelected = isSelected,
+                                    isSelectionMode = isSelectionMode,
+                                    onToggleSelect = { viewModel.toggleSelection(galleryItem.mediaItem.id) },
+                                    onClick = { onNavigateToDetail(galleryItem.mediaItem.id) }
+                                )
+                            }
                         }
                     }
                 }
@@ -208,6 +418,19 @@ private fun GalleryItemCard(
     onToggleSelect: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val imageRequest = remember(galleryItem.mediaItem.contentUri) {
+        val builder = ImageRequest.Builder(context)
+            .data(Uri.parse(galleryItem.mediaItem.contentUri))
+            .crossfade(200)
+        if (galleryItem.mediaItem.isVideo) {
+            builder.decoderFactory(VideoFrameDecoder.Factory())
+        } else {
+            ExifOrientationHelper.applyExifOrientation(builder, context, galleryItem.mediaItem.contentUri, galleryItem.mediaItem.mimeType)
+        }
+        builder.build()
+    }
+
     Card(
         modifier = Modifier
             .aspectRatio(1f)
@@ -229,10 +452,7 @@ private fun GalleryItemCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(Uri.parse(galleryItem.mediaItem.contentUri))
-                    .crossfade(200)
-                    .build(),
+                model = imageRequest,
                 contentDescription = galleryItem.mediaItem.displayName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

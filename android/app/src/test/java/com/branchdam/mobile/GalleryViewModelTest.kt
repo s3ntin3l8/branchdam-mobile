@@ -1,5 +1,6 @@
-package com.branchdam.mobile
-
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
@@ -26,6 +27,10 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -43,6 +48,7 @@ class GalleryViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         GalleryViewModel.ioDispatcher = testDispatcher
+        GalleryViewModel.defaultDispatcher = testDispatcher
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val config = Configuration.Builder()
@@ -55,6 +61,7 @@ class GalleryViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         GalleryViewModel.ioDispatcher = Dispatchers.IO
+        GalleryViewModel.defaultDispatcher = Dispatchers.Default
     }
 
     @Test
@@ -99,8 +106,10 @@ class GalleryViewModelTest {
     }
 
     @Test
-    fun testSelectAll_excludesOffloadedItems() {
+    fun testSelectAll_excludesOffloadedItems() = runTest(testDispatcher) {
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
         val localItem = GalleryItem(
             primaryMediaItem = MediaItem(
                 id = 101L, contentUri = "content://images/101",
@@ -123,6 +132,8 @@ class GalleryViewModelTest {
         )
 
         viewModel.setItemsForTesting(listOf(localItem, offloadedItem))
+        advanceUntilIdle()
+
         viewModel.selectAll()
 
         val selected = viewModel.selectedItemIds.value
@@ -233,5 +244,137 @@ class GalleryViewModelTest {
         val formatted = formatDateTaken(1724000000L)
         assertNotNull(formatted)
         assertTrue("Date should start with 2024", formatted.startsWith("2024"))
+    }
+
+    @Test
+    fun testFilterAndSortAndFolder() = runTest(testDispatcher) {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val photo1 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 1L, contentUri = "content://images/1",
+                filePath = "/sdcard/DCIM/PXL_A.jpg", displayName = "PXL_A.jpg",
+                mimeType = "image/jpeg", sizeBytes = 2_000_000L,
+                dateTakenUnix = 1000L, isRaw = false, folderName = "Camera"
+            )
+        )
+        val video1 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 2L, contentUri = "content://videos/2",
+                filePath = "/sdcard/Movies/PXL_B.mp4", displayName = "PXL_B.mp4",
+                mimeType = "video/mp4", sizeBytes = 10_000_000L,
+                dateTakenUnix = 2000L, isRaw = false, folderName = "Movies"
+            )
+        )
+        val rawItem = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 3L, contentUri = "content://images/3",
+                filePath = "/sdcard/DCIM/PXL_C.dng", displayName = "PXL_C.dng",
+                mimeType = "image/x-adobe-dng", sizeBytes = 25_000_000L,
+                dateTakenUnix = 1500L, isRaw = true, folderName = "Camera"
+            ),
+            lineageStatus = "RAW"
+        )
+
+        viewModel.setItemsForTesting(listOf(photo1, video1, rawItem))
+        advanceUntilIdle()
+
+        // Default: ALL, All Folders, DATE DESC
+        var displayed = viewModel.displayedItems.value
+        assertEquals(3, displayed.size)
+        assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName) // 2000L
+        assertEquals("PXL_C.dng", displayed[1].mediaItem.displayName) // 1500L
+        assertEquals("PXL_A.jpg", displayed[2].mediaItem.displayName) // 1000L
+
+        // Filter: VIDEOS
+        viewModel.setFilter(com.branchdam.mobile.ui.gallery.GalleryFilter.VIDEOS)
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals(1, displayed.size)
+        assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName)
+
+        // Filter: RAW
+        viewModel.setFilter(com.branchdam.mobile.ui.gallery.GalleryFilter.RAW)
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals(1, displayed.size)
+        assertEquals("PXL_C.dng", displayed[0].mediaItem.displayName)
+
+        // Filter: ALL, Folder: Movies
+        viewModel.setFilter(com.branchdam.mobile.ui.gallery.GalleryFilter.ALL)
+        viewModel.setFolder("Movies")
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals(1, displayed.size)
+        assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName)
+
+        // Sort by SIZE DESC
+        viewModel.setFolder("All Folders")
+        viewModel.setSort(com.branchdam.mobile.ui.gallery.GallerySortProperty.SIZE, com.branchdam.mobile.ui.gallery.GallerySortDirection.DESC)
+        advanceUntilIdle()
+        displayed = viewModel.displayedItems.value
+        assertEquals("PXL_C.dng", displayed[0].mediaItem.displayName) // 25MB
+        assertEquals("PXL_B.mp4", displayed[1].mediaItem.displayName) // 10MB
+        assertEquals("PXL_A.jpg", displayed[2].mediaItem.displayName) // 2MB
+    }
+
+    @Test
+    fun testDeleteItemAndSelectedItems() = runTest(testDispatcher) {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val viewModel = GalleryViewModel(app)
+        advanceUntilIdle()
+
+        val item1 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 10L, contentUri = "content://images/10",
+                filePath = "/sdcard/DCIM/PXL_10.jpg", displayName = "PXL_10.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 1000L, isRaw = false
+            )
+        )
+        val item2 = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 20L, contentUri = "content://images/20",
+                filePath = "/sdcard/DCIM/PXL_20.jpg", displayName = "PXL_20.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 2000L, isRaw = false
+            )
+        )
+
+        viewModel.setItemsForTesting(listOf(item1, item2))
+        advanceUntilIdle()
+        assertEquals(2, viewModel.items.value.size)
+
+        // Test failed delete: contentResolver returns 0
+        val failResolver = mock<ContentResolver>()
+        whenever(failResolver.delete(eq(Uri.parse("content://images/10")), anyOrNull(), anyOrNull())).thenReturn(0)
+        val failContext = mock<Context>()
+        whenever(failContext.contentResolver).thenReturn(failResolver)
+
+        var deleteSuccess = true
+        viewModel.deleteItem(failContext, item1) { success ->
+            deleteSuccess = success
+        }
+        advanceUntilIdle()
+
+        assertFalse("Delete should fail when contentResolver returns 0 rows", deleteSuccess)
+        assertEquals("Item should be restored to items list when delete fails", 2, viewModel.items.value.size)
+
+        // Test successful delete: contentResolver returns 1
+        val successResolver = mock<ContentResolver>()
+        whenever(successResolver.delete(eq(Uri.parse("content://images/10")), anyOrNull(), anyOrNull())).thenReturn(1)
+        val successContext = mock<Context>()
+        whenever(successContext.contentResolver).thenReturn(successResolver)
+
+        viewModel.deleteItem(successContext, item1) { success ->
+            deleteSuccess = success
+        }
+        advanceUntilIdle()
+
+        assertTrue(deleteSuccess)
+        val remaining = viewModel.items.value
+        assertEquals(1, remaining.size)
+        assertEquals(20L, remaining[0].primaryMediaItem.id)
     }
 }

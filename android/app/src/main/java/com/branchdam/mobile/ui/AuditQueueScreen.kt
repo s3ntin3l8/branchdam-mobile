@@ -21,6 +21,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import com.branchdam.mobile.ui.components.ExifOrientationHelper
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -260,7 +262,7 @@ private fun AssetPreviewCard(
             .clickable(enabled = uri != null, onClick = onInspect),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = Color.Black
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -269,11 +271,16 @@ private fun AssetPreviewCard(
             contentAlignment = Alignment.Center,
         ) {
             if (uri != null) {
-                SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                val auditContext = LocalContext.current
+                val imageRequest = remember(uri) {
+                    val builder = ImageRequest.Builder(auditContext)
                         .data(Uri.parse(uri))
                         .crossfade(true)
-                        .build(),
+                    ExifOrientationHelper.applyExifOrientation(builder, auditContext, uri)
+                    builder.build()
+                }
+                SubcomposeAsyncImage(
+                    model = imageRequest,
                     contentDescription = "$roleLabel: $filename",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -597,11 +604,16 @@ private fun FullImageComparisonDialog(
                     val activeFilename = if (selectedTab == 0) candidate.masterFilename else candidate.childFilename
 
                     if (activeUri != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
+                        val dialogContext = LocalContext.current
+                        val dialogRequest = remember(activeUri) {
+                            val builder = ImageRequest.Builder(dialogContext)
                                 .data(Uri.parse(activeUri))
                                 .crossfade(true)
-                                .build(),
+                            ExifOrientationHelper.applyExifOrientation(builder, dialogContext, activeUri)
+                            builder.build()
+                        }
+                        AsyncImage(
+                            model = dialogRequest,
                             contentDescription = activeFilename,
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize()

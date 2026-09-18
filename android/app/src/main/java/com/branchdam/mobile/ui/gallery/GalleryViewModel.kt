@@ -12,11 +12,36 @@ import com.branchdam.mobile.observer.MediaScanner
 import com.branchdam.mobile.service.SyncScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+enum class GalleryFilter(val label: String) {
+    ALL("All"),
+    PHOTOS("Photos"),
+    VIDEOS("Videos"),
+    RAW("RAW"),
+    BACKED_UP("Backed Up")
+}
+
+enum class GallerySortProperty(val label: String) {
+    DATE("Date"),
+    SIZE("Size"),
+    NAME("Name")
+}
+
+enum class GallerySortDirection(val label: String) {
+    DESC("Descending"),
+    ASC("Ascending")
+}
+
+const val ALL_FOLDERS = "All Folders"
 
 data class GalleryItem(
     val primaryMediaItem: MediaItem,
@@ -37,6 +62,70 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _items = MutableStateFlow<List<GalleryItem>>(emptyList())
     val items: StateFlow<List<GalleryItem>> = _items.asStateFlow()
 
+    private val _selectedFilter = MutableStateFlow(GalleryFilter.ALL)
+    val selectedFilter: StateFlow<GalleryFilter> = _selectedFilter.asStateFlow()
+
+    private val _selectedFolder = MutableStateFlow(ALL_FOLDERS)
+    val selectedFolder: StateFlow<String> = _selectedFolder.asStateFlow()
+
+    private val _availableFolders = MutableStateFlow<List<String>>(listOf(ALL_FOLDERS))
+    val availableFolders: StateFlow<List<String>> = _availableFolders.asStateFlow()
+
+    private val _selectedSortProperty = MutableStateFlow(GallerySortProperty.DATE)
+    val selectedSortProperty: StateFlow<GallerySortProperty> = _selectedSortProperty.asStateFlow()
+
+    private val _selectedSortDirection = MutableStateFlow(GallerySortDirection.DESC)
+    val selectedSortDirection: StateFlow<GallerySortDirection> = _selectedSortDirection.asStateFlow()
+
+    val displayedItems: StateFlow<List<GalleryItem>> = combine(
+        _items,
+        _selectedFilter,
+        _selectedFolder,
+        _selectedSortProperty,
+        _selectedSortDirection
+    ) { rawItems, filter, folder, sortProp, sortDir ->
+        var filtered = rawItems.filter { item ->
+            val passesFilter = when (filter) {
+                GalleryFilter.ALL -> true
+                GalleryFilter.PHOTOS -> !item.primaryMediaItem.isVideo
+                GalleryFilter.VIDEOS -> item.primaryMediaItem.isVideo
+                GalleryFilter.RAW -> item.primaryMediaItem.isDng || item.primaryMediaItem.isRaw || item.companionMediaItem != null
+                GalleryFilter.BACKED_UP -> item.isBackedUp
+            }
+            val passesFolder = if (folder == ALL_FOLDERS) true else {
+                item.primaryMediaItem.folderName.equals(folder, ignoreCase = true) ||
+                    (item.companionMediaItem != null && item.companionMediaItem.folderName.equals(folder, ignoreCase = true))
+            }
+            passesFilter && passesFolder
+        }
+
+        when (sortProp) {
+            GallerySortProperty.DATE -> {
+                filtered = if (sortDir == GallerySortDirection.DESC) {
+                    filtered.sortedByDescending { it.primaryMediaItem.dateTakenUnix }
+                } else {
+                    filtered.sortedBy { it.primaryMediaItem.dateTakenUnix }
+                }
+            }
+            GallerySortProperty.SIZE -> {
+                filtered = if (sortDir == GallerySortDirection.DESC) {
+                    filtered.sortedByDescending { it.primaryMediaItem.sizeBytes + (it.companionMediaItem?.sizeBytes ?: 0L) }
+                } else {
+                    filtered.sortedBy { it.primaryMediaItem.sizeBytes + (it.companionMediaItem?.sizeBytes ?: 0L) }
+                }
+            }
+            GallerySortProperty.NAME -> {
+                filtered = if (sortDir == GallerySortDirection.DESC) {
+                    filtered.sortedByDescending { it.primaryMediaItem.displayName }
+                } else {
+                    filtered.sortedBy { it.primaryMediaItem.displayName }
+                }
+            }
+        }
+        filtered
+    }.flowOn(defaultDispatcher)
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -54,7 +143,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val galleryItems = withContext(Dispatchers.IO) {
+                val galleryItems = withContext(ioDispatcher) {
                     val context = getApplication<Application>()
                     val images = MediaScanner.queryRecentImages(context)
                     val videos = MediaScanner.queryRecentVideos(context)
@@ -130,6 +219,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             )
                         }
                     }
+                    val detectedFolders = MediaScanner.queryAvailableFolders(context)
+                    val folderList = mutableListOf(ALL_FOLDERS)
+                    for (f in detectedFolders) {
+                        if (f.isNotBlank() && !folderList.contains(f)) {
+                            folderList.add(f)
+                        }
+                    }
+                    _availableFolders.value = folderList
+
                     resultList
                 }
                 _items.value = galleryItems
@@ -150,7 +248,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun selectAll() {
-        _selectedItemIds.value = _items.value.filter { !it.isOffloaded }.map { it.mediaItem.id }.toSet()
+        _selectedItemIds.value = displayedItems.value.filter { !it.isOffloaded }.map { it.mediaItem.id }.toSet()
     }
 
     fun clearSelection() {
@@ -273,6 +371,141 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         return _items.value.find { it.primaryMediaItem.id == id || it.companionMediaItem?.id == id }
     }
 
+    fun setFilter(filter: GalleryFilter) {
+        clearSelection()
+        _selectedFilter.value = filter
+    }
+
+    fun setFolder(folder: String) {
+        clearSelection()
+        _selectedFolder.value = folder
+    }
+
+    fun setSort(property: GallerySortProperty, direction: GallerySortDirection) {
+        _selectedSortProperty.value = property
+        _selectedSortDirection.value = direction
+    }
+
+    fun deleteItem(context: Context, item: GalleryItem, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch(ioDispatcher) {
+            _items.update { list ->
+                list.filter { it.primaryMediaItem.id != item.primaryMediaItem.id }
+            }
+
+            val primaryUri = item.primaryMediaItem.contentUri
+            val companionUri = item.companionMediaItem?.contentUri
+
+            var primarySuccess = false
+            var companionSuccess = false
+            try {
+                val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
+                if (primaryDeleted > 0) {
+                    primarySuccess = true
+                    if (companionUri != null) {
+                        try {
+                            companionSuccess = context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null) > 0
+                        } catch (e: Exception) {
+                            Log.w(TAG, "deleteItem companion contentResolver delete failed", e)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "deleteItem contentResolver delete failed", e)
+            }
+
+            if (primarySuccess) {
+                EngineHolder.enqueueDeleteEvent(primaryUri)
+                if (companionUri != null && companionSuccess) {
+                    EngineHolder.enqueueDeleteEvent(companionUri)
+                }
+                try {
+                    SyncScheduler.triggerImmediateSync(context)
+                } catch (e: Exception) {
+                    Log.w(TAG, "triggerImmediateSync failed", e)
+                }
+            } else {
+                _items.update { list ->
+                    if (list.none { it.primaryMediaItem.id == item.primaryMediaItem.id }) list + item else list
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                onComplete(primarySuccess)
+            }
+        }
+    }
+
+    fun deleteSelectedItems(context: Context, onComplete: (Int) -> Unit) {
+        val selectedIds = _selectedItemIds.value
+        val itemsToDelete = _items.value.filter { selectedIds.contains(it.mediaItem.id) }
+        if (itemsToDelete.isEmpty()) {
+            clearSelection()
+            onComplete(0)
+            return
+        }
+
+        viewModelScope.launch(ioDispatcher) {
+            _items.update { list ->
+                list.filter { !selectedIds.contains(it.primaryMediaItem.id) }
+            }
+
+            var deletedCount = 0
+            val failedItems = mutableListOf<GalleryItem>()
+
+            for (item in itemsToDelete) {
+                val primaryUri = item.primaryMediaItem.contentUri
+                val companionUri = item.companionMediaItem?.contentUri
+
+                var primarySuccess = false
+                var companionSuccess = false
+                try {
+                    val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
+                    if (primaryDeleted > 0) {
+                        primarySuccess = true
+                        if (companionUri != null) {
+                            try {
+                                companionSuccess = context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null) > 0
+                            } catch (e: Exception) {
+                                Log.w(TAG, "deleteSelectedItems companion contentResolver delete failed", e)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "deleteSelectedItems contentResolver delete failed", e)
+                }
+
+                if (primarySuccess) {
+                    EngineHolder.enqueueDeleteEvent(primaryUri)
+                    if (companionUri != null && companionSuccess) {
+                        EngineHolder.enqueueDeleteEvent(companionUri)
+                    }
+                    deletedCount++
+                } else {
+                    failedItems.add(item)
+                }
+            }
+
+            if (failedItems.isNotEmpty()) {
+                _items.update { list ->
+                    list + failedItems.filter { failed -> list.none { it.primaryMediaItem.id == failed.primaryMediaItem.id } }
+                }
+            }
+
+            if (deletedCount > 0) {
+                try {
+                    SyncScheduler.triggerImmediateSync(context)
+                } catch (e: Exception) {
+                    Log.w(TAG, "triggerImmediateSync failed", e)
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                clearSelection()
+                onComplete(deletedCount)
+            }
+        }
+    }
+
     @androidx.annotation.VisibleForTesting
     internal fun setItemsForTesting(testItems: List<GalleryItem>) {
         _items.value = testItems
@@ -283,5 +516,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         @androidx.annotation.VisibleForTesting
         internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+
+        @androidx.annotation.VisibleForTesting
+        internal var defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default
     }
 }

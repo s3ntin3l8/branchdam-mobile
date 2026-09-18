@@ -77,9 +77,13 @@ object PairDetector {
         return count
     }
 
+    private val STEM_SUFFIX_REGEX = Regex(
+        """(\.(RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*|TS(-\d+)*))+$""",
+        RegexOption.IGNORE_CASE
+    )
+
     internal fun extractStem(filename: String): String {
-        var stem = if (filename.contains('.')) filename.substringBeforeLast('.') else filename
-        stem = stem.replace(STEM_SUFFIX_REGEX, "")
-        return stem.trim()
+        val stem = if (filename.contains('.')) filename.substringBeforeLast('.') else filename
+        return stem.replace(STEM_SUFFIX_REGEX, "").trim()
     }
 }
