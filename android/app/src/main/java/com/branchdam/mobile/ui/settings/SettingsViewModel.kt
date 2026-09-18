@@ -198,14 +198,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleFolderIncluded(folder: String, availableFolders: List<String> = emptyList()) {
-        val currentStored = _includedFolders.value
+        val currentStored = _includedFolders.value - NO_FOLDERS_SENTINEL
+        val hasSentinel = _includedFolders.value.contains(NO_FOLDERS_SENTINEL)
         val effectiveAvailable = if (availableFolders.isNotEmpty()) {
             availableFolders
         } else {
             listOf(folder)
         }
 
-        val currentlySelected = if (currentStored.isEmpty()) {
+        val currentlySelected = if (currentStored.isEmpty() && !hasSentinel) {
             effectiveAvailable.toSet()
         } else {
             currentStored

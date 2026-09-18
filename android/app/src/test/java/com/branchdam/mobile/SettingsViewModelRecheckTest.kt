@@ -281,5 +281,9 @@ class SettingsViewModelRecheckTest {
         // Unchecking the last remaining checked folder sets NO_FOLDERS_SENTINEL to suppress all folders
         viewModel.toggleFolderIncluded("Pictures", availableFolders)
         assertEquals(setOf(SettingsViewModel.NO_FOLDERS_SENTINEL), viewModel.includedFolders.value)
+
+        // Re-checking a folder after all were unchecked strips sentinel and includes only the re-checked folder
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+        assertEquals(setOf("Camera"), viewModel.includedFolders.value)
     }
 }
