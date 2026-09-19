@@ -7,8 +7,7 @@ import branchdam
 final class BranchDamCoreBridgeTests: XCTestCase {
 
     /// Each test uses a unique DB path so the singleton engine is
-    /// initialized fresh for that test and torn down after. This
-    /// avoids cross-test state leakage via the shared singleton.
+    /// initialized fresh for that test and torn down after.
     private var dbPath: String!
 
     override func setUp() {
@@ -28,7 +27,8 @@ final class BranchDamCoreBridgeTests: XCTestCase {
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
         XCTAssertTrue(success)
     }
@@ -39,7 +39,8 @@ final class BranchDamCoreBridgeTests: XCTestCase {
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
         let tempFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("IMG_\(UUID().uuidString).DNG")
         try? "test dng content".data(using: .utf8)?.write(to: tempFile)
@@ -60,7 +61,8 @@ final class BranchDamCoreBridgeTests: XCTestCase {
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
         let eventUuid = bridge.enqueueLineageEvent(
             parentUUID: "ph://master-\(UUID().uuidString)",
@@ -78,7 +80,8 @@ final class BranchDamCoreBridgeTests: XCTestCase {
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
         let localID = "ph://asset-\(UUID().uuidString)"
         let setResult = bridge.setMediaOffloaded(localID: localID, isOffloaded: true)
@@ -113,7 +116,8 @@ final class BranchDamCoreBridgeTests: XCTestCase {
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
             apiKey: "from-explicit-arg", // pragma: allowlist secret
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
         XCTAssertTrue(success)
     }
@@ -132,7 +136,8 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         let success = bridge.initialize(
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
         XCTAssertTrue(success)
     }
@@ -144,19 +149,22 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         let success = bridge.initialize(
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
         XCTAssertTrue(success)
     }
 
     func testNewBridgeMethods() {
         let bridge = BranchDamCoreBridge.shared
-        _ = bridge.initialize(
+        let initialized = bridge.initialize(
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
+        XCTAssertTrue(initialized, "engine should initialize with cleartext host")
 
         let status = bridge.getMediaStatus(localID: "ph://non-existent")
         XCTAssertEqual(status, "NOT_ENQUEUED")
@@ -171,7 +179,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertNil(activeProgress, "no active upload should be in progress initially")
 
         let connErr = bridge.testConnectionDetailed()
-        XCTAssertNotNil(connErr)
+        XCTAssertNotNil(connErr, "connection diagnostic should report error when server unreachable")
 
         let contentCheck = bridge.checkContent(fastHash: "abc", fullHash: "xyz")
         XCTAssertNil(contentCheck)
@@ -181,5 +189,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
 
         let hash = bridge.computeHashes(localPath: "")
         XCTAssertEqual(hash, "")
+
+        bridge.shutdown()
     }
 }
