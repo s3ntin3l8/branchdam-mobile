@@ -103,10 +103,10 @@ public struct VisualLineageComparisonView: View {
     }
 
     private func loadPairedImages() async {
-        // Load primary asset
+        // Load master RAW asset
         let resources = PHAssetResource.assetResources(for: item.asset)
         let primaryRes = resources.first(where: { $0.type == .photo || $0.type == .alternatePhoto }) ?? resources.first
-        let primaryName = primaryRes?.originalFilename ?? "Primary"
+        let primaryName = primaryRes?.originalFilename ?? "Master"
 
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
@@ -119,38 +119,50 @@ public struct VisualLineageComparisonView: View {
             options: options
         ) { image, _ in
             DispatchQueue.main.async {
-                if item.isRaw {
-                    self.masterImage = image
-                    self.masterFilename = "\(primaryName) (RAW)"
-                } else {
-                    self.derivativeImage = image
-                    self.derivativeFilename = "\(primaryName) (Derivative)"
-                }
+                self.masterImage = image
+                self.masterFilename = "\(primaryName) (RAW)"
             }
         }
 
-        // Search for paired companion resource or asset
-        let cleanId = item.id.hasPrefix("ph://") ? String(item.id.dropFirst(5)) : item.id
-        let allAssets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
-        if let asset = allAssets.firstObject {
-            let resList = PHAssetResource.assetResources(for: asset)
-            if let companionRes = resList.first(where: { $0.type == .alternatePhoto || ($0.type == .photo && item.isRaw) }) {
-                let buffer = NSMutableData()
-                PHAssetResourceManager.default().requestData(for: companionRes, options: nil, dataReceivedHandler: { chunk in
-                    buffer.append(chunk)
-                }, completionHandler: { error in
-                    if error == nil, let compImg = UIImage(data: buffer as Data) {
-                        DispatchQueue.main.async {
-                            if item.isRaw {
+        // Load paired derivative asset if derivativeLocalId exists
+        if let derivativeId = item.derivativeLocalId {
+            let cleanId = derivativeId.hasPrefix("ph://") ? String(derivativeId.dropFirst(5)) : derivativeId
+            let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
+            if let derivativeAsset = fetchResult.firstObject {
+                let derivResources = PHAssetResource.assetResources(for: derivativeAsset)
+                let derivName = derivResources.first?.originalFilename ?? "Derivative.JPG"
+
+                PHImageManager.default().requestImage(
+                    for: derivativeAsset,
+                    targetSize: CGSize(width: 1024, height: 1024),
+                    contentMode: .aspectFit,
+                    options: options
+                ) { image, _ in
+                    DispatchQueue.main.async {
+                        self.derivativeImage = image
+                        self.derivativeFilename = "\(derivName) (JPEG Derivative)"
+                    }
+                }
+            }
+        } else {
+            // Search for companion resource within the same PHAsset
+            let cleanId = item.id.hasPrefix("ph://") ? String(item.id.dropFirst(5)) : item.id
+            let allAssets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
+            if let asset = allAssets.firstObject {
+                let resList = PHAssetResource.assetResources(for: asset)
+                if let companionRes = resList.first(where: { $0.type == .alternatePhoto || ($0.type == .photo && item.isRaw) }) {
+                    let buffer = NSMutableData()
+                    PHAssetResourceManager.default().requestData(for: companionRes, options: nil, dataReceivedHandler: { chunk in
+                        buffer.append(chunk)
+                    }, completionHandler: { error in
+                        if error == nil, let compImg = UIImage(data: buffer as Data) {
+                            DispatchQueue.main.async {
                                 self.derivativeImage = compImg
                                 self.derivativeFilename = "\(companionRes.originalFilename) (JPEG)"
-                            } else {
-                                self.masterImage = compImg
-                                self.masterFilename = "\(companionRes.originalFilename) (RAW)"
                             }
                         }
-                    }
-                })
+                    })
+                }
             }
         }
     }
