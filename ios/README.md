@@ -6,11 +6,12 @@ Native iOS companion module for branchDAM built with SwiftUI, Swift Concurrency,
 
 - **UI Layer:** SwiftUI views with dual-pane support and safe space reclaim audit queue.
 - **Background Ingest:** `BGAppRefreshTask` and `PHPhotoLibraryChangeObserver` tracking camera roll mutations.
-- **Native Core:** Swift wrapper (`BranchDamCoreBridge.swift`) around the gomobile-bound `branchdam.xcframework` produced by `make mobile-build-ios`. Sub-issue A wires the bridge; sub-issue B fleshes out the engine API.
+- **Native Core:** Swift wrapper (`BranchDamCoreBridge.swift`) around the gomobile-bound `branchdam.xcframework` produced by `make mobile-build-ios` (or SPM `Package.swift`). Sub-issue A wires the bridge; sub-issue B fleshes out the engine API.
 
 ## Sideloading with Personal Apple ID
 
-1. Open `ios/BranchDamApp.xcodeproj` in Xcode 16+.
-2. Select your personal Apple ID team under **Signing & Capabilities**.
-3. Select your connected iPhone and press **Cmd + R**.
-4. Trust your certificate in **Settings > General > VPN & Device Management**.
+1. Build the native core framework locally once on fresh clones: `make mobile-build-ios`.
+2. Open `ios/BranchDamApp.xcodeproj` in Xcode 16+.
+3. Select your personal Apple ID team under **Signing & Capabilities**.
+4. Select your connected iPhone and press **Cmd + R**.
+5. Trust your certificate in **Settings > General > VPN & Device Management**.

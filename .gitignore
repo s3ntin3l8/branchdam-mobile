@@ -28,6 +28,7 @@ captures/
 out/
 
 # iOS / Xcode
+.build/
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/

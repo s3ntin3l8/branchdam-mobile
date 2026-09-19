@@ -70,7 +70,9 @@ The branchdam engine ships as a single gomobile-bound Go package at the reposito
 | Target | Output | Consumer |
 |---|---|---|
 | Android | `android/app/libs/branchdam.aar` | Kotlin: `io.branchdam.core.Engine` |
-| iOS | `ios/Frameworks/branchdam.xcframework` | Swift: `import branchdam` |
+| iOS | `ios/Frameworks/branchdam.xcframework` | Swift: `import branchdam` (or SPM `Package.swift`) |
+
+Both targets are uncommitted build artifacts generated on-demand by `./scripts/build-mobile.sh` or published as GitHub Release binaries.
 
 To build both at once:
 

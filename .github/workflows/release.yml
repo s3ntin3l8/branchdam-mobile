@@ -175,3 +175,56 @@ jobs:
           else
             echo "No release tag target specified or no artifacts found; skipping release attachment."
           fi
+
+  build-release-ios-framework:
+    name: Build Release iOS Framework
+    needs: [release-please]
+    if: ${{ needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: macos-14
+    env:
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Build branchdam.xcframework
+        run: ./scripts/build-mobile.sh --ios-only
+
+      - name: Package Framework and Checksum
+        env:
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag }}
+        run: |
+          mkdir -p dist
+          VER="${TAG_NAME#v}"
+          if [ -z "$VER" ]; then VER="0.0.0"; fi
+
+          # Zip the built xcframework
+          ( cd ios/Frameworks && zip -r -9 "../../dist/branchdam.xcframework.zip" branchdam.xcframework )
+
+          # Generate SHA256 sidecar file
+          ( cd dist && shasum -a 256 "branchdam.xcframework.zip" > "branchdam.xcframework.zip.sha256" )
+
+      - name: Upload iOS Framework Build Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: branchdam-xcframework-release-binary
+          path: dist/*
+          if-no-files-found: warn
+
+      - name: Attach iOS Framework to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag }}
+        run: |
+          if [ -n "$TAG_NAME" ] && [ -d "dist" ] && [ "$(ls -A dist)" ]; then
+            echo "Uploading iOS framework artifact to release $TAG_NAME..."
+            gh release upload "$TAG_NAME" dist/* --clobber -R "${{ github.repository }}"
+          else
+            echo "No release tag target specified or no artifacts found; skipping release attachment."
+          fi
