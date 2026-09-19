@@ -4,6 +4,24 @@ import Combine
 import branchdam
 #endif
 
+public struct SafeSpaceCandidateVerdict: Codable, Equatable {
+    public let localId: String
+    public let nodeUuid: String
+    public let blake3Hash: String
+    public let isVerified: Bool?
+    public let isEligible: Bool?
+    public let tier: String?
+
+    public init(localId: String, nodeUuid: String = "", blake3Hash: String = "", isVerified: Bool = false, isEligible: Bool = false, tier: String = "") {
+        self.localId = localId
+        self.nodeUuid = nodeUuid
+        self.blake3Hash = blake3Hash
+        self.isVerified = isVerified
+        self.isEligible = isEligible
+        self.tier = tier
+    }
+}
+
 public struct ActiveUploadProgress: Codable, Equatable, Sendable {
     public let filename: String
     public let bytesSent: Int64
@@ -29,6 +47,13 @@ public struct ActiveUploadProgress: Codable, Equatable, Sendable {
     }
 }
 
+/// Bridge between the Swift shells (camera-roll observer, BGTask manager,
+/// audit UI) and the gomobile-bound `branchdam` Go engine.
+///
+/// All public methods are synchronous from the caller's perspective. The
+/// underlying gomobile calls block (they marshal arguments and call
+/// into Go over a sequence number channel), so the bridge internally
+/// dispatches calls to a private serial background queue.
 public class BranchDamCoreBridge: @unchecked Sendable {
     public static let shared = BranchDamCoreBridge()
 

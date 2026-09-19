@@ -1,6 +1,6 @@
 import Foundation
 
-public struct AppleOtgCandidate: Equatable {
+public struct AppleOtgCandidate: Equatable, Sendable {
     public let url: URL
     public let relativePath: String
     public let fileName: String
@@ -63,7 +63,7 @@ public struct AppleOtgCandidate: Equatable {
     }
 }
 
-public struct AppleOtgScanResult: Equatable {
+public struct AppleOtgScanResult: Equatable, Sendable {
     public let deviceLabel: String
     public let rootUrl: URL
     public let candidates: [AppleOtgCandidate]

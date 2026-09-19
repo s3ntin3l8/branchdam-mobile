@@ -13,9 +13,11 @@ final class AppleSafeSpaceManagerTests: XCTestCase {
 
     func testReclaimSafeSpace() {
         let candidates = [
-            (localId: "ph://verified-1", sizeBytes: Int64(45_000_000), isVerified: true),
-            (localId: "ph://unverified-2", sizeBytes: Int64(30_000_000), isVerified: false)
+            SafeSpaceCandidate(localId: "ph://verified-1", sizeBytes: Int64(45_000_000), isVerified: true),
+            SafeSpaceCandidate(localId: "ph://unverified-2", sizeBytes: Int64(30_000_000), isVerified: false)
         ]
+        _ = BranchDamCoreBridge.shared.enqueueMedia(localPath: "/tmp/v1.jpg", filename: "v1.jpg", capturedAtUnix: 1000, localID: "ph://verified-1")
+        _ = BranchDamCoreBridge.shared.enqueueMedia(localPath: "/tmp/u2.jpg", filename: "u2.jpg", capturedAtUnix: 1000, localID: "ph://unverified-2")
 
         let report = AppleSafeSpaceManager.reclaimSafeSpace(candidates: candidates, deletionHandler: { _ in true })
         XCTAssertEqual(report.totalCandidates, 2)
@@ -29,7 +31,7 @@ final class AppleSafeSpaceManagerTests: XCTestCase {
 
     func testReclaimSafeSpace_DeletionFailure() {
         let candidates = [
-            (localId: "ph://verified-fail", sizeBytes: Int64(50_000_000), isVerified: true)
+            SafeSpaceCandidate(localId: "ph://verified-fail", sizeBytes: Int64(50_000_000), isVerified: true)
         ]
 
         // When deletion fails, reclaimedCount should not increment and offloaded should not be set

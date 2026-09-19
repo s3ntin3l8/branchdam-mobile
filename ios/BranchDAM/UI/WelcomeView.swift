@@ -1,6 +1,7 @@
 import SwiftUI
 import Photos
 
+@MainActor
 public struct WelcomeView: View {
     @State private var authorizationStatus: PHAuthorizationStatus = .notDetermined
     @State private var showMainApp = false
