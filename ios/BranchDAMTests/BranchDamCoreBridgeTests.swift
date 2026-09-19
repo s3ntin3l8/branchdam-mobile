@@ -155,6 +155,28 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertTrue(success)
     }
 
+    func testConnectionDetailed_NotInitialized_ReturnsError() {
+        let bridge = BranchDamCoreBridge.shared
+        bridge.shutdown()
+        let connErr = bridge.testConnectionDetailed()
+        XCTAssertEqual(connErr, "Engine not initialized")
+    }
+
+    func testConnectionDetailed_WhenInitialized_ReturnsNil() {
+        let bridge = BranchDamCoreBridge.shared
+        let success = bridge.initialize(
+            dbPath: dbPath,
+            baseURL: "http://localhost:8080",
+            apiKey: "test_key", // pragma: allowlist secret
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
+        )
+        XCTAssertTrue(success)
+        let connErr = bridge.testConnectionDetailed()
+        XCTAssertNil(connErr, "connection diagnostic should return nil when engine is initialized")
+        bridge.shutdown()
+    }
+
     func testNewBridgeMethods() {
         let bridge = BranchDamCoreBridge.shared
         let initialized = bridge.initialize(
@@ -177,9 +199,6 @@ final class BranchDamCoreBridgeTests: XCTestCase {
 
         let activeProgress = bridge.getActiveUploadProgress()
         XCTAssertNil(activeProgress, "no active upload should be in progress initially")
-
-        let connErr = bridge.testConnectionDetailed()
-        XCTAssertNotNil(connErr, "connection diagnostic should report error when server unreachable")
 
         let contentCheck = bridge.checkContent(fastHash: "abc", fullHash: "xyz")
         XCTAssertNil(contentCheck)
