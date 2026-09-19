@@ -54,9 +54,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version-file: core/go.mod
           cache: true
-          cache-dependency-path: go.sum
+          cache-dependency-path: core/go.sum
 
       - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v4
@@ -189,9 +189,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version-file: core/go.mod
           cache: true
-          cache-dependency-path: go.sum
+          cache-dependency-path: core/go.sum
 
       - name: Build branchdam.xcframework
         run: ./scripts/build-mobile.sh --ios-only

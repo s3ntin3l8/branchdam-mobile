@@ -14,6 +14,10 @@ on:
   pull_request:
     types: [labeled]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -28,14 +32,17 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
 
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v4
@@ -66,8 +73,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
 
       - name: Build BranchDam.xcframework
         run: ./scripts/build-mobile.sh --ios-only

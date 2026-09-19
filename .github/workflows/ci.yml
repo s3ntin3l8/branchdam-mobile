@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -74,9 +78,17 @@ jobs:
           go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
 
+      - name: Cache Xcode DerivedData
+        uses: actions/cache@v4
+        with:
+          path: build/DerivedData
+          key: ${{ runner.os }}-xcode-deriveddata-${{ hashFiles('ios/**/*.swift', 'ios/**/*.xcodeproj', 'core/go.mod', 'core/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-deriveddata-
+
       - name: Build Go Core xcframework
         run: |
-          ./scripts/build-mobile.sh --ios-only
+          ./scripts/build-mobile.sh --ios-sim-only
 
       - name: Run iOS Unit Tests
         run: |
@@ -85,6 +97,7 @@ jobs:
             -scheme BranchDamApp \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             -derivedDataPath build/DerivedData \
+            -quiet \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
@@ -99,7 +112,15 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
 
       - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v4
@@ -118,7 +139,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew test
+          ./gradlew testDebugUnitTest
 
       - name: Verify 16KB ELF alignment of bundled .so files
         env:
