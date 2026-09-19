@@ -46,8 +46,9 @@ final class SyncStatusViewModel: ObservableObject {
         startProgressPolling()
 
         BackgroundSyncManager.shared.triggerImmediateSync { [weak self] success in
+            guard let self = self else { return }
             Task { @MainActor in
-                guard let self = self, !self.isCancelled else { return }
+                guard !self.isCancelled else { return }
                 self.stopProgressPolling()
                 let now = Date()
                 UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.lastSyncTimeKey)
