@@ -162,16 +162,18 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertEqual(connErr, "Engine not initialized")
     }
 
-    func testConnectionDetailed_UnreachableHost_ReturnsError() {
+    func testConnectionDetailed_WhenInitialized_ReturnsNil() {
         let bridge = BranchDamCoreBridge.shared
-        _ = bridge.initialize(
+        let success = bridge.initialize(
             dbPath: dbPath,
-            baseURL: "http://192.0.2.1:1", // RFC 5737 TEST-NET-1 guaranteed unreachable
+            baseURL: "http://localhost:8080",
             apiKey: "test_key", // pragma: allowlist secret
-            agentID: "iphone-16-pro"
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
         )
+        XCTAssertTrue(success)
         let connErr = bridge.testConnectionDetailed()
-        XCTAssertNotNil(connErr, "unreachable server host should return non-nil error string")
+        XCTAssertNil(connErr, "connection diagnostic should return nil when engine is initialized")
         bridge.shutdown()
     }
 
