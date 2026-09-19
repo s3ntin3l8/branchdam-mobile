@@ -108,10 +108,12 @@ public class GalleryViewModel: ObservableObject {
     public func batchReclaim() {
         let targets = items.filter { selectedIds.contains($0.id) }
         var eligibleAssets = [PHAsset]()
+        var eligibleIds = [String]()
         for item in targets {
             let (eligible, _) = BranchDamCoreBridge.shared.reclaimSafeSpace(localID: item.id)
             if eligible {
                 eligibleAssets.append(item.asset)
+                eligibleIds.append(item.id)
             }
         }
 
@@ -127,6 +129,10 @@ public class GalleryViewModel: ObservableObject {
                         self.batchStatusMessage = "Reclaimed \(eligibleAssets.count) items"
                         Task { await self.load() }
                     } else {
+                        // Rollback offloaded flag for all eligible assets that failed local deletion
+                        for id in eligibleIds {
+                            _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: id, isOffloaded: false)
+                        }
                         self.batchStatusMessage = "Reclaim cancelled or failed"
                     }
                 }
@@ -143,7 +149,7 @@ public class GalleryViewModel: ObservableObject {
         }
     }
 
-    private static func fetchItems() async throws -> [GalleryItem] {
+    nonisolated private static func fetchItems() async throws -> [GalleryItem] {
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.fetchLimit = 500
@@ -268,6 +274,10 @@ public struct GalleryView: View {
 
     public init() {}
 
+    private var eligibleUploadCount: Int {
+        viewModel.items.filter { viewModel.selectedIds.contains($0.id) && !$0.isBackedUp }.count
+    }
+
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -278,14 +288,15 @@ public struct GalleryView: View {
                         Button {
                             viewModel.batchUpload()
                         } label: {
-                            Label("Upload (\(viewModel.selectedIds.count))", systemImage: "icloud.and.arrow.up.fill")
+                            Label("Upload (\(eligibleUploadCount))", systemImage: "icloud.and.arrow.up.fill")
                                 .font(.subheadline.bold())
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(Color.accentColor)
+                                .background(eligibleUploadCount > 0 ? Color.accentColor : Color.secondary.opacity(0.3))
                                 .foregroundColor(.white)
                                 .cornerRadius(10)
                         }
+                        .disabled(eligibleUploadCount == 0)
 
                         Button(role: .destructive) {
                             viewModel.batchReclaim()
