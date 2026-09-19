@@ -1,7 +1,7 @@
 import SwiftUI
 import Photos
 
-public struct AppleAuditCandidate: Identifiable, Equatable {
+public struct AppleAuditCandidate: Identifiable, Equatable, Sendable {
     public let id: String
     public let masterLocalId: String
     public let derivativeLocalId: String
@@ -53,14 +53,18 @@ public class LineageViewModel: ObservableObject {
     }
 
     public func confirmCandidate(_ candidate: AppleAuditCandidate) {
-        _ = BranchDamCoreBridge.shared.enqueueLineageEvent(
+        let eventUuid = BranchDamCoreBridge.shared.enqueueLineageEvent(
             parentUUID: candidate.masterLocalId,
             childUUID: candidate.derivativeLocalId,
             relationshipType: "DERIVED_FROM",
             resolver: candidate.resolver,
             confidence: 1.00
         )
-        advanceQueue()
+        if !eventUuid.isEmpty {
+            advanceQueue()
+        } else {
+            loadError = "Failed to confirm lineage pair (engine uninitialized)"
+        }
     }
 
     public func rejectCandidate(_ candidate: AppleAuditCandidate) {
@@ -73,7 +77,7 @@ public class LineageViewModel: ObservableObject {
         }
     }
 
-    private static func fetchCandidates() async throws -> [AppleAuditCandidate] {
+    nonisolated private static func fetchCandidates() async throws -> [AppleAuditCandidate] {
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         options.fetchLimit = 200
