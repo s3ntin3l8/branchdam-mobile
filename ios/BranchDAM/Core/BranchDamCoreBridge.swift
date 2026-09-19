@@ -59,6 +59,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
 
     private let workQueue = DispatchQueue(label: "com.branchdam.mobile.bridge", qos: .userInitiated)
     public private(set) var isInitialized: Bool = false
+    private var mockOffloadedSet = Set<String>()
 
     public static var engineVersion: String {
         #if canImport(branchdam)
@@ -260,7 +261,11 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return out
         #else
-        return false
+        var out = false
+        workQueue.sync {
+            out = mockOffloadedSet.contains(localID)
+        }
+        return out
         #endif
     }
 
@@ -278,6 +283,13 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return success
         #else
+        workQueue.sync {
+            if isOffloaded {
+                mockOffloadedSet.insert(localID)
+            } else {
+                mockOffloadedSet.remove(localID)
+            }
+        }
         return true
         #endif
     }
