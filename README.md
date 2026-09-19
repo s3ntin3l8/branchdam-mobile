@@ -74,6 +74,18 @@ The branchdam engine ships as a single gomobile-bound Go package at the reposito
 
 Both targets are uncommitted build artifacts generated on-demand by `./scripts/build-mobile.sh` or published as GitHub Release binaries.
 
+#### Prebuilt Release Drop-In
+To use the prebuilt iOS framework from a GitHub Release asset without building from source locally:
+1. Download `branchdam.xcframework.zip` and `branchdam.xcframework.zip.sha256` from the release assets.
+2. Verify the checksum:
+   ```bash
+   shasum -a 256 -c branchdam.xcframework.zip.sha256
+   ```
+3. Extract into `ios/Frameworks/`:
+   ```bash
+   unzip branchdam.xcframework.zip -d ios/Frameworks/
+   ```
+
 To build both at once:
 
 ```bash
