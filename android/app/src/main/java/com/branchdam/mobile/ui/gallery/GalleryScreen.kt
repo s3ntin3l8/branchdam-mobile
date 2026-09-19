@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
@@ -54,6 +55,7 @@ fun GalleryScreen(
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
     onNavigateToDetail: (Long) -> Unit = {},
+    onNavigateToSafeSpace: () -> Unit = {},
 ) {
     val rawItems by viewModel.items.collectAsStateWithLifecycle()
     val displayedItems by viewModel.displayedItems.collectAsStateWithLifecycle()
@@ -328,6 +330,13 @@ fun GalleryScreen(
                                 )
                             }
                         }
+
+                        IconButton(onClick = onNavigateToSafeSpace) {
+                            Icon(
+                                imageVector = Icons.Default.CleaningServices,
+                                contentDescription = "Free Up Storage (Safe Space)"
+                            )
+                        }
                     }
                 )
             }
@@ -384,7 +393,9 @@ fun GalleryScreen(
                         EmptyGalleryState()
                     }
                     else -> {
+                        val gridState = rememberLazyGridState()
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Adaptive(minSize = 110.dp),
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(2.dp),
@@ -422,7 +433,11 @@ private fun GalleryItemCard(
     val imageRequest = remember(galleryItem.mediaItem.contentUri) {
         val builder = ImageRequest.Builder(context)
             .data(Uri.parse(galleryItem.mediaItem.contentUri))
-            .crossfade(200)
+            .size(300, 300)
+            .scale(coil.size.Scale.FILL)
+            .precision(coil.size.Precision.INEXACT)
+            .allowHardware(true)
+            .crossfade(150)
         if (galleryItem.mediaItem.isVideo) {
             builder.decoderFactory(VideoFrameDecoder.Factory())
         } else {
@@ -438,13 +453,13 @@ private fun GalleryItemCard(
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) {
-                        onToggleSelect()
+                        currentToggleSelect()
                     } else {
-                        onClick()
+                        currentClick()
                     }
                 },
                 onLongClick = {
-                    onToggleSelect()
+                    currentToggleSelect()
                 }
             ),
         shape = RoundedCornerShape(2.dp),

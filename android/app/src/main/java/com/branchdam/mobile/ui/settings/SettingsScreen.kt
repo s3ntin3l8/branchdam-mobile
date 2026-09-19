@@ -1,5 +1,6 @@
 package com.branchdam.mobile.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -51,6 +52,10 @@ fun SettingsScreen(
             currentPage = SettingsPage.Categories
             lastProcessedResetTrigger = resetTrigger
         }
+    }
+
+    BackHandler(enabled = currentPage != SettingsPage.Categories) {
+        currentPage = SettingsPage.Categories
     }
 
     when (currentPage) {
@@ -145,8 +150,8 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         SettingsCategoryRow(
-                            title = "Import",
-                            subtitle = "Camera roll auto-import",
+                            title = "Import & Folders",
+                            subtitle = "Auto-import & Gallery folders",
                             icon = Icons.Default.CloudUpload,
                             iconColor = MaterialTheme.colorScheme.tertiary,
                             onClick = { currentPage = SettingsPage.Import },

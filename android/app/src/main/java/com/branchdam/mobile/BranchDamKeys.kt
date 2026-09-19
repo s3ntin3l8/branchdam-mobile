@@ -101,6 +101,11 @@ object BranchDamKeys {
     const val THEME_MODE = "branchdam_theme_mode"
 
     /**
+     * Set of folder names configured by the user to display in Gallery view.
+     */
+    const val INCLUDED_GALLERY_FOLDERS = "branchdam_included_gallery_folders"
+
+    /**
      * Whether the user has completed the onboarding flow.
      */
     const val ONBOARDING_COMPLETED = "branchdam_onboarding_completed"

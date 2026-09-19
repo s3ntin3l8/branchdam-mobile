@@ -28,7 +28,7 @@ object MediaScanner {
     private const val QUERY_ARG_SQL_SORT_ORDER = "android:query-arg-sql-sort-order"
     private const val QUERY_ARG_LIMIT = "android:query-arg-limit"
 
-    fun queryRecentImages(context: Context, minDateTakenUnix: Long = 0, limit: Int = 100): List<MediaItem> {
+    fun queryRecentImages(context: Context, minDateTakenUnix: Long = 0, limit: Int = 5000): List<MediaItem> {
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
@@ -36,7 +36,8 @@ object MediaScanner {
             MediaStore.Images.Media.MIME_TYPE,
             MediaStore.Images.Media.SIZE,
             MediaStore.Images.Media.DATE_TAKEN,
-            MediaStore.Images.Media.BUCKET_DISPLAY_NAME
+            MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
+            MediaStore.Images.Media.ORIENTATION
         )
 
         val selection = "${MediaStore.Images.Media.DATE_TAKEN} > ?"
@@ -55,7 +56,7 @@ object MediaScanner {
         )
     }
 
-    fun queryRecentVideos(context: Context, minDateTakenUnix: Long = 0, limit: Int = 50): List<MediaItem> {
+    fun queryRecentVideos(context: Context, minDateTakenUnix: Long = 0, limit: Int = 1000): List<MediaItem> {
         val projection = arrayOf(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.DISPLAY_NAME,
@@ -82,21 +83,38 @@ object MediaScanner {
         )
     }
 
+    fun extractFolderName(bucketDisplayName: String?, filePath: String): String {
+        if (!bucketDisplayName.isNullOrBlank()) {
+            return bucketDisplayName
+        }
+        if (filePath.isNotBlank()) {
+            val parent = if (filePath.contains('/')) {
+                filePath.substringBeforeLast('/').substringAfterLast('/')
+            } else ""
+            if (parent.isNotBlank() && parent != "0" && parent != "emulated") {
+                return parent
+            }
+        }
+        return "Camera"
+    }
+
     fun queryAvailableFolders(context: Context): List<String> {
         val folders = mutableSetOf<String>()
-        val projection = arrayOf(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
-        val bundle = buildQueryBundle("", arrayOf(), "${MediaStore.MediaColumns.BUCKET_DISPLAY_NAME} ASC", 200)
+        folders.add("Camera")
+        val projection = arrayOf(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME, MediaStore.MediaColumns.DATA)
+        val bundle = buildQueryBundle("", arrayOf(), "", 2000)
 
         for (uri in listOf(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)) {
             try {
                 context.contentResolver.query(uri, projection, bundle, null)?.use { cursor ->
                     val bucketCol = cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
-                    if (bucketCol != -1) {
-                        while (cursor.moveToNext()) {
-                            val name = cursor.getString(bucketCol)
-                            if (!name.isNullOrEmpty()) {
-                                folders.add(name)
-                            }
+                    val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    while (cursor.moveToNext()) {
+                        val bucket = if (bucketCol != -1) cursor.getString(bucketCol) else null
+                        val data = if (dataCol != -1) cursor.getString(dataCol) ?: "" else ""
+                        val folder = extractFolderName(bucket, data)
+                        if (folder.isNotBlank()) {
+                            folders.add(folder)
                         }
                     }
                 }
@@ -124,6 +142,7 @@ object MediaScanner {
         val cursor: Cursor? = try {
             context.contentResolver.query(uri, projection, bundle, null)
         } catch (e: SecurityException) {
+            // Cold-launch permission race: when app starts up before READ_MEDIA_IMAGES permission is granted by the system, query throws SecurityException. Return empty list so scanning fails gracefully without crashing.
             Log.w(TAG, "queryMediaUri($uri) denied; returning empty list", e)
             return emptyList()
         }
@@ -136,6 +155,7 @@ object MediaScanner {
             val sizeColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
             val dateColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_TAKEN)
             val bucketColumn = it.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+            val orientationColumn = it.getColumnIndex(MediaStore.Images.Media.ORIENTATION)
 
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
@@ -144,7 +164,9 @@ object MediaScanner {
                 val mimeType = it.getString(mimeColumn) ?: if (isVideo) "video/mp4" else "image/jpeg"
                 val sizeBytes = it.getLong(sizeColumn)
                 val dateTaken = it.getLong(dateColumn) / 1000L
-                val folderName = if (bucketColumn != -1) it.getString(bucketColumn) ?: "Camera" else "Camera"
+                val rawBucket = if (bucketColumn != -1) it.getString(bucketColumn) else null
+                val folderName = extractFolderName(rawBucket, filePath)
+                val orientation = if (orientationColumn != -1) it.getInt(orientationColumn) else 0
 
                 val itemUri = ContentUris.withAppendedId(uri, id).toString()
                 val isRaw = displayName.endsWith(".dng", ignoreCase = true) || mimeType == "image/x-adobe-dng"
@@ -159,7 +181,8 @@ object MediaScanner {
                         sizeBytes = sizeBytes,
                         dateTakenUnix = dateTaken,
                         isRaw = isRaw,
-                        folderName = folderName
+                        folderName = folderName,
+                        orientationDegrees = orientation
                     )
                 )
             }
@@ -193,9 +216,17 @@ object MediaScanner {
         sortOrder: String,
         limit: Int,
     ): android.os.Bundle = android.os.Bundle().apply {
-        putString(QUERY_ARG_SQL_SELECTION, selection)
-        putStringArray(QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
-        putString(QUERY_ARG_SQL_SORT_ORDER, sortOrder)
-        putInt(QUERY_ARG_LIMIT, limit)
+        if (selection.isNotBlank()) {
+            putString(QUERY_ARG_SQL_SELECTION, selection)
+            if (selectionArgs.isNotEmpty()) {
+                putStringArray(QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
+            }
+        }
+        if (sortOrder.isNotBlank()) {
+            putString(QUERY_ARG_SQL_SORT_ORDER, sortOrder)
+        }
+        if (limit > 0) {
+            putInt(QUERY_ARG_LIMIT, limit)
+        }
     }
 }

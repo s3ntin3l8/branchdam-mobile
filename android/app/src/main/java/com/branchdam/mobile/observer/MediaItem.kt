@@ -1,5 +1,8 @@
 package com.branchdam.mobile.observer
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class MediaItem(
     val id: Long,
     val contentUri: String,
@@ -10,7 +13,8 @@ data class MediaItem(
     val dateTakenUnix: Long,
     val isRaw: Boolean,
     val burstId: String? = null,
-    val folderName: String = "Camera"
+    val folderName: String = "Camera",
+    val orientationDegrees: Int = 0
 ) {
     val isVideo: Boolean
         get() = mimeType.startsWith("video/")

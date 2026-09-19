@@ -15,29 +15,51 @@ object EditCorrelator {
 
     /**
      * Correlates in-phone edits (Google Photos / Luminar Neo Mobile exports in Pictures/ or DCIM/Restored)
-     * back to the camera roll master asset.
+     * back to the camera roll master asset using O(1) hash map indexing.
      */
     fun findInPhoneEdits(masters: List<MediaItem>, derivatives: List<MediaItem>): List<InPhoneEdit> {
         val edits = mutableListOf<InPhoneEdit>()
 
+        // Index masters by normalized base stem for O(1) hash lookup
+        val masterStemMap = HashMap<String, MediaItem>(masters.size)
+        for (master in masters) {
+            val stem = extractBaseStem(master.displayName)
+            if (stem.isNotBlank()) {
+                masterStemMap[stem] = master
+            }
+        }
+
+        // Only evaluate candidates that contain editor path or filename hints
         for (edited in derivatives) {
+            val path = edited.filePath
+            val name = edited.displayName
+
+            val isEditedCandidate = path.contains("Luminar", ignoreCase = true) ||
+                path.contains("Edited", ignoreCase = true) ||
+                path.contains("Restored", ignoreCase = true) ||
+                name.contains("edited", ignoreCase = true) ||
+                name.contains("exported", ignoreCase = true) ||
+                name.contains("-EDIT", ignoreCase = true)
+
+            if (!isEditedCandidate) continue
+
             val app = when {
-                edited.filePath.contains("Luminar", ignoreCase = true) -> "Luminar Neo Mobile"
-                edited.filePath.contains("Edited", ignoreCase = true) -> "Google Photos Editor"
-                edited.filePath.contains("Restored", ignoreCase = true) -> "Google Photos Restored"
+                path.contains("Luminar", ignoreCase = true) -> "Luminar Neo Mobile"
+                path.contains("Edited", ignoreCase = true) -> "Google Photos Editor"
+                path.contains("Restored", ignoreCase = true) -> "Google Photos Restored"
                 else -> "In-Phone Editor"
             }
 
-            // Look for master with stem match or date match
             val editedStem = extractEditedBaseStem(edited.displayName)
-            val matchingMaster = masters.firstOrNull { master ->
-                master.id != edited.id && (
-                    master.displayName.contains(editedStem, ignoreCase = true) ||
-                    edited.displayName.contains(extractBaseStem(master.displayName), ignoreCase = true)
-                )
+            var matchingMaster = masterStemMap[editedStem]
+            if (matchingMaster == null && editedStem.isNotBlank()) {
+                matchingMaster = masters.firstOrNull { master ->
+                    val masterStem = extractBaseStem(master.displayName)
+                    masterStem.isNotBlank() && editedStem.startsWith(masterStem)
+                }
             }
 
-            if (matchingMaster != null) {
+            if (matchingMaster != null && matchingMaster.id != edited.id) {
                 edits.add(
                     InPhoneEdit(
                         originalMaster = matchingMaster,

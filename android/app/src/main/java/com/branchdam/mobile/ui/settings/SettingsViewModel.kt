@@ -68,6 +68,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _autoImportEnabled = MutableStateFlow(ImportConfirmationNotifier.getAutoImportEnabled(application))
     val autoImportEnabled: StateFlow<Boolean> = _autoImportEnabled.asStateFlow()
 
+    private val _includedFolders = MutableStateFlow<Set<String>>(
+        nonSecretPrefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+    )
+    val includedFolders: StateFlow<Set<String>> = _includedFolders.asStateFlow()
+
     private val _namingTemplate = MutableStateFlow("{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}")
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
@@ -190,6 +195,37 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setAutoImportEnabled(enabled: Boolean) {
         _autoImportEnabled.value = enabled
         ImportConfirmationNotifier.setAutoImportEnabled(getApplication(), enabled)
+    }
+
+    fun toggleFolderIncluded(folder: String, availableFolders: List<String> = emptyList()) {
+        val currentStored = _includedFolders.value - NO_FOLDERS_SENTINEL
+        val hasSentinel = _includedFolders.value.contains(NO_FOLDERS_SENTINEL)
+        val effectiveAvailable = if (availableFolders.isNotEmpty()) {
+            availableFolders
+        } else {
+            listOf(folder)
+        }
+
+        val currentlySelected = if (currentStored.isEmpty() && !hasSentinel) {
+            effectiveAvailable.toSet()
+        } else {
+            currentStored
+        }
+
+        val updated = if (currentlySelected.contains(folder)) {
+            currentlySelected - folder
+        } else {
+            currentlySelected + folder
+        }
+
+        val normalized = when {
+            updated.isEmpty() -> setOf(NO_FOLDERS_SENTINEL)
+            updated.containsAll(effectiveAvailable) -> emptySet()
+            else -> updated
+        }
+
+        nonSecretPrefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, normalized).apply()
+        _includedFolders.value = normalized
     }
 
     fun setSyncIntervalMinutes(minutes: Int) {
@@ -331,6 +367,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
+        const val NO_FOLDERS_SENTINEL = "__NONE__"
+
         /**
          * Default upper bound on the time `checkConnection` will wait
          * for the server handshake before treating it as unreachable.

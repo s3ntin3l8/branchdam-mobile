@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -200,5 +201,89 @@ class SettingsViewModelRecheckTest {
             "agentId must reflect the QR-scanned value",
             "test-agent" == viewModel.agentId.value,
         )
+    }
+
+    @Test
+    fun testToggleFolderIncluded_whenInitiallyEmpty_disablesOnlyTargetFolder() = runTest(testDispatcher) {
+        SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
+        SettingsViewModel.testConnectionFn = { true }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val availableFolders = listOf("Camera", "Download", "Pictures")
+        assertEquals(emptySet<String>(), viewModel.includedFolders.value)
+
+        // Toggle "Camera" off when initially all folders are included (emptySet)
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+
+        val expected = setOf("Download", "Pictures")
+        assertEquals(expected, viewModel.includedFolders.value)
+        assertFalse(viewModel.includedFolders.value.contains("Camera"))
+        assertTrue(viewModel.includedFolders.value.contains("Download"))
+        assertTrue(viewModel.includedFolders.value.contains("Pictures"))
+    }
+
+    @Test
+    fun testToggleFolderIncluded_whenToggledBack_restoresAllFoldersAsEmptySet() = runTest(testDispatcher) {
+        SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
+        SettingsViewModel.testConnectionFn = { true }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val availableFolders = listOf("Camera", "Download", "Pictures")
+
+        // First disable Camera
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+        assertEquals(setOf("Download", "Pictures"), viewModel.includedFolders.value)
+
+        // Toggle Camera back on
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+
+        // Should normalize back to emptySet (meaning all folders included)
+        assertEquals(emptySet<String>(), viewModel.includedFolders.value)
+    }
+
+    @Test
+    fun testToggleFolderIncluded_whenDisablingMultipleFolders() = runTest(testDispatcher) {
+        SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
+        SettingsViewModel.testConnectionFn = { true }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val availableFolders = listOf("Camera", "Download", "Pictures")
+
+        // Disable Camera -> ["Download", "Pictures"]
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+
+        // Disable Download -> ["Pictures"]
+        viewModel.toggleFolderIncluded("Download", availableFolders)
+
+        assertEquals(setOf("Pictures"), viewModel.includedFolders.value)
+    }
+
+    @Test
+    fun testToggleFolderIncluded_whenLastRemainingFolderToggled_resetsToEmptySet() = runTest(testDispatcher) {
+        SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
+        SettingsViewModel.testConnectionFn = { true }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val availableFolders = listOf("Camera", "Download", "Pictures")
+
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+        viewModel.toggleFolderIncluded("Download", availableFolders)
+        assertEquals(setOf("Pictures"), viewModel.includedFolders.value)
+
+        // Unchecking the last remaining checked folder sets NO_FOLDERS_SENTINEL to suppress all folders
+        viewModel.toggleFolderIncluded("Pictures", availableFolders)
+        assertEquals(setOf(SettingsViewModel.NO_FOLDERS_SENTINEL), viewModel.includedFolders.value)
+
+        // Re-checking a folder after all were unchecked strips sentinel and includes only the re-checked folder
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+        assertEquals(setOf("Camera"), viewModel.includedFolders.value)
     }
 }

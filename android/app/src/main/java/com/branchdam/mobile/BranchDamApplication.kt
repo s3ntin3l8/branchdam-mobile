@@ -3,13 +3,25 @@ package com.branchdam.mobile
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import com.branchdam.mobile.observer.MediaStoreObserver
 import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncNotificationHelper
 import com.branchdam.mobile.service.SyncScheduler
+import com.branchdam.mobile.ui.components.RawPreviewFetcher
 import java.io.File
 
-open class BranchDamApplication : Application() {
+open class BranchDamApplication : Application(), ImageLoaderFactory {
+
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .components {
+                add(RawPreviewFetcher.Factory(this@BranchDamApplication))
+            }
+            .crossfade(true)
+            .build()
+    }
 
     lateinit var mediaStoreObserver: MediaStoreObserver
         private set
