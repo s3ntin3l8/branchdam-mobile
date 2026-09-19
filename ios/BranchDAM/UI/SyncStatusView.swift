@@ -16,7 +16,8 @@ class SyncStatusViewModel: ObservableObject {
     @Published var isTestingConnection = false
 
     private static let lastSyncTimeKey = "branchdam_last_sync_time"
-    private var progressTimer: Timer? = nil
+    private var pollingTask: Task<Void, Never>? = nil
+    private var isCancelled = false
 
     init() {
         refresh()
@@ -40,29 +41,32 @@ class SyncStatusViewModel: ObservableObject {
     func triggerSync() {
         guard !isSyncing else { return }
         isSyncing = true
+        isCancelled = false
         syncResultMessage = nil
         startProgressPolling()
 
         BackgroundSyncManager.shared.triggerImmediateSync { [weak self] success in
-            DispatchQueue.main.async {
-                self?.stopProgressPolling()
+            Task { @MainActor in
+                guard let self = self, !self.isCancelled else { return }
+                self.stopProgressPolling()
                 let now = Date()
                 UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.lastSyncTimeKey)
-                self?.lastSyncTime = now
-                self?.isSyncing = false
-                self?.activeProgress = nil
-                self?.syncResultMessage = success ? "Sync completed" : "Sync completed (no new items)"
-                self?.refreshQueueMetrics()
+                self.lastSyncTime = now
+                self.isSyncing = false
+                self.activeProgress = nil
+                self.syncResultMessage = success ? "Sync completed" : "Sync batch completed"
+                self.refreshQueueMetrics()
             }
         }
     }
 
     func cancelSync() {
+        isCancelled = true
         BranchDamCoreBridge.shared.setCancelFlag()
-        syncResultMessage = "Sync cancelled by user"
         stopProgressPolling()
         isSyncing = false
         activeProgress = nil
+        syncResultMessage = "Sync cancelled by user"
         refreshQueueMetrics()
     }
 
@@ -86,23 +90,26 @@ class SyncStatusViewModel: ObservableObject {
 
     private func startProgressPolling() {
         stopProgressPolling()
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.pollActiveProgress()
+        pollingTask = Task.detached(priority: .utility) { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if Task.isCancelled { break }
+                let isReady = await MainActor.run { self?.isEngineReady ?? false }
+                if isReady {
+                    let progress = BranchDamCoreBridge.shared.getActiveUploadProgress()
+                    let pending = BranchDamCoreBridge.shared.countPendingUploads()
+                    await MainActor.run {
+                        self?.activeProgress = progress
+                        self?.pendingCount = pending
+                    }
+                }
             }
         }
     }
 
     private func stopProgressPolling() {
-        progressTimer?.invalidate()
-        progressTimer = nil
-    }
-
-    private func pollActiveProgress() {
-        if isEngineReady {
-            activeProgress = BranchDamCoreBridge.shared.getActiveUploadProgress()
-            refreshQueueMetrics()
-        }
+        pollingTask?.cancel()
+        pollingTask = nil
     }
 
     func formatSpeed(_ speedBytesPerSec: Double) -> String {
