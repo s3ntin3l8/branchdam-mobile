@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.9](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.8...branchdam-mobile-v0.7.9) (2026-09-19)
+
+
+### Features
+
+* **android:** add visual asset lineage comparison and optimize space utilization across all tabs ([#165](https://github.com/s3ntin3l8/branchdam-mobile/issues/165)) ([76c57a6](https://github.com/s3ntin3l8/branchdam-mobile/commit/76c57a646a34f80cd7e5fcc4674ab1fde2802449))
+* **gallery:** add ExoPlayer video playback, EXIF rotation, and top bar action controls ([#169](https://github.com/s3ntin3l8/branchdam-mobile/issues/169)) ([3ed6b25](https://github.com/s3ntin3l8/branchdam-mobile/commit/3ed6b2542029997e629d58f0b9b3c275a6de77ba))
+* **sync:** improve core engine concurrency, upload retries, and progress tracking ([#167](https://github.com/s3ntin3l8/branchdam-mobile/issues/167)) ([05bf97a](https://github.com/s3ntin3l8/branchdam-mobile/commit/05bf97a06fb360834732c9bd28efb4fd4ca1090a))
+
+
+### Bug Fixes
+
+* **gallery:** finalize EXIF orientation gating and remove duplicate STEM_SUFFIX_REGEX declaration ([ee5cfcc](https://github.com/s3ntin3l8/branchdam-mobile/commit/ee5cfcc5e423f54cfc56f7d49fc3ab40efac9581))
+* **lineage:** support TopShot sequence suffixes in RAW/JPEG stem pairing ([#168](https://github.com/s3ntin3l8/branchdam-mobile/issues/168)) ([5e146de](https://github.com/s3ntin3l8/branchdam-mobile/commit/5e146dea03bae97d157a9a420cfabcbdae7eb9dd))
+
+
+### Performance Improvements
+
+* **gallery:** optimize grid scrolling, EXIF caching, and RAW preview loading ([#171](https://github.com/s3ntin3l8/branchdam-mobile/issues/171)) ([1b65daf](https://github.com/s3ntin3l8/branchdam-mobile/commit/1b65dafe6fa46ff76463699ac242a5d1d1088a17))
+
 ## [0.7.8](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.7...branchdam-mobile-v0.7.8) (2026-09-17)
 
 
