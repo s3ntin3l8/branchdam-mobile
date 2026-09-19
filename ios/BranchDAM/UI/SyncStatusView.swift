@@ -11,6 +11,7 @@ final class SyncStatusViewModel: ObservableObject {
     @Published var lastSyncTime: Date? = nil
     @Published var syncResultMessage: String? = nil
     @Published var pendingCount: Int64 = 0
+    @Published var failedCount: Int64 = 0
     @Published var activeProgress: ActiveUploadProgress? = nil
     @Published var connectionDiagnosticError: String? = nil
     @Published var isTestingConnection = false
@@ -33,8 +34,11 @@ final class SyncStatusViewModel: ObservableObject {
     func refreshQueueMetrics() {
         if isEngineReady {
             pendingCount = BranchDamCoreBridge.shared.countPendingUploads()
+            let statuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
+            failedCount = Int64(statuses.values.filter { $0 == "FAILED" }.count)
         } else {
             pendingCount = 0
+            failedCount = 0
         }
     }
 
@@ -55,8 +59,15 @@ final class SyncStatusViewModel: ObservableObject {
                 self.lastSyncTime = now
                 self.isSyncing = false
                 self.activeProgress = nil
-                self.syncResultMessage = success ? "Sync completed" : "Sync batch completed"
+
                 self.refreshQueueMetrics()
+                if success {
+                    self.syncResultMessage = "Sync completed"
+                } else if self.pendingCount > 0 {
+                    self.syncResultMessage = "Sync attempt failed (check connection or server)"
+                } else {
+                    self.syncResultMessage = "Sync batch completed (no items uploaded)"
+                }
             }
         }
     }
@@ -210,11 +221,11 @@ public struct SyncStatusView: View {
                                 .font(.subheadline)
                         }
 
-                        if viewModel.pendingCount > 0 {
+                        if viewModel.failedCount > 0 {
                             Button {
                                 viewModel.retryFailedUploads()
                             } label: {
-                                Label("Retry Failed Uploads", systemImage: "arrow.clockwise.circle")
+                                Label("Retry Failed Uploads (\(viewModel.failedCount))", systemImage: "arrow.clockwise.circle")
                                     .font(.caption.bold())
                             }
                             .padding(.top, 4)
@@ -296,7 +307,7 @@ public struct SyncStatusView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(viewModel.isEngineReady ? Color.accentColor : Color.secondary.opacity(0.3))
+                            .background(viewModel.isEngineReady ? Color.accentColor : Color.accentColor.opacity(0.8))
                             .foregroundColor(.white)
                             .cornerRadius(12)
                         }

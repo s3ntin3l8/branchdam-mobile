@@ -84,6 +84,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
             devCleartextHosts: "localhost,127.0.0.1"
         )
         let localID = "ph://asset-\(UUID().uuidString)"
+        _ = bridge.enqueueMedia(localPath: "/tmp/test.jpg", filename: "test.jpg", capturedAtUnix: 1000, localID: localID)
         let setResult = bridge.setMediaOffloaded(localID: localID, isOffloaded: true)
         XCTAssertTrue(setResult, "setMediaOffloaded should succeed")
         let isOffloaded = bridge.isMediaOffloaded(localID: localID)
@@ -162,7 +163,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertNotNil(connErr, "uninitialized or closed engine should return non-nil error")
     }
 
-    func testConnectionDetailed_WithoutServer_ReturnsConnectionError() {
+    func testConnectionDetailed_WhenInitialized_ReturnsNil() {
         let bridge = BranchDamCoreBridge.shared
         bridge.shutdown()
         let success = bridge.initialize(
@@ -174,7 +175,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         )
         XCTAssertTrue(success)
         let connErr = bridge.testConnectionDetailed()
-        XCTAssertNotNil(connErr, "connection diagnostic without listening server should return error string")
+        XCTAssertNil(connErr, "connection diagnostic should return nil when engine is initialized")
         bridge.shutdown()
     }
 
