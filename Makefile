@@ -29,7 +29,7 @@ android:
 	cd android && if [ -f "./gradlew" ]; then ./gradlew assembleDebug; fi
 
 android-test:
-	cd android && if [ -f "./gradlew" ]; then ./gradlew test; fi
+	cd android && if [ -f "./gradlew" ]; then ./gradlew testDebugUnitTest; fi
 
 # Build the gomobile-bound branchdam library (Android AAR + iOS xcframework).
 # Produces android/app/libs/branchdam.aar and ios/Frameworks/BranchDam.xcframework.
