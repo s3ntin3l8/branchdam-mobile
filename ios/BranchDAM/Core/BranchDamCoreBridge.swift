@@ -21,6 +21,34 @@ public struct SafeSpaceCandidateVerdict: Codable, Equatable {
     }
 }
 
+public struct ActiveUploadProgress: Codable, Equatable {
+    public let id: Int64
+    public let filename: String
+    public let bytesSent: Int64
+    public let totalBytes: Int64
+    public let speedBytesPerSec: Double
+    public let itemIndex: Int
+    public let totalItems: Int
+
+    public init(
+        id: Int64 = 0,
+        filename: String = "",
+        bytesSent: Int64 = 0,
+        totalBytes: Int64 = 0,
+        speedBytesPerSec: Double = 0.0,
+        itemIndex: Int = 0,
+        totalItems: Int = 0
+    ) {
+        self.id = id
+        self.filename = filename
+        self.bytesSent = bytesSent
+        self.totalBytes = totalBytes
+        self.speedBytesPerSec = speedBytesPerSec
+        self.itemIndex = itemIndex
+        self.totalItems = totalItems
+    }
+}
+
 /// Bridge between the Swift shells (camera-roll observer, BGTask manager,
 /// audit UI) and the gomobile-bound `branchdam` Go engine.
 ///
@@ -30,9 +58,6 @@ public struct SafeSpaceCandidateVerdict: Codable, Equatable {
 /// dispatches each call to a private serial background queue. Callers
 /// should already be off-main-thread; invoking the bridge from the main
 /// thread is a no-op-cost that runs synchronously.
-///
-/// Sub-issue A wired the bridge to the new framework. Sub-issue B
-/// replaces the mock-fallback branches with real engine calls.
 public class BranchDamCoreBridge {
     public static let shared = BranchDamCoreBridge()
 
@@ -53,24 +78,14 @@ public class BranchDamCoreBridge {
     /// Initialize the Go engine. Returns true on success; surfaces
     /// INVALID_INPUT / DB_ERROR via the returned branchdam.Error code
     /// (logged, not raised, to keep the existing Bool return contract).
-    ///
-    /// T2-5 hardening: the API key is read from the iOS keychain by
-    /// default. The QrPairingView writes the key into the keychain
-    /// before calling initialize, so the cleartext value never leaves
-    /// the user's typing buffer for the bridge. Callers (mostly tests)
-    /// that want to bypass the keychain can pass an explicit
-    /// `apiKey` argument, which takes precedence over the keychain
-    /// read.
     public func initialize(
         dbPath: String,
         baseURL: String,
         apiKey: String? = nil,
         agentID: String = "iphone-companion",
-        version: String = "0.1.0"
+        version: String = "0.1.0",
+        devCleartextHosts: String = ""
     ) -> Bool {
-        // T2-5: resolve the API key from the keychain unless the caller
-        // supplied one explicitly. The QR pairing flow stores into the
-        // keychain and passes nothing here; tests pass an explicit value.
         let resolvedApiKey = apiKey ?? AppleKeychain.shared.apiKey ?? ""
         #if canImport(branchdam)
         var opts = branchdam.EngineOptions()
@@ -83,6 +98,7 @@ public class BranchDamCoreBridge {
         do {
             let e = try branchdam.Engine.newEngine(opts)
             self.engine = e
+            _ = try? branchdam.bindingOpen(dbPath, baseURL, resolvedApiKey, agentID, version, devCleartextHosts)
             self.isInitialized = true
             return true
         } catch {
@@ -96,9 +112,8 @@ public class BranchDamCoreBridge {
         #endif
     }
 
-    /// E.1: Idempotent engine startup. Safe to call from both the app
+    /// Idempotent engine startup. Safe to call from both the app
     /// init (pre-authorized path) and the WelcomeView grant path.
-    /// No-ops if the engine is already initialized.
     public func startEngineIfNeeded() {
         guard !isInitialized else { return }
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -129,6 +144,7 @@ public class BranchDamCoreBridge {
         #if canImport(branchdam)
         workQueue.sync {
             _ = try? self.engine?.close()
+            _ = try? branchdam.bindingClose()
             self.engine = nil
             self.isInitialized = false
         }
@@ -243,9 +259,6 @@ public class BranchDamCoreBridge {
             do {
                 out = try engine.isMediaOffloaded(localID: localID)
             } catch {
-                // B.2.3: DB error → fail closed. Returning false here
-                // causes the shell to refuse the local delete, which
-                // is exactly the invariant the audit calls out.
                 NSLog("isMediaOffloaded failed: %@", String(describing: error))
                 out = false
             }
@@ -292,10 +305,6 @@ public class BranchDamCoreBridge {
         #endif
     }
 
-    /// Engine-owned atomic reclaim. Returns the verdict so the shell
-    /// can decide whether to delete the local file. The engine does
-    /// the server re-check + the local flag set in one logical
-    /// operation (B.2.7).
     public func reclaimSafeSpace(localID: String) -> (eligible: Bool, reason: String) {
         #if canImport(branchdam)
         guard let engine = self.engine else { return (false, "engine not initialized") }
@@ -340,14 +349,150 @@ public class BranchDamCoreBridge {
         #endif
     }
 
-    /// E.4: Sets the in-process cancel flag. The next SyncUploads/SyncEvents
-    /// call will observe the flag and return early. Called by the BGTask
-    /// expiration handler so the Go engine stops HTTP transfers promptly.
-    ///
-    /// IMPORTANT: This bypasses the serial workQueue because the Go engine's
-    /// cancel flag is an atomic.Bool checked between upload items. Calling
-    /// via workQueue.sync would deadlock when syncBatch is already running
-    /// on that queue. The gomobile seq channel handles thread safety.
+    public func getMediaStatus(localID: String) -> String {
+        #if canImport(branchdam)
+        guard isInitialized else { return "NOT_ENQUEUED" }
+        var status = "NOT_ENQUEUED"
+        workQueue.sync {
+            do {
+                status = try branchdam.bindingGetMediaStatus(localID)
+            } catch {
+                NSLog("getMediaStatus failed: %@", String(describing: error))
+            }
+        }
+        return status
+        #else
+        return "NOT_ENQUEUED"
+        #endif
+    }
+
+    public func countPendingUploads() -> Int64 {
+        #if canImport(branchdam)
+        guard isInitialized else { return 0 }
+        var count: Int64 = 0
+        workQueue.sync {
+            do {
+                count = try branchdam.bindingCountPendingUploads()
+            } catch {
+                NSLog("countPendingUploads failed: %@", String(describing: error))
+            }
+        }
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    public func resetFailedUploads() -> Int64 {
+        #if canImport(branchdam)
+        guard isInitialized else { return 0 }
+        var count: Int64 = 0
+        workQueue.sync {
+            do {
+                count = try branchdam.bindingResetFailedUploads()
+            } catch {
+                NSLog("resetFailedUploads failed: %@", String(describing: error))
+            }
+        }
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    public func getActiveUploadProgress() -> ActiveUploadProgress? {
+        #if canImport(branchdam)
+        guard isInitialized else { return nil }
+        var progress: ActiveUploadProgress? = nil
+        workQueue.sync {
+            do {
+                let jsonStr = try branchdam.bindingGetActiveUploadProgress()
+                if !jsonStr.isEmpty,
+                   let data = jsonStr.data(using: .utf8),
+                   let decoded = try? JSONDecoder().decode(ActiveUploadProgress.self, from: data) {
+                    progress = decoded
+                }
+            } catch {
+                NSLog("getActiveUploadProgress failed: %@", String(describing: error))
+            }
+        }
+        return progress
+        #else
+        return nil
+        #endif
+    }
+
+    public func testConnectionDetailed() -> String? {
+        #if canImport(branchdam)
+        guard isInitialized else { return "Engine not initialized" }
+        var errorMsg: String? = nil
+        workQueue.sync {
+            do {
+                _ = try branchdam.bindingFetchNamingTemplate()
+            } catch {
+                errorMsg = String(describing: error)
+            }
+        }
+        return errorMsg
+        #else
+        return isInitialized ? nil : "Engine not initialized"
+        #endif
+    }
+
+    public func checkContent(fastHash: String, fullHash: String) -> String? {
+        #if canImport(branchdam)
+        guard isInitialized else { return nil }
+        var result: String? = nil
+        workQueue.sync {
+            do {
+                let jsonStr = try branchdam.bindingCheckContent(fastHash, fullHash)
+                if !jsonStr.isEmpty {
+                    result = jsonStr
+                }
+            } catch {
+                NSLog("checkContent failed: %@", String(describing: error))
+            }
+        }
+        return result
+        #else
+        return nil
+        #endif
+    }
+
+    public func lookupBlake3ForLocalID(localID: String) -> String {
+        #if canImport(branchdam)
+        guard isInitialized else { return "" }
+        var hash = ""
+        workQueue.sync {
+            do {
+                hash = try branchdam.bindingLookupBlake3ForLocalID(localID)
+            } catch {
+                NSLog("lookupBlake3ForLocalID failed: %@", String(describing: error))
+            }
+        }
+        return hash
+        #else
+        return ""
+        #endif
+    }
+
+    public func computeHashes(localPath: String) -> String {
+        #if canImport(branchdam)
+        guard isInitialized else { return "" }
+        var hash = ""
+        workQueue.sync {
+            do {
+                hash = try branchdam.bindingComputeHashes(localPath)
+            } catch {
+                NSLog("computeHashes failed: %@", String(describing: error))
+            }
+        }
+        return hash
+        #else
+        return ""
+        #endif
+    }
+
     public func setCancelFlag() {
         #if canImport(branchdam)
         guard let engine = self.engine else { return }
