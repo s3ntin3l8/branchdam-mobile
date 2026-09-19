@@ -162,8 +162,9 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertEqual(connErr, "Engine not initialized")
     }
 
-    func testConnectionDetailed_WhenInitialized_ReturnsNil() {
+    func testConnectionDetailed_WithoutServer_ReturnsConnectionError() {
         let bridge = BranchDamCoreBridge.shared
+        bridge.shutdown()
         let success = bridge.initialize(
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
@@ -173,12 +174,13 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         )
         XCTAssertTrue(success)
         let connErr = bridge.testConnectionDetailed()
-        XCTAssertNil(connErr, "connection diagnostic should return nil when engine is initialized")
+        XCTAssertNotNil(connErr, "connection diagnostic without listening server should return error string")
         bridge.shutdown()
     }
 
     func testNewBridgeMethods() {
         let bridge = BranchDamCoreBridge.shared
+        bridge.shutdown()
         let initialized = bridge.initialize(
             dbPath: dbPath,
             baseURL: "http://localhost:8080",
