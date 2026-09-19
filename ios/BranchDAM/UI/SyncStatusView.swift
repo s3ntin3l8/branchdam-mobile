@@ -45,8 +45,8 @@ class SyncStatusViewModel: ObservableObject {
         syncResultMessage = nil
         startProgressPolling()
 
-        BackgroundSyncManager.shared.triggerImmediateSync { [weak self] success in
-            Task { @MainActor in
+        BackgroundSyncManager.shared.triggerImmediateSync { success in
+            Task { @MainActor [weak self] in
                 guard let self = self, !self.isCancelled else { return }
                 self.stopProgressPolling()
                 let now = Date()
@@ -90,18 +90,16 @@ class SyncStatusViewModel: ObservableObject {
 
     private func startProgressPolling() {
         stopProgressPolling()
-        pollingTask = Task.detached(priority: .utility) { [weak self] in
+        pollingTask = Task.detached(priority: .utility) {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 if Task.isCancelled { break }
-                let isReady = await MainActor.run { self?.isEngineReady ?? false }
-                if isReady {
-                    let progress = BranchDamCoreBridge.shared.getActiveUploadProgress()
-                    let pending = BranchDamCoreBridge.shared.countPendingUploads()
-                    await MainActor.run {
-                        self?.activeProgress = progress
-                        self?.pendingCount = pending
-                    }
+                let progress = BranchDamCoreBridge.shared.getActiveUploadProgress()
+                let pending = BranchDamCoreBridge.shared.countPendingUploads()
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
+                    self.activeProgress = progress
+                    self.pendingCount = pending
                 }
             }
         }
