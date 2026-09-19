@@ -1,0 +1,8 @@
+framework module "Branchdam" {
+	header "ref.h"
+    header "Branchdam.objc.h"
+    header "Universe.objc.h"
+    header "Branchdam.h"
+
+    export *
+}
