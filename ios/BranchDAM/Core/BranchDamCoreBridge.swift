@@ -220,16 +220,23 @@ public class BranchDamCoreBridge {
     public func syncBatch(timeoutSecs: Int32 = 120, batchSize: Int32 = 10) -> (uploaded: Int32, eventsSent: Int32) {
         #if canImport(branchdam)
         guard isInitialized else { return (0, 0) }
-        var success = false
+        var uploaded: Int32 = 0
+        var eventsSent: Int32 = 0
         workQueue.sync {
             do {
-                try branchdam.bindingSyncBatch(Int64(timeoutSecs), Int64(batchSize))
-                success = true
+                let resStr = try branchdam.bindingSyncBatch(Int64(timeoutSecs), Int64(batchSize))
+                let parts = resStr.split(separator: ",")
+                if parts.count == 2,
+                   let u = Int32(parts[0]),
+                   let e = Int32(parts[1]) {
+                    uploaded = u
+                    eventsSent = e
+                }
             } catch {
                 NSLog("syncBatch failed: %@", String(describing: error))
             }
         }
-        return success ? (1, 0) : (0, 0)
+        return (uploaded, eventsSent)
         #else
         return (0, 0)
         #endif
