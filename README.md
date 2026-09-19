@@ -76,8 +76,8 @@ Both targets are uncommitted build artifacts generated on-demand by `./scripts/b
 
 #### Prebuilt Release Drop-In
 To use the prebuilt iOS framework from a GitHub Release asset without building from source locally:
-1. Download `branchdam.xcframework.zip` and `branchdam.xcframework.zip.sha256` from the release assets.
-2. Verify the checksum:
+1. Download `branchdam.xcframework.zip` and `branchdam.xcframework.zip.sha256` from the release assets into the repository root.
+2. From the repository root, verify the checksum:
    ```bash
    shasum -a 256 -c branchdam.xcframework.zip.sha256
    ```
