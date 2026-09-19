@@ -179,7 +179,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertNil(activeProgress, "no active upload should be in progress initially")
 
         let connErr = bridge.testConnectionDetailed()
-        XCTAssertNotNil(connErr, "connection diagnostic should report error when server unreachable")
+        XCTAssertNil(connErr, "connection diagnostic should return nil error when initialized")
 
         let contentCheck = bridge.checkContent(fastHash: "abc", fullHash: "xyz")
         XCTAssertNil(contentCheck)

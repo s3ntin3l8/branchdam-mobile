@@ -21,7 +21,7 @@ public struct SafeSpaceCandidateVerdict: Codable, Equatable {
     }
 }
 
-public struct ActiveUploadProgress: Codable, Equatable {
+public struct ActiveUploadProgress: Codable, Equatable, Sendable {
     public let id: Int64
     public let filename: String
     public let bytesSent: Int64
@@ -56,7 +56,7 @@ public struct ActiveUploadProgress: Codable, Equatable {
 /// underlying gomobile calls block (they marshal arguments and call
 /// into Go over a sequence number channel), so the bridge internally
 /// dispatches calls to a private serial background queue.
-public class BranchDamCoreBridge {
+public class BranchDamCoreBridge: @unchecked Sendable {
     public static let shared = BranchDamCoreBridge()
 
     /// Serial queue that runs the gomobile calls. gomobile's transport

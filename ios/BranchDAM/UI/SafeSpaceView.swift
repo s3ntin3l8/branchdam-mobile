@@ -6,7 +6,7 @@ public struct SafeSpaceView: View {
     @State private var verifiedCount: Int = 0
     @State private var isReclaimed = false
     @State private var isProcessing = false
-    @State private var candidateList: [(localId: String, sizeBytes: Int64, isVerified: Bool)] = []
+    @State private var candidateList: [SafeSpaceCandidate] = []
 
     public init() {}
 
@@ -50,9 +50,9 @@ public struct SafeSpaceView: View {
         guard !candidateList.isEmpty else { return }
         isProcessing = true
         let candidates = candidateList
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached(priority: .userInitiated) {
             let report = AppleSafeSpaceManager.reclaimSafeSpace(candidates: candidates)
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.isProcessing = false
                 if report.reclaimedCount > 0 {
                     self.isReclaimed = true
@@ -63,29 +63,34 @@ public struct SafeSpaceView: View {
     }
 
     private func loadCandidates() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            var foundCandidates = [(localId: String, sizeBytes: Int64, isVerified: Bool)]()
-            let fetchResult = PHAsset.fetchAssets(with: nil)
-            var totalBytes: Int64 = 0
-            var verifiedNum = 0
-
-            fetchResult.enumerateObjects { asset, _, _ in
-                let id = "ph://\(asset.localIdentifier)"
-                if BranchDamCoreBridge.shared.isMediaOffloaded(localID: id) {
-                    let estimatedSize = Int64(asset.pixelWidth * asset.pixelHeight * 3 / 4)
-                    let size = estimatedSize > 0 ? estimatedSize : Int64(5 * 1024 * 1024)
-                    foundCandidates.append((localId: id, sizeBytes: size, isVerified: true))
-                    totalBytes += size
-                    verifiedNum += 1
-                }
-            }
-
-            let resultMB = Int(totalBytes / (1024 * 1024))
-            DispatchQueue.main.async {
+        Task.detached(priority: .userInitiated) {
+            let (foundCandidates, verifiedNum, resultMB) = fetchCandidates()
+            await MainActor.run {
                 self.candidateList = foundCandidates
                 self.verifiedCount = verifiedNum
                 self.reclaimableMB = resultMB
             }
         }
+    }
+
+    nonisolated private func fetchCandidates() -> (candidates: [SafeSpaceCandidate], verifiedNum: Int, resultMB: Int) {
+        var foundCandidates = [SafeSpaceCandidate]()
+        let fetchResult = PHAsset.fetchAssets(with: nil)
+        var totalBytes: Int64 = 0
+        var verifiedNum = 0
+
+        fetchResult.enumerateObjects { asset, _, _ in
+            let id = "ph://\(asset.localIdentifier)"
+            if BranchDamCoreBridge.shared.isMediaOffloaded(localID: id) {
+                let estimatedSize = Int64(asset.pixelWidth * asset.pixelHeight * 3 / 4)
+                let size = estimatedSize > 0 ? estimatedSize : Int64(5 * 1024 * 1024)
+                foundCandidates.append(SafeSpaceCandidate(localId: id, sizeBytes: size, isVerified: true))
+                totalBytes += size
+                verifiedNum += 1
+            }
+        }
+
+        let resultMB = Int(totalBytes / (1024 * 1024))
+        return (foundCandidates, verifiedNum, resultMB)
     }
 }

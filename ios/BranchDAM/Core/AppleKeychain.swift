@@ -29,7 +29,7 @@ import Security
 /// All public methods are synchronous; the underlying Security
 /// framework calls are cheap (microseconds for the simulator, a few
 /// hundred microseconds on hardware) so no queue dispatch is needed.
-public final class AppleKeychain {
+public final class AppleKeychain: @unchecked Sendable {
     /// Production keychain service identifier. Aliased to the
     /// canonical value in [BranchDamKeys.keychainService] so the iOS
     /// shell and the Android `BranchDamKeys.keychainService` constant
@@ -45,7 +45,7 @@ public final class AppleKeychain {
     /// Default accessibility class: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     /// on physical devices so secrets are available after the first device unlock
     /// and are not migrated off-device via iCloud Keychain backups.
-    public static let defaultAccessibility: CFString = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    nonisolated(unsafe) public static let defaultAccessibility: CFString = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
     /// The shared instance used by the QR pairing flow and the
     /// BranchDamCoreBridge. Tests construct their own instances with
@@ -57,7 +57,7 @@ public final class AppleKeychain {
     public let accessibility: CFString
 
     private static let lock = NSLock()
-    private static var fallbackStore: [String: [String: String]] = [:]
+    nonisolated(unsafe) private static var fallbackStore: [String: [String: String]] = [:]
 
     public init(service: String, accessibility: CFString = AppleKeychain.defaultAccessibility) {
         self.service = service
