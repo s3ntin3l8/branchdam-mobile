@@ -155,8 +155,32 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertTrue(success)
     }
 
+    func testConnectionDetailed_NotInitialized_ReturnsError() {
+        let bridge = BranchDamCoreBridge.shared
+        bridge.shutdown()
+        let connErr = bridge.testConnectionDetailed()
+        XCTAssertNotNil(connErr, "uninitialized or closed engine should return non-nil error")
+    }
+
+    func testConnectionDetailed_WithoutServer_ReturnsConnectionError() {
+        let bridge = BranchDamCoreBridge.shared
+        bridge.shutdown()
+        let success = bridge.initialize(
+            dbPath: dbPath,
+            baseURL: "http://localhost:8080",
+            apiKey: "test_key", // pragma: allowlist secret
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
+        )
+        XCTAssertTrue(success)
+        let connErr = bridge.testConnectionDetailed()
+        XCTAssertNotNil(connErr, "connection diagnostic without listening server should return error string")
+        bridge.shutdown()
+    }
+
     func testNewBridgeMethods() {
         let bridge = BranchDamCoreBridge.shared
+        bridge.shutdown()
         let initialized = bridge.initialize(
             dbPath: dbPath,
             baseURL: "http://localhost:8080",

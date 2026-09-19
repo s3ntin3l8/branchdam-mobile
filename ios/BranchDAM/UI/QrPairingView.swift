@@ -166,7 +166,7 @@ private struct ConnectionSettingsView: View {
             isConnected = BranchDamCoreBridge.shared.isInitialized
             apiKey = AppleKeychain.shared.apiKey ?? ""
             if isConnected {
-                namingTemplate = BranchDamCoreBridge.shared.fetchNamingTemplate()
+                namingTemplate = BranchDamCoreBridge.shared.fetchNamingTemplate() ?? ""
             }
         }
         .sheet(isPresented: $showQrScanner) {
@@ -196,7 +196,7 @@ private struct ConnectionSettingsView: View {
             agentID: agentId
         )
         isConnected = BranchDamCoreBridge.shared.isInitialized
-        namingTemplate = BranchDamCoreBridge.shared.fetchNamingTemplate()
+        namingTemplate = BranchDamCoreBridge.shared.fetchNamingTemplate() ?? ""
     }
 }
 
