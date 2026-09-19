@@ -21,7 +21,10 @@ final class AppleSafeSpaceManagerTests: XCTestCase {
 
         let report = AppleSafeSpaceManager.reclaimSafeSpace(
             candidates: candidates,
-            engineReclaimHandler: { _ in (eligible: true, reason: "") },
+            engineReclaimHandler: { id in
+                _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: id, isOffloaded: true)
+                return (eligible: true, reason: "")
+            },
             deletionHandler: { _ in true }
         )
         XCTAssertEqual(report.totalCandidates, 2)

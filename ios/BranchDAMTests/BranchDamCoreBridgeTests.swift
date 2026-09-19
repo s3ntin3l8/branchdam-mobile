@@ -161,6 +161,13 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         bridge.shutdown()
         let connErr = bridge.testConnectionDetailed()
         XCTAssertNotNil(connErr, "uninitialized or closed engine should return non-nil error")
+        _ = bridge.initialize(
+            dbPath: dbPath,
+            baseURL: "http://localhost:8080",
+            apiKey: "test_key", // pragma: allowlist secret
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
+        )
     }
 
     func testConnectionDetailed_WhenInitialized_ReturnsNil() {
