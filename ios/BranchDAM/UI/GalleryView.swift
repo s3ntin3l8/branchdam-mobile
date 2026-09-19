@@ -1,28 +1,30 @@
 import SwiftUI
 import Photos
 
-public struct GalleryItem: Identifiable, Hashable, Equatable {
+public struct GalleryItem: Identifiable, Hashable, Equatable, Sendable {
     public let id: String
     public let asset: PHAsset
     public let lineageStatus: String
     public let isRaw: Bool
     public let isOffloaded: Bool
     public let backupStatus: String
+    public let derivativeLocalId: String?
 
     public var isBackedUp: Bool { backupStatus == "COMPLETED" || isOffloaded }
     public var isPendingUpload: Bool { backupStatus == "PENDING" || backupStatus == "IN_PROGRESS" }
 
-    public init(id: String, asset: PHAsset, lineageStatus: String, isRaw: Bool, isOffloaded: Bool, backupStatus: String) {
+    public init(id: String, asset: PHAsset, lineageStatus: String, isRaw: Bool, isOffloaded: Bool, backupStatus: String, derivativeLocalId: String? = nil) {
         self.id = id
         self.asset = asset
         self.lineageStatus = lineageStatus
         self.isRaw = isRaw
         self.isOffloaded = isOffloaded
         self.backupStatus = backupStatus
+        self.derivativeLocalId = derivativeLocalId
     }
 
     public static func == (lhs: GalleryItem, rhs: GalleryItem) -> Bool {
-        lhs.id == rhs.id && lhs.lineageStatus == rhs.lineageStatus && lhs.isOffloaded == rhs.isOffloaded && lhs.backupStatus == rhs.backupStatus
+        lhs.id == rhs.id && lhs.lineageStatus == rhs.lineageStatus && lhs.isOffloaded == rhs.isOffloaded && lhs.backupStatus == rhs.backupStatus && lhs.derivativeLocalId == rhs.derivativeLocalId
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -180,9 +182,11 @@ public class GalleryViewModel: ObservableObject {
 
         var pairedRawIds = Set<String>()
         var pairedJpegIds = Set<String>()
+        var rawToJpegMap = [String: String]()
         for pair in pairs {
             pairedRawIds.insert(pair.masterLocalId)
             pairedJpegIds.insert(pair.derivativeLocalId)
+            rawToJpegMap[pair.masterLocalId] = pair.derivativeLocalId
         }
 
         let allStatuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
@@ -191,10 +195,24 @@ public class GalleryViewModel: ObservableObject {
         for meta in metas {
             let metaLocalId = "ph://\(meta.id)"
             if pairedRawIds.contains(meta.id) || pairedRawIds.contains(metaLocalId) {
-                continue
-            }
-
-            if pairedJpegIds.contains(meta.id) || pairedJpegIds.contains(metaLocalId) {
+                let derivativeId = rawToJpegMap[meta.id] ?? rawToJpegMap[metaLocalId]
+                let backupStatus = allStatuses[meta.id]
+                    ?? allStatuses[metaLocalId]
+                    ?? allStatuses[meta.filename]
+                    ?? "NOT_ENQUEUED"
+                let isOffloaded = backupStatus == "OFFLOADED"
+                galleryItems.append(
+                    GalleryItem(
+                        id: meta.id,
+                        asset: meta.asset,
+                        lineageStatus: "Paired",
+                        isRaw: true,
+                        isOffloaded: isOffloaded,
+                        backupStatus: backupStatus,
+                        derivativeLocalId: derivativeId
+                    )
+                )
+            } else if pairedJpegIds.contains(meta.id) || pairedJpegIds.contains(metaLocalId) {
                 let backupStatus = allStatuses[meta.id]
                     ?? allStatuses[metaLocalId]
                     ?? allStatuses[meta.filename]
