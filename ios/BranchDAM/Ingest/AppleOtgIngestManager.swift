@@ -136,7 +136,7 @@ public class AppleOtgIngestManager: ObservableObject {
                     let copyHash = BranchDamCoreBridge.shared.computeHashes(localPath: targetURL.path)
                     let priorHash = BranchDamCoreBridge.shared.lookupBlake3ForLocalID(localID: candidate.url.absoluteString)
                     if !priorHash.isEmpty && !copyHash.isEmpty && copyHash != priorHash {
-                        NSLog("OTG ingest warning: hash changed for %s (prior=%s, new=%s)", candidate.fileName, priorHash, copyHash)
+                        NSLog("OTG ingest warning: hash changed for %@ (prior=%@, new=%@)", candidate.fileName, priorHash, copyHash)
                     }
 
                     // Enqueue into core engine
