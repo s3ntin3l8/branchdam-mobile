@@ -54,6 +54,7 @@ public class AppleSafeSpaceManager {
             }
 
             if deleted {
+                _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: candidate.localId, isOffloaded: true)
                 reclaimedCount += 1
                 bytesFreed += candidate.sizeBytes
             } else {
