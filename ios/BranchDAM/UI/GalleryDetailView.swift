@@ -339,6 +339,8 @@ public struct GalleryDetailView: View {
                         _ = BranchDamCoreBridge.shared.enqueueDeleteEvent(nodeUUID: item.id)
                         self.dismiss()
                     } else {
+                        // Rollback offloaded state in Go core so local file does not leak
+                        _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: item.id, isOffloaded: false)
                         withAnimation { self.actionMessage = "Deletion failed: \(error?.localizedDescription ?? "Cancelled")" }
                     }
                 }
