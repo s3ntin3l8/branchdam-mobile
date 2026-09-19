@@ -120,19 +120,21 @@ public class GalleryViewModel: ObservableObject {
         }
 
         if !eligibleAssets.isEmpty {
+            let assetsToDelete = eligibleAssets
+            let idsToRollback = eligibleIds
             PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.deleteAssets(eligibleAssets as NSArray)
+                PHAssetChangeRequest.deleteAssets(assetsToDelete as NSArray)
             }) { success, error in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     if success {
-                        for asset in eligibleAssets {
+                        for asset in assetsToDelete {
                             _ = BranchDamCoreBridge.shared.enqueueDeleteEvent(nodeUUID: asset.localIdentifier)
                         }
-                        self.batchStatusMessage = "Reclaimed \(eligibleAssets.count) items"
-                        Task { await self.load() }
+                        self.batchStatusMessage = "Reclaimed \(assetsToDelete.count) items"
+                        await self.load()
                     } else {
                         // Rollback offloaded flag for all eligible assets that failed local deletion
-                        for id in eligibleIds {
+                        for id in idsToRollback {
                             _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: id, isOffloaded: false)
                         }
                         self.batchStatusMessage = "Reclaim cancelled or failed"
@@ -146,7 +148,8 @@ public class GalleryViewModel: ObservableObject {
         clearSelection()
         isSelectionMode = false
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             self.batchStatusMessage = nil
         }
     }
