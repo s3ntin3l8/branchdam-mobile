@@ -430,7 +430,10 @@ private fun GalleryItemCard(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val imageRequest = remember(galleryItem.mediaItem.contentUri) {
+    val currentToggleSelect by rememberUpdatedState(onToggleSelect)
+    val currentClick by rememberUpdatedState(onClick)
+
+    val imageRequest = remember(galleryItem.mediaItem.contentUri, galleryItem.mediaItem.isVideo, galleryItem.mediaItem.orientationDegrees) {
         val builder = ImageRequest.Builder(context)
             .data(Uri.parse(galleryItem.mediaItem.contentUri))
             .size(300, 300)
@@ -441,7 +444,11 @@ private fun GalleryItemCard(
         if (galleryItem.mediaItem.isVideo) {
             builder.decoderFactory(VideoFrameDecoder.Factory())
         } else {
-            ExifOrientationHelper.applyExifOrientation(builder, context, galleryItem.mediaItem.contentUri, galleryItem.mediaItem.mimeType)
+            ExifOrientationHelper.applyExifOrientation(
+                builder,
+                galleryItem.mediaItem.orientationDegrees,
+                galleryItem.mediaItem.isDng || galleryItem.mediaItem.isRaw
+            )
         }
         builder.build()
     }

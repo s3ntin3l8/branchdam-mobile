@@ -88,7 +88,6 @@ object ExifOrientationHelper {
         isRaw: Boolean = false
     ): ImageRequest.Builder {
         if (isRaw && orientationDegrees != 0) {
-            builder.respectExifOrientation(false)
             builder.transformations(RotateTransformation(orientationDegrees.toFloat()))
         }
         return builder
@@ -104,7 +103,6 @@ object ExifOrientationHelper {
         if (isRaw) {
             val degrees = getExifRotationDegrees(context, contentUriString, mimeType)
             if (degrees != 0f) {
-                builder.respectExifOrientation(false)
                 builder.transformations(RotateTransformation(degrees))
             }
         }
