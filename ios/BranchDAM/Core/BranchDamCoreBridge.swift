@@ -59,6 +59,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
 
     private let workQueue = DispatchQueue(label: "com.branchdam.mobile.bridge", qos: .userInitiated)
     public private(set) var isInitialized: Bool = false
+    private var mockOffloadedSet = Set<String>()
 
     public static var engineVersion: String {
         #if canImport(branchdam)
@@ -260,7 +261,11 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return out
         #else
-        return false
+        var out = false
+        workQueue.sync {
+            out = mockOffloadedSet.contains(localID)
+        }
+        return out
         #endif
     }
 
@@ -278,6 +283,13 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return success
         #else
+        workQueue.sync {
+            if isOffloaded {
+                mockOffloadedSet.insert(localID)
+            } else {
+                mockOffloadedSet.remove(localID)
+            }
+        }
         return true
         #endif
     }
@@ -340,10 +352,10 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
-    public func countPendingUploads() -> Int64 {
+    public func countPendingUploads() -> Int64? {
         #if canImport(branchdam)
-        guard isInitialized else { return 0 }
-        var count: Int64 = 0
+        guard isInitialized else { return nil }
+        var count: Int64? = nil
         workQueue.sync {
             do {
                 count = try branchdam.bindingCountPendingUploads()
@@ -353,14 +365,14 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return count
         #else
-        return 0
+        return isInitialized ? 0 : nil
         #endif
     }
 
-    public func resetFailedUploads() -> Int64 {
+    public func resetFailedUploads() -> Int64? {
         #if canImport(branchdam)
-        guard isInitialized else { return 0 }
-        var count: Int64 = 0
+        guard isInitialized else { return nil }
+        var count: Int64? = nil
         workQueue.sync {
             do {
                 count = try branchdam.bindingResetFailedUploads()
@@ -370,7 +382,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return count
         #else
-        return 0
+        return isInitialized ? 0 : nil
         #endif
     }
 
