@@ -105,7 +105,7 @@ final class QrPairingViewTests: XCTestCase {
     // MARK: - Documents-directory DB path (F plan: reconfigure does
     // not orphan the documents-directory DB)
 
-    func testDocumentsDirectoryDBPathIsNotInTmp() {
+    @MainActor func testDocumentsDirectoryDBPathIsNotInTmp() {
         // Call the real SUT function and assert on its output. If
         // QrPairingView.defaultDBPath() regressed to the temp
         // directory, this test would fail.

@@ -19,7 +19,6 @@ public struct BrandMonogramView: View {
             context.fill(stemPath, with: .color(brandColor))
 
             // 2. Main loop: circle cx=28, cy=40, r=14.5, stroke=7.5
-            let loopCenter = CGPoint(x: 28 * scale, y: 40 * scale)
             let loopRect = CGRect(x: (28 - 14.5) * scale, y: (40 - 14.5) * scale, width: 29 * scale, height: 29 * scale)
             let loopPath = Path(ellipseIn: loopRect)
             context.stroke(loopPath, with: .color(brandColor), lineWidth: 7.5 * scale)

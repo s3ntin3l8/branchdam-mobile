@@ -203,6 +203,9 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         let activeProgress = bridge.getActiveUploadProgress()
         XCTAssertNil(activeProgress, "no active upload should be in progress initially")
 
+        let connErr = bridge.testConnectionDetailed()
+        XCTAssertNil(connErr, "connection diagnostic should return nil error when initialized")
+
         let contentCheck = bridge.checkContent(fastHash: "abc", fullHash: "xyz")
         XCTAssertNil(contentCheck)
 

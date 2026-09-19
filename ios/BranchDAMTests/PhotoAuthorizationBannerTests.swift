@@ -10,22 +10,22 @@ import SwiftUI
 /// so the unit test target can access it.
 final class PhotoAuthorizationBannerTests: XCTestCase {
 
-    func testTitleForDenied() {
+    @MainActor func testTitleForDenied() {
         let banner = PhotoAuthorizationBanner(status: .denied)
         XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Denied")
     }
 
-    func testTitleForRestricted() {
+    @MainActor func testTitleForRestricted() {
         let banner = PhotoAuthorizationBanner(status: .restricted)
         XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Restricted")
     }
 
-    func testTitleForNotDetermined() {
+    @MainActor func testTitleForNotDetermined() {
         let banner = PhotoAuthorizationBanner(status: .notDetermined)
         XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Needed")
     }
 
-    func testTitleForAuthorized() {
+    @MainActor func testTitleForAuthorized() {
         let banner = PhotoAuthorizationBanner(status: .authorized)
         XCTAssertEqual(banner.bannerTitle, "Camera Roll Access Needed")
     }
@@ -37,7 +37,7 @@ final class PhotoAuthorizationBannerTests: XCTestCase {
     /// Tests the buttonLabel property directly (same pattern as
     /// bannerTitle) rather than walking the UIKit view hierarchy,
     /// which is fragile across simulator environments.
-    func testButtonLabelPerStatus() {
+    @MainActor func testButtonLabelPerStatus() {
         XCTAssertEqual(PhotoAuthorizationBanner(status: .notDetermined).buttonLabel,
                        "Grant Camera Roll Access")
         XCTAssertEqual(PhotoAuthorizationBanner(status: .denied).buttonLabel,
@@ -48,7 +48,7 @@ final class PhotoAuthorizationBannerTests: XCTestCase {
                        "Open Settings")
     }
 
-    func testBodyRendersWithoutCrashing() {
+    @MainActor func testBodyRendersWithoutCrashing() {
         for status: PHAuthorizationStatus in [.authorized, .denied, .restricted, .notDetermined] {
             _ = PhotoAuthorizationBanner(status: status).body
         }
