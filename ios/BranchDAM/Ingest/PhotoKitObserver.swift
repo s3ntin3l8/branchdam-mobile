@@ -1,7 +1,7 @@
 import Foundation
 import Photos
 
-public struct DiscoveredAsset: Equatable {
+public struct DiscoveredAsset: Equatable, Sendable {
     public let localIdentifier: String
     public let filename: String
     public let creationDateUnix: Int64

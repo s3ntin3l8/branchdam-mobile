@@ -117,6 +117,7 @@ class GalleryViewModel: ObservableObject {
     }
 }
 
+@MainActor
 private struct AssetThumbnailView: View {
     let asset: PHAsset
     @State private var image: UIImage? = nil
@@ -153,6 +154,7 @@ private struct AssetThumbnailView: View {
     }
 }
 
+@MainActor
 public struct GalleryView: View {
     @StateObject private var viewModel = GalleryViewModel()
 

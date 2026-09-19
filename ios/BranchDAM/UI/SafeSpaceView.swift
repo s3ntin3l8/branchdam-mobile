@@ -1,6 +1,7 @@
 import Photos
 import SwiftUI
 
+@MainActor
 public struct SafeSpaceView: View {
     @State private var reclaimableMB: Int = 0
     @State private var verifiedCount: Int = 0
@@ -50,30 +51,30 @@ public struct SafeSpaceView: View {
         guard !candidateList.isEmpty else { return }
         isProcessing = true
         let candidates = candidateList
-        Task.detached(priority: .userInitiated) {
-            let report = AppleSafeSpaceManager.reclaimSafeSpace(candidates: candidates)
-            await MainActor.run {
-                self.isProcessing = false
-                if report.reclaimedCount > 0 {
-                    self.isReclaimed = true
-                }
-                self.loadCandidates()
+        Task {
+            let report = await Task.detached(priority: .userInitiated) {
+                AppleSafeSpaceManager.reclaimSafeSpace(candidates: candidates)
+            }.value
+            self.isProcessing = false
+            if report.reclaimedCount > 0 {
+                self.isReclaimed = true
             }
+            self.loadCandidates()
         }
     }
 
     private func loadCandidates() {
-        Task.detached(priority: .userInitiated) {
-            let (foundCandidates, verifiedNum, resultMB) = fetchCandidates()
-            await MainActor.run {
-                self.candidateList = foundCandidates
-                self.verifiedCount = verifiedNum
-                self.reclaimableMB = resultMB
-            }
+        Task {
+            let (foundCandidates, verifiedNum, resultMB) = await Task.detached(priority: .userInitiated) {
+                Self.fetchCandidates()
+            }.value
+            self.candidateList = foundCandidates
+            self.verifiedCount = verifiedNum
+            self.reclaimableMB = resultMB
         }
     }
 
-    nonisolated private func fetchCandidates() -> (candidates: [SafeSpaceCandidate], verifiedNum: Int, resultMB: Int) {
+    nonisolated private static func fetchCandidates() -> (candidates: [SafeSpaceCandidate], verifiedNum: Int, resultMB: Int) {
         var foundCandidates = [SafeSpaceCandidate]()
         let fetchResult = PHAsset.fetchAssets(with: nil)
         var totalBytes: Int64 = 0
