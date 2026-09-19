@@ -32,6 +32,7 @@ public class AppleSafeSpaceManager {
     /// Executes safe space reclaim on iOS.
     public static func reclaimSafeSpace(
         candidates: [SafeSpaceCandidate],
+        engineReclaimHandler: ((_ localId: String) -> (eligible: Bool, reason: String))? = nil,
         deletionHandler: ((_ localId: String) -> Bool)? = nil
     ) -> AppleSafeSpaceReport {
         var verifiedCount = 0
@@ -42,7 +43,7 @@ public class AppleSafeSpaceManager {
             guard candidate.isVerified else { continue }
             verifiedCount += 1
 
-            let verdict = BranchDamCoreBridge.shared.reclaimSafeSpace(localID: candidate.localId)
+            let verdict = engineReclaimHandler?(candidate.localId) ?? BranchDamCoreBridge.shared.reclaimSafeSpace(localID: candidate.localId)
             guard verdict.eligible else { continue }
 
             let deleted: Bool

@@ -19,7 +19,11 @@ final class AppleSafeSpaceManagerTests: XCTestCase {
         _ = BranchDamCoreBridge.shared.enqueueMedia(localPath: "/tmp/v1.jpg", filename: "v1.jpg", capturedAtUnix: 1000, localID: "ph://verified-1")
         _ = BranchDamCoreBridge.shared.enqueueMedia(localPath: "/tmp/u2.jpg", filename: "u2.jpg", capturedAtUnix: 1000, localID: "ph://unverified-2")
 
-        let report = AppleSafeSpaceManager.reclaimSafeSpace(candidates: candidates, deletionHandler: { _ in true })
+        let report = AppleSafeSpaceManager.reclaimSafeSpace(
+            candidates: candidates,
+            engineReclaimHandler: { _ in (eligible: true, reason: "") },
+            deletionHandler: { _ in true }
+        )
         XCTAssertEqual(report.totalCandidates, 2)
         XCTAssertEqual(report.verifiedCount, 1)
         XCTAssertEqual(report.reclaimedCount, 1)
