@@ -352,10 +352,10 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
-    public func countPendingUploads() -> Int64 {
+    public func countPendingUploads() -> Int64? {
         #if canImport(branchdam)
-        guard isInitialized else { return 0 }
-        var count: Int64 = 0
+        guard isInitialized else { return nil }
+        var count: Int64? = nil
         workQueue.sync {
             do {
                 count = try branchdam.bindingCountPendingUploads()
@@ -365,14 +365,14 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return count
         #else
-        return 0
+        return isInitialized ? 0 : nil
         #endif
     }
 
-    public func resetFailedUploads() -> Int64 {
+    public func resetFailedUploads() -> Int64? {
         #if canImport(branchdam)
-        guard isInitialized else { return 0 }
-        var count: Int64 = 0
+        guard isInitialized else { return nil }
+        var count: Int64? = nil
         workQueue.sync {
             do {
                 count = try branchdam.bindingResetFailedUploads()
@@ -382,7 +382,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return count
         #else
-        return 0
+        return isInitialized ? 0 : nil
         #endif
     }
 
