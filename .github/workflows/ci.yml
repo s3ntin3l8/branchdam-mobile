@@ -59,13 +59,14 @@ jobs:
 
   test-mobile:
     name: Mobile CI (Android & iOS)
-    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@main
+    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@feat/ci-mobile-workflow-and-blueprint
     with:
       java-version: '21'
       android-ndk-version: '25.1.8937393'
       xcode-version: '/Applications/Xcode_15.4.app/Contents/Developer'
       ios-scheme: 'BranchDamApp'
       ios-project: 'ios/BranchDamApp.xcodeproj'
+      upload-aar: true
 
   verify-elf-alignment:
     name: Verify 16KB ELF Alignment
@@ -74,22 +75,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: core/go.mod
-          cache-dependency-path: core/go.sum
-
       - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;25.1.8937393'
 
-      - name: Build Go Core AAR
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
-        run: |
-          ./scripts/build-mobile.sh --android-only
+      - name: Download Built AAR
+        uses: actions/download-artifact@v7
+        with:
+          name: branchdam-aar
+          path: android/app/libs/
 
       - name: Verify 16KB ELF alignment of bundled .so files
         env:
@@ -98,7 +93,7 @@ jobs:
           set -euo pipefail
           AAR="${{ github.workspace }}/android/app/libs/branchdam.aar"
           if [[ ! -f "$AAR" ]]; then
-            echo "::error::AAR not found at $AAR — did the gomobile build step run?"
+            echo "::error::AAR not found at $AAR — did the download-artifact step run?"
             exit 1
           fi
           rm -rf aar-extract
