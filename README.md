@@ -70,7 +70,7 @@ The branchdam engine ships as a single gomobile-bound Go package at the reposito
 | Target | Output | Consumer |
 |---|---|---|
 | Android | `android/app/libs/branchdam.aar` | Kotlin: `io.branchdam.core.Engine` |
-| iOS | `ios/Frameworks/branchdam.xcframework` | Swift: `import branchdam` (or SPM `Package.swift`) |
+| iOS | `ios/Frameworks/branchdam.xcframework` | Swift: `import branchdam` |
 
 Both targets are uncommitted build artifacts generated on-demand by `./scripts/build-mobile.sh` or published as GitHub Release binaries.
 
@@ -95,10 +95,12 @@ The native iOS companion is structured for zero-configuration sideloading using 
 
 #### Method A: Xcode Direct Sideloading (Free Apple ID)
 1. **Prerequisites**: macOS with Xcode 16+ and an iPhone running iOS 17+.
-2. **Clone & Open Project**:
+2. **Clone & Build Core**:
    ```bash
    git clone https://github.com/s3ntin3l8/branchdam-mobile.git
-   cd branchdam-mobile/ios
+   cd branchdam-mobile
+   make mobile-build-ios   # Build the Go native core framework locally
+   cd ios
    open BranchDamApp.xcodeproj
    ```
 3. **Configure Signing**:

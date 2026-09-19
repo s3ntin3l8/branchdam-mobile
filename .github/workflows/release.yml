@@ -197,15 +197,11 @@ jobs:
         run: ./scripts/build-mobile.sh --ios-only
 
       - name: Package Framework and Checksum
-        env:
-          TAG_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag }}
         run: |
           mkdir -p dist
-          VER="${TAG_NAME#v}"
-          if [ -z "$VER" ]; then VER="0.0.0"; fi
 
-          # Zip the built xcframework
-          ( cd ios/Frameworks && zip -r -9 "../../dist/branchdam.xcframework.zip" branchdam.xcframework )
+          # Zip the built xcframework preserving symlinks
+          ( cd ios/Frameworks && ditto -c -k --keepParent branchdam.xcframework "../../dist/branchdam.xcframework.zip" )
 
           # Generate SHA256 sidecar file
           ( cd dist && shasum -a 256 "branchdam.xcframework.zip" > "branchdam.xcframework.zip.sha256" )
