@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D1000101 /* SyncStatusViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000101 /* SyncStatusViewModelTests.swift */; };
 		C1000101 /* LineageViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000101 /* LineageViewModelTests.swift */; };
 		B1000001 /* GalleryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001 /* GalleryDetailView.swift */; };
 		B1000002 /* VisualLineageComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002 /* VisualLineageComparisonView.swift */; };
@@ -88,6 +89,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D2000101 /* SyncStatusViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusViewModelTests.swift; sourceTree = "<group>"; };
 		C2000101 /* LineageViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineageViewModelTests.swift; sourceTree = "<group>"; };
 		B2000001 /* GalleryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryDetailView.swift; sourceTree = "<group>"; };
 		B2000002 /* VisualLineageComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualLineageComparisonView.swift; sourceTree = "<group>"; };
@@ -294,6 +296,7 @@
 				A2000113 /* BranchDamKeysTests.swift */,
 				B2000101 /* GalleryViewModelTests.swift */,
 				C2000101 /* LineageViewModelTests.swift */,
+				D2000101 /* SyncStatusViewModelTests.swift */,
 			);
 			path = BranchDAMTests;
 			sourceTree = "<group>";
@@ -448,6 +451,7 @@
 				A1000111 /* PhotoKitObserverSerialTests.swift in Sources */,
 				B1000101 /* GalleryViewModelTests.swift in Sources */,
 				C1000101 /* LineageViewModelTests.swift in Sources */,
+				D1000101 /* SyncStatusViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
