@@ -33,7 +33,7 @@ final class SyncStatusViewModel: ObservableObject {
 
     func refreshQueueMetrics() {
         if isEngineReady {
-            pendingCount = BranchDamCoreBridge.shared.countPendingUploads()
+            pendingCount = BranchDamCoreBridge.shared.countPendingUploads() ?? 0
             let statuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
             failedCount = Int64(statuses.values.filter { $0 == "FAILED" }.count)
         } else {
@@ -83,7 +83,7 @@ final class SyncStatusViewModel: ObservableObject {
     }
 
     func retryFailedUploads() {
-        let resetCount = BranchDamCoreBridge.shared.resetFailedUploads()
+        let resetCount = BranchDamCoreBridge.shared.resetFailedUploads() ?? 0
         syncResultMessage = "Reset \(resetCount) failed uploads to pending"
         refreshQueueMetrics()
     }
@@ -107,7 +107,7 @@ final class SyncStatusViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 if Task.isCancelled { break }
                 let progress = BranchDamCoreBridge.shared.getActiveUploadProgress()
-                let pending = BranchDamCoreBridge.shared.countPendingUploads()
+                let pending = BranchDamCoreBridge.shared.countPendingUploads() ?? 0
                 await MainActor.run { [weak self] in
                     guard let self = self else { return }
                     self.activeProgress = progress
