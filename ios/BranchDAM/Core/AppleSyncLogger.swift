@@ -1,6 +1,6 @@
 import Foundation
 
-public class AppleSyncLogger {
+public class AppleSyncLogger: @unchecked Sendable {
     public static let shared = AppleSyncLogger()
 
     private let queue = DispatchQueue(label: "com.branchdam.mobile.synclogger", qos: .background)

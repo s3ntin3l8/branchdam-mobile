@@ -1,6 +1,7 @@
 import XCTest
 @testable import BranchDAM
 
+@MainActor
 final class AppleOtgIngestManagerTests: XCTestCase {
 
     var tempDir: URL!

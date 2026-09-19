@@ -1,7 +1,7 @@
 import Foundation
-import BackgroundTasks
+@preconcurrency import BackgroundTasks
 
-public class BackgroundSyncManager {
+public class BackgroundSyncManager: @unchecked Sendable {
     public static let shared = BackgroundSyncManager()
     public static let syncTaskId = "com.branchdam.mobile.sync"
     /// Backwards-compatible alias of
@@ -65,7 +65,7 @@ public class BackgroundSyncManager {
         return syncOnMobileData // Cellular only if user opted in
     }
 
-    public func triggerImmediateSync(isOnCellular: Bool = false, completion: ((Bool) -> Void)? = nil) {
+    public func triggerImmediateSync(isOnCellular: Bool = false, completion: (@Sendable (Bool) -> Void)? = nil) {
         guard shouldAllowImmediateSync(isOnCellular: isOnCellular) else {
             completion?(false)
             return

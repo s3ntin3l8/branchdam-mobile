@@ -1,7 +1,19 @@
 import Foundation
 import Photos
 
-public struct AppleSafeSpaceReport: Equatable {
+public struct SafeSpaceCandidate: Equatable, Sendable {
+    public let localId: String
+    public let sizeBytes: Int64
+    public let isVerified: Bool
+
+    public init(localId: String, sizeBytes: Int64, isVerified: Bool) {
+        self.localId = localId
+        self.sizeBytes = sizeBytes
+        self.isVerified = isVerified
+    }
+}
+
+public struct AppleSafeSpaceReport: Equatable, Sendable {
     public let totalCandidates: Int
     public let verifiedCount: Int
     public let reclaimedCount: Int
@@ -18,15 +30,8 @@ public struct AppleSafeSpaceReport: Equatable {
 public class AppleSafeSpaceManager {
 
     /// Executes safe space reclaim on iOS.
-    ///
-    /// For each candidate the engine re-queries the server for current
-    /// verified + tier state and sets the offloaded flag atomically
-    /// (B.2.7). The shell only deletes the local file after the engine
-    /// confirms eligibility. If the local delete fails the offloaded
-    /// flag is rolled back so the asset remains a future reclaim
-    /// candidate.
     public static func reclaimSafeSpace(
-        candidates: [(localId: String, sizeBytes: Int64, isVerified: Bool)],
+        candidates: [SafeSpaceCandidate],
         deletionHandler: ((_ localId: String) -> Bool)? = nil
     ) -> AppleSafeSpaceReport {
         var verifiedCount = 0
