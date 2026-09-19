@@ -384,5 +384,5 @@ func TestBindingSyncBatchAndCheckContent(t *testing.T) {
 	}
 
 	// Sync batch
-	_ = BindingSyncBatch(10, 5)
+	_, _ = BindingSyncBatch(10, 5)
 }

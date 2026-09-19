@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-public struct AppleOtgIngestProgress: Equatable {
+public struct AppleOtgIngestProgress: Equatable, Sendable {
     public let currentFileIndex: Int
     public let totalFiles: Int
     public let currentFileName: String
@@ -29,7 +29,7 @@ public struct AppleOtgIngestProgress: Equatable {
     }
 }
 
-public enum AppleOtgState: Equatable {
+public enum AppleOtgState: Equatable, Sendable {
     case idle
     case scanning(label: String)
     case awaitingConfirmation(scanResult: AppleOtgScanResult)
@@ -39,28 +39,7 @@ public enum AppleOtgState: Equatable {
 }
 
 /// OTG card ingest orchestrator.
-///
-/// Thread-safety model (T2-9 hardening):
-/// - `state` is published via `@Published`. The Combine runtime
-///   internally synchronizes `_send` so concurrent mutations from
-///   the OTG queue and the main thread are observed atomically by
-///   subscribers; reads of `state` from any thread return the latest
-///   committed value. Swift 6 strict concurrency accepts this for
-///   the `AppleOtgState` payload because every associated value is
-///   `Sendable` (`URL`, `String`, `Int`, `Int64`, the nested
-///   `AppleOtgScanResult`/`AppleOtgIngestProgress` structs).
-/// - `isCancelled` is the cross-thread flag the Swift 6 strict
-///   concurrency checker flagged as a data race when it was a plain
-///   `var Bool`: written from `cancelImport()`/`reset()` on the
-///   main thread and from `onCardDetected`/`confirmImport` on the
-///   main thread, but read from `confirmImport`'s OTG-queue block
-///   on a background thread. It is now backed by
-///   `OSAllocatedUnfairLock<Bool>` from the `os` framework
-///   (iOS 16.0+, the deployment target is iOS 17). The lock itself
-///   is `Sendable`, and every access goes through `withLock { ... }`
-///   so the cross-thread load/store is atomic. The deployment
-///   target predates `Synchronization.Atomic` (iOS 18.0+), so
-///   `OSAllocatedUnfairLock` is the lowest-friction replacement.
+@MainActor
 public class AppleOtgIngestManager: ObservableObject {
     public static let shared = AppleOtgIngestManager()
 
@@ -76,9 +55,9 @@ public class AppleOtgIngestManager: ObservableObject {
         state = .scanning(label: deviceLabel)
 
         queue.async { [weak self] in
-            guard let self = self else { return }
             let result = AppleOtgCardScanner.scanDirectory(at: directory, deviceLabel: deviceLabel)
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 if !self.isCancelledFlag.withLock({ $0 }) {
                     if !result.candidates.isEmpty {
                         self.state = .awaitingConfirmation(scanResult: result)
@@ -93,7 +72,7 @@ public class AppleOtgIngestManager: ObservableObject {
     public func confirmImport(
         scanResult: AppleOtgScanResult,
         stageDirectory: URL? = nil,
-        onFileStaged: ((URL, AppleOtgCandidate) -> Void)? = nil
+        onFileStaged: (@Sendable (URL, AppleOtgCandidate) -> Void)? = nil
     ) {
         isCancelledFlag.withLock { $0 = false }
         let destinationDir = stageDirectory ?? FileManager.default.temporaryDirectory.appendingPathComponent("otg_stage", isDirectory: true)
@@ -104,20 +83,21 @@ public class AppleOtgIngestManager: ObservableObject {
         try? FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
 
         queue.async { [weak self] in
-            guard let self = self else { return }
             var bytesProcessed: Int64 = 0
             var importedCount = 0
 
             for (index, candidate) in candidates.enumerated() {
-                if self.isCancelledFlag.withLock({ $0 }) { break }
+                let cancelled = self?.isCancelledFlag.withLock({ $0 }) ?? true
+                if cancelled { break }
 
-                DispatchQueue.main.async {
-                    self.state = .ingesting(
+                let currentBytes = bytesProcessed
+                DispatchQueue.main.async { [weak self] in
+                    self?.state = .ingesting(
                         progress: AppleOtgIngestProgress(
                             currentFileIndex: index + 1,
                             totalFiles: candidates.count,
                             currentFileName: candidate.fileName,
-                            bytesProcessed: bytesProcessed,
+                            bytesProcessed: currentBytes,
                             totalBytes: totalBytes
                         )
                     )
@@ -132,6 +112,13 @@ public class AppleOtgIngestManager: ObservableObject {
                     }
                     try FileManager.default.copyItem(at: candidate.url, to: targetURL)
 
+                    // Post-copy verification: compute BLAKE3 hash via bridge
+                    let copyHash = BranchDamCoreBridge.shared.computeHashes(localPath: targetURL.path)
+                    let priorHash = BranchDamCoreBridge.shared.lookupBlake3ForLocalID(localID: candidate.url.absoluteString)
+                    if !priorHash.isEmpty && !copyHash.isEmpty && copyHash != priorHash {
+                        NSLog("OTG ingest warning: hash changed for %@ (prior=%@, new=%@)", candidate.fileName, priorHash, copyHash)
+                    }
+
                     // Enqueue into core engine
                     _ = BranchDamCoreBridge.shared.enqueueMedia(
                         localPath: targetURL.path,
@@ -144,16 +131,19 @@ public class AppleOtgIngestManager: ObservableObject {
                     importedCount += 1
                     onFileStaged?(targetURL, candidate)
                 } catch {
-                    DispatchQueue.main.async {
-                        self.state = .error(message: "Failed to copy \(candidate.relativePath): \(error.localizedDescription)")
+                    DispatchQueue.main.async { [weak self] in
+                        self?.state = .error(message: "Failed to copy \(candidate.relativePath): \(error.localizedDescription)")
                     }
                     return
                 }
             }
 
-            DispatchQueue.main.async {
+            let finalBytes = bytesProcessed
+            let finalImportedCount = importedCount
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 if !self.isCancelledFlag.withLock({ $0 }) {
-                    self.state = .completed(importedCount: importedCount, totalBytes: bytesProcessed)
+                    self.state = .completed(importedCount: finalImportedCount, totalBytes: finalBytes)
                 } else {
                     self.state = .idle
                 }
