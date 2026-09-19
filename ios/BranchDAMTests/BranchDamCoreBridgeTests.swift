@@ -162,7 +162,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertNotNil(connErr, "uninitialized or closed engine should return non-nil error")
     }
 
-    func testConnectionDetailed_WhenInitialized_ReturnsNil() {
+    func testConnectionDetailed_WithoutServer_ReturnsConnectionError() {
         let bridge = BranchDamCoreBridge.shared
         bridge.shutdown()
         let success = bridge.initialize(
@@ -174,7 +174,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         )
         XCTAssertTrue(success)
         let connErr = bridge.testConnectionDetailed()
-        XCTAssertNil(connErr, "connection diagnostic should return nil when engine is initialized")
+        XCTAssertNotNil(connErr, "connection diagnostic without listening server should return error string")
         bridge.shutdown()
     }
 
