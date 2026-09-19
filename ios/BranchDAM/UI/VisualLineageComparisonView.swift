@@ -1,6 +1,7 @@
 import SwiftUI
 import Photos
 
+@MainActor
 public struct VisualLineageComparisonView: View {
     public let item: GalleryItem
     @Environment(\.dismiss) private var dismiss

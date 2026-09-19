@@ -1,7 +1,7 @@
 import Foundation
-import BackgroundTasks
+@preconcurrency import BackgroundTasks
 
-public class BackgroundSyncManager {
+public class BackgroundSyncManager: @unchecked Sendable {
     public static let shared = BackgroundSyncManager()
     public static let syncTaskId = "com.branchdam.mobile.sync"
     /// Backwards-compatible alias of
@@ -65,7 +65,7 @@ public class BackgroundSyncManager {
         return syncOnMobileData // Cellular only if user opted in
     }
 
-    public func triggerImmediateSync(isOnCellular: Bool = false, completion: ((Bool) -> Void)? = nil) {
+    public func triggerImmediateSync(isOnCellular: Bool = false, completion: (@Sendable (Bool) -> Void)? = nil) {
         guard shouldAllowImmediateSync(isOnCellular: isOnCellular) else {
             completion?(false)
             return
@@ -105,16 +105,13 @@ public class BackgroundSyncManager {
     private func handleBackgroundSync(task: BGProcessingTask) {
         // E.4: Set the Go engine's cancel flag so in-flight HTTP transfers
         // stop promptly when iOS reclaims the background time.
-        var completed = false
-        let completionLock = NSLock()
+        let tracker = SyncTaskTracker()
 
         task.expirationHandler = {
             BranchDamCoreBridge.shared.setCancelFlag()
-            completionLock.lock()
-            defer { completionLock.unlock() }
-            guard !completed else { return }
-            completed = true
-            task.setTaskCompleted(success: false)
+            tracker.completeOnce {
+                task.setTaskCompleted(success: false)
+            }
         }
 
         let timeout = Int32(readTimeoutSecs())
@@ -122,12 +119,23 @@ public class BackgroundSyncManager {
         DispatchQueue.global(qos: .background).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
             AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
-            completionLock.lock()
-            defer { completionLock.unlock() }
-            guard !completed else { return }
-            completed = true
-            task.setTaskCompleted(success: true)
-            self.scheduleBackgroundSync()
+            tracker.completeOnce {
+                task.setTaskCompleted(success: true)
+                self.scheduleBackgroundSync()
+            }
         }
+    }
+}
+
+private final class SyncTaskTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completed = false
+
+    func completeOnce(action: () -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !completed else { return }
+        completed = true
+        action()
     }
 }
