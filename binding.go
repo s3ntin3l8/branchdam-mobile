@@ -128,19 +128,22 @@ func BindingEnqueueDeleteEvent(localID string) (string, error) {
 	return e.EnqueueDeleteEvent(localID)
 }
 
-// BindingSyncBatch runs a sync cycle.
-func BindingSyncBatch(timeoutSecs, batchSize int64) error {
+// BindingSyncBatch runs a sync cycle. Returns "uploaded,eventsSent" string on success.
+func BindingSyncBatch(timeoutSecs, batchSize int64) (string, error) {
 	e, err := getBindingEngine()
 	if err != nil {
-		return err
+		return "0,0", err
 	}
-	_, syncErr := e.SyncBatch(SyncOptions{
+	res, syncErr := e.SyncBatch(SyncOptions{
 		TimeoutSecs:    int(timeoutSecs),
 		BatchSize:      int(batchSize),
 		IncludeEvents:  true,
 		IncludeUploads: true,
 	})
-	return syncErr
+	if syncErr != nil {
+		return "0,0", syncErr
+	}
+	return fmt.Sprintf("%d,%d", res.Uploaded, res.EventsSent), nil
 }
 
 // BindingIsMediaOffloaded returns the offload flag. On error returns false
