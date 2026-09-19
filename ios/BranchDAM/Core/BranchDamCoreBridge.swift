@@ -88,6 +88,38 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
+    @discardableResult
+    public func startEngineIfNeeded() -> Bool {
+        if isInitialized { return true }
+        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dbPath = docsDir.appendingPathComponent("branchdam_queue.db").path
+        let storedServer = UserDefaults.standard.string(forKey: "branchdam_server_url") ?? ""
+        if !storedServer.isEmpty {
+            return initialize(dbPath: dbPath, baseURL: storedServer)
+        }
+        return false
+    }
+
+    public func fetchNamingTemplate() -> String? {
+        #if canImport(branchdam)
+        guard isInitialized else { return nil }
+        var tpl: String? = nil
+        workQueue.sync {
+            do {
+                let res = try branchdam.bindingFetchNamingTemplate()
+                if !res.isEmpty {
+                    tpl = res
+                }
+            } catch {
+                NSLog("fetchNamingTemplate failed: %@", String(describing: error))
+            }
+        }
+        return tpl
+        #else
+        return nil
+        #endif
+    }
+
     public func enqueueMedia(
         localPath: String,
         filename: String,

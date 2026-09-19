@@ -294,8 +294,9 @@ public struct GalleryDetailView: View {
                     }
                 }
             }
+            let finalMeta = meta
             DispatchQueue.main.async {
-                self.exifMetadata = meta
+                self.exifMetadata = finalMeta
             }
         }
     }
