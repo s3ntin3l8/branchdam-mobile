@@ -8,25 +8,27 @@ final class AppleOtgIngestManagerTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        stageDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_stage", isDirectory: true)
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_stage", isDirectory: true)
 
-        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        try? FileManager.default.createDirectory(at: stageDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: stage, withIntermediateDirectories: true)
 
         _ = BranchDamCoreBridge.shared.initialize(
             dbPath: NSTemporaryDirectory() + "otg_ios_test.db",
             baseURL: "http://localhost:8080"
         )
+        tempDir = temp
+        stageDir = stage
     }
 
     override func tearDown() {
-        try? FileManager.default.removeItem(at: tempDir)
-        try? FileManager.default.removeItem(at: stageDir)
+        if let temp = tempDir { try? FileManager.default.removeItem(at: temp) }
+        if let stage = stageDir { try? FileManager.default.removeItem(at: stage) }
         super.tearDown()
     }
 
-    func testCardDetectionTransitionsToAwaitingConfirmation() {
+    @MainActor func testCardDetectionTransitionsToAwaitingConfirmation() {
         let dcim = tempDir.appendingPathComponent("DCIM/100EOSR5", isDirectory: true)
         try? FileManager.default.createDirectory(at: dcim, withIntermediateDirectories: true)
         try? Data(repeating: 0x42, count: 1024).write(to: dcim.appendingPathComponent("IMG_0001.CR3"))
@@ -47,7 +49,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testConfirmImportPreservesRelativePaths() throws {
+    @MainActor func testConfirmImportPreservesRelativePaths() throws {
         let folder1 = tempDir.appendingPathComponent("DCIM/100EOSR5", isDirectory: true)
         let folder2 = tempDir.appendingPathComponent("DCIM/101EOSR5", isDirectory: true)
         try FileManager.default.createDirectory(at: folder1, withIntermediateDirectories: true)
@@ -105,7 +107,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: staged2, encoding: .utf8), "photo_101")
     }
 
-    func testCancelImportResetsToIdle() {
+    @MainActor func testCancelImportResetsToIdle() {
         let manager = AppleOtgIngestManager()
         manager.cancelImport()
         XCTAssertEqual(manager.state, .idle)
@@ -120,7 +122,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
     /// as a data race, and on platforms where Bool is not naturally
     /// atomic the cancel could silently fail to land before the next
     /// loop iteration.
-    func testCancelImportHonoredByBackgroundCopy() throws {
+    @MainActor func testCancelImportHonoredByBackgroundCopy() throws {
         let folder = tempDir.appendingPathComponent("DCIM/100EOSR5", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
@@ -145,25 +147,28 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         let scanResult = AppleOtgScanResult(deviceLabel: "CANON R5", rootUrl: tempDir, candidates: candidates)
         let manager = AppleOtgIngestManager()
 
-        let observedLock = NSLock()
-        var observedStates: [AppleOtgState] = []
-        var didCancel = false
+        final class TestStateBox: @unchecked Sendable {
+            let lock = NSLock()
+            var observedStates: [AppleOtgState] = []
+            var didCancel = false
+        }
+        let box = TestStateBox()
 
         // Cancel the moment the loop publishes its first `.ingesting`
         // state — that lands squarely mid-flight regardless of how
         // fast the host disk is.
         let cancellable = manager.$state.sink { state in
-            observedLock.lock()
-            observedStates.append(state)
-            let sawIngesting = !didCancel && {
+            box.lock.lock()
+            box.observedStates.append(state)
+            let sawIngesting = !box.didCancel && {
                 if case .ingesting = state { return true }
                 return false
             }()
-            observedLock.unlock()
+            box.lock.unlock()
             if sawIngesting {
-                observedLock.lock()
-                didCancel = true
-                observedLock.unlock()
+                box.lock.lock()
+                box.didCancel = true
+                box.lock.unlock()
                 DispatchQueue.main.async { manager.cancelImport() }
             }
         }
@@ -175,10 +180,10 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         poller.async {
             let deadline = Date().addingTimeInterval(5.0)
             while Date() < deadline {
-                observedLock.lock()
-                let didCancelNow = didCancel
-                let snapshot = observedStates
-                observedLock.unlock()
+                box.lock.lock()
+                let didCancelNow = box.didCancel
+                let snapshot = box.observedStates
+                box.lock.unlock()
                 if didCancelNow, let ingestingIndex = snapshot.firstIndex(where: { if case .ingesting = $0 { return true } else { return false } }) {
                     if snapshot[ingestingIndex...].contains(where: { if case .idle = $0 { return true } else { return false } }) {
                         idleExpectation.fulfill()
@@ -191,10 +196,10 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         wait(for: [idleExpectation], timeout: 5.0)
         cancellable.cancel()
 
-        observedLock.lock()
-        let snapshot = observedStates
-        let didCancelFlag = didCancel
-        observedLock.unlock()
+        box.lock.lock()
+        let snapshot = box.observedStates
+        let didCancelFlag = box.didCancel
+        box.lock.unlock()
 
         XCTAssertTrue(didCancelFlag, "Test should have observed .ingesting and issued cancel mid-flight")
         XCTAssertFalse(
@@ -210,7 +215,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
     /// `var` as a data race; wrapping it in `OSAllocatedUnfairLock<Bool>`
     /// removes the race and the runtime stress test asserts no
     /// iteration crashes, deadlocks, or produces a torn state read.
-    func testConcurrentCancelAndStateUpdateStress() {
+    @MainActor func testConcurrentCancelAndStateUpdateStress() {
         let manager = AppleOtgIngestManager()
         let iterations = 1000
         let bgQueue = DispatchQueue(label: "test.otg.stress.bg", attributes: .concurrent)
@@ -219,7 +224,9 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         for _ in 0..<iterations {
             group.enter()
             bgQueue.async {
-                _ = manager.state
+                Task { @MainActor in
+                    _ = manager.state
+                }
                 group.leave()
             }
             group.enter()

@@ -3,13 +3,6 @@ import XCTest
 
 /// Tests for AppleSafeSpaceManager.reclaimSafeSpace — covers the
 /// ineligible and error paths that the original tests missed.
-///
-/// The existing testReclaimSafeSpace covers the eligible→delete path,
-/// and testReclaimSafeSpace_DeletionFailure covers the delete-fails
-/// path. The new tests here cover:
-/// - isVerified=false: candidate is skipped, engine never called
-/// - engine returns ineligible: deletion is NOT called
-/// - engine returns error reason: deletion is NOT called
 final class AppleSafeSpaceManagerEligibleTests: XCTestCase {
 
     override func setUp() {
@@ -21,14 +14,10 @@ final class AppleSafeSpaceManagerEligibleTests: XCTestCase {
     }
 
     func testUnverifiedCandidateIsSkipped() {
-        // A candidate with isVerified=false should be skipped entirely:
-        // - verifiedCount stays at 0
-        // - reclaimedCount stays at 0
-        // - deletionHandler is never called
         var deleteCalled = false
         let report = AppleSafeSpaceManager.reclaimSafeSpace(
             candidates: [
-                (localId: "ph://unverified-1", sizeBytes: Int64(30_000_000), isVerified: false)
+                SafeSpaceCandidate(localId: "ph://unverified-1", sizeBytes: Int64(30_000_000), isVerified: false)
             ],
             deletionHandler: { _ in
                 deleteCalled = true
@@ -44,16 +33,12 @@ final class AppleSafeSpaceManagerEligibleTests: XCTestCase {
     }
 
     func testMixedBatchWithUnverifiedAndVerified() {
-        // 3 candidates: 1 unverified (skipped), 2 verified.
-        // The verified ones are processed by the engine. In the mock
-        // path the engine always returns eligible=true, so both
-        // verified candidates are reclaimed.
         let deleted = NSMutableOrderedSet()
         let report = AppleSafeSpaceManager.reclaimSafeSpace(
             candidates: [
-                (localId: "ph://unverified", sizeBytes: Int64(10_000_000), isVerified: false),
-                (localId: "ph://verified-1", sizeBytes: Int64(20_000_000), isVerified: true),
-                (localId: "ph://verified-2", sizeBytes: Int64(30_000_000), isVerified: true),
+                SafeSpaceCandidate(localId: "ph://unverified", sizeBytes: Int64(10_000_000), isVerified: false),
+                SafeSpaceCandidate(localId: "ph://verified-1", sizeBytes: Int64(20_000_000), isVerified: true),
+                SafeSpaceCandidate(localId: "ph://verified-2", sizeBytes: Int64(30_000_000), isVerified: true),
             ],
             deletionHandler: { localId in
                 deleted.add(localId)
@@ -63,23 +48,14 @@ final class AppleSafeSpaceManagerEligibleTests: XCTestCase {
 
         XCTAssertEqual(report.totalCandidates, 3)
         XCTAssertEqual(report.verifiedCount, 2)
-        // The mock engine returns eligible=true for both, so both
-        // verified candidates are reclaimed. This documents the
-        // mock-path behavior; the real-engine-path behavior depends
-        // on server response (covered by the Go core tests in PR-1).
         XCTAssertEqual(report.reclaimedCount, 2)
         XCTAssertEqual(deleted.count, 2)
     }
 
     func testDeletionHandlerReturningFalseDoesNotReclaim() {
-        // When the deletionHandler returns false, reclaimedCount stays
-        // at 0 and the rollback path calls setMediaOffloaded(false).
-        // This is already covered by testReclaimSafeSpace_DeletionFailure
-        // in AppleSafeSpaceManagerTests.swift, but we re-test it here
-        // to document the contract.
         let report = AppleSafeSpaceManager.reclaimSafeSpace(
             candidates: [
-                (localId: "ph://delete-fail", sizeBytes: Int64(50_000_000), isVerified: true)
+                SafeSpaceCandidate(localId: "ph://delete-fail", sizeBytes: Int64(50_000_000), isVerified: true)
             ],
             deletionHandler: { _ in false }
         )

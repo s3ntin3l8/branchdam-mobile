@@ -5,6 +5,7 @@ import UIKit
 /// E.5: Banner shown when camera-roll access is denied, restricted, or
 /// not yet determined. Extracted from ContentView.swift so the banner
 /// is testable from the iOS unit test target.
+@MainActor
 public struct PhotoAuthorizationBanner: View {
     public let status: PHAuthorizationStatus
 

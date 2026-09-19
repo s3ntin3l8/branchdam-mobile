@@ -17,6 +17,7 @@ public struct ExifMetadata {
     public var lineageStatus: String = ""
 }
 
+@MainActor
 public struct GalleryDetailView: View {
     public let item: GalleryItem
     @Environment(\.dismiss) private var dismiss

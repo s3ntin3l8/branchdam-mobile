@@ -1,7 +1,7 @@
 import Foundation
 import Photos
 
-public struct DiscoveredAsset: Equatable {
+public struct DiscoveredAsset: Equatable, Sendable {
     public let localIdentifier: String
     public let filename: String
     public let creationDateUnix: Int64
@@ -32,7 +32,7 @@ public struct DiscoveredAsset: Equatable {
     }
 }
 
-public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver {
+public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecked Sendable {
     public static let shared = PhotoKitObserver()
 
     private var lastScannedDate: Date = Date().addingTimeInterval(-3600)

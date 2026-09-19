@@ -1,7 +1,7 @@
 import Foundation
 import UserNotifications
 
-public class AppleCameraRollImportNotifier {
+public class AppleCameraRollImportNotifier: @unchecked Sendable {
     public static let shared = AppleCameraRollImportNotifier()
 
     /// Backwards-compatible alias of
