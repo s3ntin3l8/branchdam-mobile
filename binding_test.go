@@ -341,8 +341,12 @@ func TestBindingOffloadAndReclaimAndLineage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BindingCheckSafeSpaceCandidates failed: %v", err)
 	}
-	if verdicts == "" {
-		t.Fatalf("expected non-empty verdicts string")
+	var parsedVerdicts []SafeSpaceVerdict
+	if err := json.Unmarshal([]byte(verdicts), &parsedVerdicts); err != nil {
+		t.Fatalf("expected valid JSON verdicts array, got %q: %v", verdicts, err)
+	}
+	if len(parsedVerdicts) != 2 {
+		t.Fatalf("expected 2 verdicts in JSON array, got %d", len(parsedVerdicts))
 	}
 }
 
