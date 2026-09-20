@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.10](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.9...branchdam-mobile-v0.7.10) (2026-09-20)
+
+
+### Features
+
+* **ios:** extend Swift core bridge and update xcframework for core parity ([#173](https://github.com/s3ntin3l8/branchdam-mobile/issues/173)) ([0bf6eb9](https://github.com/s3ntin3l8/branchdam-mobile/commit/0bf6eb9037ba29707bf1c5404994eedec10aa692))
+
 ## [0.7.9](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.8...branchdam-mobile-v0.7.9) (2026-09-19)
 
 
