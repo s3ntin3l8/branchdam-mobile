@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.11](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.10...branchdam-mobile-v0.7.11) (2026-09-20)
+
+
+### Bug Fixes
+
+* **android:** expose encrypted storage availability check and wire fallback logging ([1150c4d](https://github.com/s3ntin3l8/branchdam-mobile/commit/1150c4d0844cc15b38e4e1712052da921f772621))
+* **core:** resolve candidate node UUID mapping, defer file close, and JSON binding format ([0fad461](https://github.com/s3ntin3l8/branchdam-mobile/commit/0fad461fad4238a4e38dec3f7a088a29cba670ae))
+* **ios:** stage PhotoKit asset resources to local POSIX paths and restore observer entry points ([af1b13c](https://github.com/s3ntin3l8/branchdam-mobile/commit/af1b13c568180f64b4085014f96759b72f713926))
+
 ## [0.7.10](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.9...branchdam-mobile-v0.7.10) (2026-09-20)
 
 
