@@ -200,9 +200,29 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                     let resources = PHAssetResource.assetResources(for: phAsset)
                     if let pairedVideoRes = resources.first(where: { $0.type == .pairedVideo }) {
                         let videoLocalId = "ph://\(item.localIdentifier)/pairedVideo"
+                        let tmpDir = FileManager.default.temporaryDirectory
+                        let safeFilename = cleanId.replacingOccurrences(of: "/", with: "_")
+                        let stagedVideoURL = tmpDir.appendingPathComponent("\(safeFilename)_pairedVideo.mov")
+
+                        // Stage paired video file to local POSIX path if not already present
+                        if !FileManager.default.fileExists(atPath: stagedVideoURL.path) {
+                            let options = PHAssetResourceRequestOptions()
+                            options.isNetworkAccessAllowed = true
+                            let sema = DispatchSemaphore(value: 0)
+                            PHAssetResourceManager.default().writeData(for: pairedVideoRes, toFile: stagedVideoURL, options: options) { error in
+                                if let error = error {
+                                    NSLog("PhotoKitObserver: failed to write pairedVideo to file: %@", String(describing: error))
+                                }
+                                sema.signal()
+                            }
+                            _ = sema.wait(timeout: .now() + 10.0)
+                        }
+
+                        let targetPath = FileManager.default.fileExists(atPath: stagedVideoURL.path) ? stagedVideoURL.path : videoLocalId
+
                         if AppleCameraRollImportNotifier.shared.autoImportEnabled {
                             let queueId = BranchDamCoreBridge.shared.enqueueMedia(
-                                localPath: videoLocalId,
+                                localPath: targetPath,
                                 filename: pairedVideoRes.originalFilename,
                                 capturedAtUnix: item.creationDateUnix,
                                 localID: videoLocalId
