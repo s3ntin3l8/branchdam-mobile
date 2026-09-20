@@ -48,6 +48,32 @@ object EncryptedPrefs {
     private var cachedPrefs: SharedPreferences? = null
 
     /**
+     * Test seam: builds a [MasterKey] instance. Tests override this lambda
+     * to simulate Keystore failures deterministically without an Android runtime.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal var masterKeyBuilder: (context: Context, alias: String) -> MasterKey = { ctx, alias ->
+        MasterKey.Builder(ctx, alias)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
+
+    /**
+     * Test seam: creates [EncryptedSharedPreferences]. Tests override this lambda
+     * to simulate successful encrypted storage creation without an Android runtime.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal var encryptedPrefsFactory: (context: Context, name: String, masterKey: MasterKey) -> SharedPreferences? = { ctx, name, masterKey ->
+        EncryptedSharedPreferences.create(
+            ctx,
+            name,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    /**
      * Returns an EncryptedSharedPreferences for [name], or null if
      * Keystore initialization fails. The returned object is cached
      * for the lifetime of the process because MasterKey construction
@@ -61,18 +87,9 @@ object EncryptedPrefs {
         }
 
         return try {
-            val masterKey = MasterKey.Builder(context, MASTER_KEY_ALIAS)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-
-            val prefs = EncryptedSharedPreferences.create(
-                context,
-                name,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-            if (name == SECURE_PREFS_NAME) {
+            val masterKey = masterKeyBuilder(context, MASTER_KEY_ALIAS)
+            val prefs = encryptedPrefsFactory(context, name, masterKey)
+            if (name == SECURE_PREFS_NAME && prefs != null) {
                 cachedPrefs = prefs
             }
             prefs
@@ -83,5 +100,20 @@ object EncryptedPrefs {
             }
             null
         }
+    }
+
+    /**
+     * Resets the cached SharedPreferences instance between test runs.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun resetCacheForTesting() {
+        cachedPrefs = null
+    }
+
+    /**
+     * Reports whether [EncryptedSharedPreferences] is functional on this device.
+     */
+    fun isEncryptedStorageAvailable(context: Context, name: String = SECURE_PREFS_NAME): Boolean {
+        return get(context, name) != null
     }
 }

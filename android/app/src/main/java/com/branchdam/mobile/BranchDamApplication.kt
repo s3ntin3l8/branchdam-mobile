@@ -103,6 +103,9 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
          */
         fun readSecureEngineConfig(context: Context): EngineConfig {
             val encrypted = EncryptedPrefs.get(context)
+            if (encrypted == null) {
+                android.util.Log.w("BranchDamApplication", "EncryptedPrefs unavailable — falling back to plain SharedPreferences (API key authentication unavailable)")
+            }
             val nonSecret = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
             val serverUrl = encrypted?.getString(KEY_SERVER_URL, null)
