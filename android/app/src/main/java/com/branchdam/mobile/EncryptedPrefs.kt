@@ -84,4 +84,11 @@ object EncryptedPrefs {
             null
         }
     }
+
+    /**
+     * Reports whether [EncryptedSharedPreferences] is functional on this device.
+     */
+    fun isEncryptedStorageAvailable(context: Context, name: String = SECURE_PREFS_NAME): Boolean {
+        return get(context, name) != null
+    }
 }

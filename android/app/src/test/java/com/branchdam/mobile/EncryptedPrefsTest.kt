@@ -49,4 +49,11 @@ class EncryptedPrefsTest {
         // uses a different name so the two never collide.
         assertTrue(EncryptedPrefs.SECURE_PREFS_NAME != BranchDamApplication.PREFS_NAME)
     }
+
+    @Test
+    fun testIsEncryptedStorageAvailableHelper() {
+        val context = org.mockito.kotlin.mock<android.content.Context>()
+        // On JVM mock, MasterKey builder throws, so helper returns false gracefully
+        org.junit.Assert.assertFalse(EncryptedPrefs.isEncryptedStorageAvailable(context))
+    }
 }
