@@ -200,44 +200,89 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                     let resources = PHAssetResource.assetResources(for: phAsset)
                     if let pairedVideoRes = resources.first(where: { $0.type == .pairedVideo }) {
                         let videoLocalId = "ph://\(item.localIdentifier)/pairedVideo"
-                        let tmpDir = FileManager.default.temporaryDirectory
-                        let safeFilename = cleanId.replacingOccurrences(of: "/", with: "_")
-                        let stagedVideoURL = tmpDir.appendingPathComponent("\(safeFilename)_pairedVideo.mov")
+                        let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_pairedVideo.mov"
 
-                        // Stage paired video file to local POSIX path if not already present
-                        if !FileManager.default.fileExists(atPath: stagedVideoURL.path) {
-                            let options = PHAssetResourceRequestOptions()
-                            options.isNetworkAccessAllowed = true
-                            let sema = DispatchSemaphore(value: 0)
-                            PHAssetResourceManager.default().writeData(for: pairedVideoRes, toFile: stagedVideoURL, options: options) { error in
-                                if let error = error {
-                                    NSLog("PhotoKitObserver: failed to write pairedVideo to file: %@", String(describing: error))
-                                }
-                                sema.signal()
-                            }
-                            _ = sema.wait(timeout: .now() + 10.0)
-                        }
+                        Self.stageResourceAtomically(resource: pairedVideoRes, filename: safeFilename) { stagedPath in
+                            let targetPath = stagedPath ?? videoLocalId
 
-                        let targetPath = FileManager.default.fileExists(atPath: stagedVideoURL.path) ? stagedVideoURL.path : videoLocalId
-
-                        if AppleCameraRollImportNotifier.shared.autoImportEnabled {
-                            let queueId = BranchDamCoreBridge.shared.enqueueMedia(
-                                localPath: targetPath,
-                                filename: pairedVideoRes.originalFilename,
-                                capturedAtUnix: item.creationDateUnix,
-                                localID: videoLocalId
-                            )
-                            if queueId > 0 {
-                                _ = LivePhotoExtractor.linkLivePhoto(
-                                    stillId: "ph://\(item.localIdentifier)",
-                                    videoId: videoLocalId,
-                                    stillFilename: item.filename,
-                                    videoFilename: pairedVideoRes.originalFilename
+                            if AppleCameraRollImportNotifier.shared.autoImportEnabled {
+                                let queueId = BranchDamCoreBridge.shared.enqueueMedia(
+                                    localPath: targetPath,
+                                    filename: pairedVideoRes.originalFilename,
+                                    capturedAtUnix: item.creationDateUnix,
+                                    localID: videoLocalId
                                 )
+                                if queueId > 0 {
+                                    _ = LivePhotoExtractor.linkLivePhoto(
+                                        stillId: "ph://\(item.localIdentifier)",
+                                        videoId: videoLocalId,
+                                        stillFilename: item.filename,
+                                        videoFilename: pairedVideoRes.originalFilename
+                                    )
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Resource Staging Helper
+
+    public static var stagedMediaDirectory: URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dir = caches.appendingPathComponent("staged_media", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    /**
+     * Stages a PhotoKit asset resource to a local POSIX path inside Caches/staged_media/.
+     * Writes to an atomic .part file first and renames upon completion to ensure
+     * incomplete/interrupted writes are never enqueued. Non-blocking async callback.
+     */
+    public static func stageResourceAtomically(
+        resource: PHAssetResource,
+        filename: String,
+        completion: @escaping (String?) -> Void
+    ) {
+        let targetURL = stagedMediaDirectory.appendingPathComponent(filename)
+        if FileManager.default.fileExists(atPath: targetURL.path),
+           let attr = try? FileManager.default.attributesOfItem(atPath: targetURL.path),
+           (attr[.size] as? Int64 ?? 0) > 0 {
+            completion(targetURL.path)
+            return
+        }
+
+        let partURL = stagedMediaDirectory.appendingPathComponent("\(filename).\(UUID().uuidString).part")
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+
+        PHAssetResourceManager.default().writeData(for: resource, toFile: partURL, options: options) { error in
+            if let error = error {
+                NSLog("stageResourceAtomically failed for %@: %@", filename, String(describing: error))
+                try? FileManager.default.removeItem(at: partURL)
+                completion(nil)
+                return
+            }
+
+            do {
+                if FileManager.default.fileExists(atPath: targetURL.path) {
+                    try? FileManager.default.removeItem(at: targetURL)
+                }
+                try FileManager.default.moveItem(at: partURL, to: targetURL)
+                completion(targetURL.path)
+            } catch {
+                NSLog("stageResourceAtomically moveItem failed: %@", String(describing: error))
+                try? FileManager.default.removeItem(at: partURL)
+                completion(nil)
+            }
+        }
+    }
+}
             }
         }
     }
