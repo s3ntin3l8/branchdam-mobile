@@ -43,7 +43,9 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         guard !isObserving else { return }
         PHPhotoLibrary.shared().register(self)
         isObserving = true
-        Self.pruneStagedMediaDirectory()
+        lineageQueue.async {
+            Self.pruneStagedMediaDirectory()
+        }
     }
 
     public func stopObserving() {
@@ -272,12 +274,27 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     /**
      * Reaps orphaned .part files and staged media older than maxAgeSeconds,
      * provided the staged file path is not currently tracked as PENDING, IN_PROGRESS, or FAILED.
+     * Fails closed if the engine bridge is not yet initialized unless custom statusMap is provided.
      */
-    public static func pruneStagedMediaDirectory(directory: URL = stagedMediaDirectory(), maxAgeSeconds: TimeInterval = 86400 * 7) {
+    public static func pruneStagedMediaDirectory(
+        directory: URL = stagedMediaDirectory(),
+        maxAgeSeconds: TimeInterval = 86400 * 7,
+        statusMap: [String: String]? = nil
+    ) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey]) else { return }
+
+        // Fail closed if bridge is uninitialized and no custom statusMap is supplied
+        guard statusMap != nil || BranchDamCoreBridge.shared.isInitialized else {
+            // Still reap orphaned .part files even if bridge is uninitialized
+            for file in files where file.pathExtension == "part" {
+                try? fm.removeItem(at: file)
+            }
+            return
+        }
+
         let now = Date()
-        let activeStatuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
+        let activeStatuses = statusMap ?? BranchDamCoreBridge.shared.getAllMediaStatuses()
 
         for file in files {
             if file.pathExtension == "part" {
@@ -285,6 +302,8 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             } else if let attrs = try? fm.attributesOfItem(atPath: file.path),
                       let creationDate = attrs[.creationDate] as? Date,
                       now.timeIntervalSince(creationDate) > maxAgeSeconds {
+                // Core maps upload_queue.LocalPath as well as localID/filename/blake3;
+                // suppress deletion if tracked as PENDING, IN_PROGRESS, or FAILED.
                 let status = activeStatuses[file.path] ?? "NOT_ENQUEUED"
                 if status == "COMPLETED" || status == "OFFLOADED" || status == "NOT_ENQUEUED" {
                     try? fm.removeItem(at: file)
