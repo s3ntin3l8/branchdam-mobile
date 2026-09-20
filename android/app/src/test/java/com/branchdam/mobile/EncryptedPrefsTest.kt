@@ -1,6 +1,7 @@
 package com.branchdam.mobile
 
 import android.content.Context
+import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,7 +18,8 @@ import org.mockito.kotlin.mock
  *     alias so the QR pairing flow can target them.
  *   - The shared constants don't drift away from the production
  *     strings the field issue (#69) and the F plan call out.
- *   - The masterKeyBuilder test seam pins failure handling deterministically.
+ *   - The masterKeyBuilder and encryptedPrefsFactory test seams pin
+ *     both success and failure paths deterministically.
  */
 class EncryptedPrefsTest {
 
@@ -46,6 +48,24 @@ class EncryptedPrefsTest {
             assertFalse(EncryptedPrefs.isEncryptedStorageAvailable(context))
         } finally {
             EncryptedPrefs.masterKeyBuilder = originalBuilder
+            EncryptedPrefs.resetCacheForTesting()
+        }
+    }
+
+    @Test
+    fun testIsEncryptedStorageAvailable_ReturnsTrueWhenFactorySucceeds() {
+        val context = mock<Context>()
+        val mockPrefs = mock<SharedPreferences>()
+        val originalBuilder = EncryptedPrefs.masterKeyBuilder
+        val originalFactory = EncryptedPrefs.encryptedPrefsFactory
+        try {
+            EncryptedPrefs.resetCacheForTesting()
+            EncryptedPrefs.masterKeyBuilder = { _, _ -> mock() }
+            EncryptedPrefs.encryptedPrefsFactory = { _, _, _ -> mockPrefs }
+            assertTrue(EncryptedPrefs.isEncryptedStorageAvailable(context))
+        } finally {
+            EncryptedPrefs.masterKeyBuilder = originalBuilder
+            EncryptedPrefs.encryptedPrefsFactory = originalFactory
             EncryptedPrefs.resetCacheForTesting()
         }
     }
