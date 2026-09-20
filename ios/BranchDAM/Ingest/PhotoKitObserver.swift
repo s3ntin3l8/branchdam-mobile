@@ -43,6 +43,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         guard !isObserving else { return }
         PHPhotoLibrary.shared().register(self)
         isObserving = true
+        Self.pruneStagedMediaDirectory()
     }
 
     public func stopObserving() {
@@ -99,12 +100,27 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         if !discovered.isEmpty {
             if AppleCameraRollImportNotifier.shared.autoImportEnabled {
                 for item in discovered {
-                    _ = BranchDamCoreBridge.shared.enqueueMedia(
-                        localPath: "ph://\(item.localIdentifier)",
-                        filename: item.filename,
-                        capturedAtUnix: item.creationDateUnix,
-                        localID: item.localIdentifier
-                    )
+                    let cleanId = item.localIdentifier.hasPrefix("ph://") ? String(item.localIdentifier.dropFirst(5)) : item.localIdentifier
+                    let phAssets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
+                    if let phAsset = phAssets.firstObject {
+                        let resources = PHAssetResource.assetResources(for: phAsset)
+                        let primaryRes = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
+                        if let res = primaryRes {
+                            let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_\(item.filename)"
+                            Self.stageResourceAtomically(resource: res, filename: safeFilename) { stagedPath in
+                                guard let targetPath = stagedPath else {
+                                    NSLog("PhotoKitObserver: staging failed for primary asset %@, skipping enqueue", item.localIdentifier)
+                                    return
+                                }
+                                _ = BranchDamCoreBridge.shared.enqueueMedia(
+                                    localPath: targetPath,
+                                    filename: item.filename,
+                                    capturedAtUnix: item.creationDateUnix,
+                                    localID: item.localIdentifier
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // E.6: Lineage pipeline runs for BOTH auto-import and
@@ -203,7 +219,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                         let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_pairedVideo.mov"
 
                         Self.stageResourceAtomically(resource: pairedVideoRes, filename: safeFilename) { stagedPath in
-                            let targetPath = stagedPath ?? videoLocalId
+                            guard let targetPath = stagedPath else {
+                                NSLog("PhotoKitObserver: staging failed for Live Photo video %@, skipping enqueue", item.localIdentifier)
+                                return
+                            }
 
                             if AppleCameraRollImportNotifier.shared.autoImportEnabled {
                                 let queueId = BranchDamCoreBridge.shared.enqueueMedia(
@@ -228,15 +247,38 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         }
     }
 
-    // MARK: - Resource Staging Helper
+    // MARK: - Resource Staging Helpers
 
-    public static var stagedMediaDirectory: URL {
+    public static func stagedMediaDirectory(customDir: URL? = nil) -> URL {
+        if let customDir = customDir { return customDir }
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let dir = caches.appendingPathComponent("staged_media", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            } catch {
+                NSLog("PhotoKitObserver: failed to create stagedMediaDirectory %@: %@", dir.path, String(describing: error))
+            }
         }
         return dir
+    }
+
+    /**
+     * Reaps orphaned .part files and staged media older than maxAgeSeconds.
+     */
+    public static func pruneStagedMediaDirectory(directory: URL = stagedMediaDirectory(), maxAgeSeconds: TimeInterval = 86400 * 7) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey]) else { return }
+        let now = Date()
+        for file in files {
+            if file.pathExtension == "part" {
+                try? fm.removeItem(at: file)
+            } else if let attrs = try? fm.attributesOfItem(atPath: file.path),
+                      let creationDate = attrs[.creationDate] as? Date,
+                      now.timeIntervalSince(creationDate) > maxAgeSeconds {
+                try? fm.removeItem(at: file)
+            }
+        }
     }
 
     /**
@@ -247,9 +289,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     public static func stageResourceAtomically(
         resource: PHAssetResource,
         filename: String,
+        directory: URL = stagedMediaDirectory(),
         completion: @escaping (String?) -> Void
     ) {
-        let targetURL = stagedMediaDirectory.appendingPathComponent(filename)
+        let targetURL = directory.appendingPathComponent(filename)
         if FileManager.default.fileExists(atPath: targetURL.path),
            let attr = try? FileManager.default.attributesOfItem(atPath: targetURL.path),
            (attr[.size] as? Int64 ?? 0) > 0 {
@@ -257,13 +300,22 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             return
         }
 
-        let partURL = stagedMediaDirectory.appendingPathComponent("\(filename).\(UUID().uuidString).part")
+        let partURL = directory.appendingPathComponent("\(filename).\(UUID().uuidString).part")
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true
 
         PHAssetResourceManager.default().writeData(for: resource, toFile: partURL, options: options) { error in
             if let error = error {
                 NSLog("stageResourceAtomically failed for %@: %@", filename, String(describing: error))
+                try? FileManager.default.removeItem(at: partURL)
+                completion(nil)
+                return
+            }
+
+            guard FileManager.default.fileExists(atPath: partURL.path),
+                  let attr = try? FileManager.default.attributesOfItem(atPath: partURL.path),
+                  (attr[.size] as? Int64 ?? 0) > 0 else {
+                NSLog("stageResourceAtomically wrote zero bytes for %@", filename)
                 try? FileManager.default.removeItem(at: partURL)
                 completion(nil)
                 return
