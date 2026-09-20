@@ -51,9 +51,14 @@ class EncryptedPrefsTest {
     }
 
     @Test
-    fun testIsEncryptedStorageAvailableHelper() {
+    fun testIsEncryptedStorageAvailable_ReturnsFalseWhenMasterKeyFails() {
         val context = org.mockito.kotlin.mock<android.content.Context>()
-        // On JVM mock, MasterKey builder throws, so helper returns false gracefully
-        org.junit.Assert.assertFalse(EncryptedPrefs.isEncryptedStorageAvailable(context))
+        val originalBuilder = EncryptedPrefs.masterKeyBuilder
+        try {
+            EncryptedPrefs.masterKeyBuilder = { _, _ -> throw RuntimeException("Keystore unavailable") }
+            org.junit.Assert.assertFalse(EncryptedPrefs.isEncryptedStorageAvailable(context))
+        } finally {
+            EncryptedPrefs.masterKeyBuilder = originalBuilder
+        }
     }
 }

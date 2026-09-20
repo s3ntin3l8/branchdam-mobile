@@ -102,6 +102,9 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
          * EncryptedPrefs.kt for the encryption story.
          */
         fun readSecureEngineConfig(context: Context): EngineConfig {
+            if (!EncryptedPrefs.isEncryptedStorageAvailable(context)) {
+                android.util.Log.w("BranchDamApplication", "EncryptedPrefs unavailable — falling back to plain SharedPreferences")
+            }
             val encrypted = EncryptedPrefs.get(context)
             val nonSecret = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

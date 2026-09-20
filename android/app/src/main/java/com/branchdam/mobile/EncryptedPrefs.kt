@@ -48,6 +48,17 @@ object EncryptedPrefs {
     private var cachedPrefs: SharedPreferences? = null
 
     /**
+     * Test seam: builds a [MasterKey] instance. Tests override this lambda
+     * to simulate Keystore failures deterministically without an Android runtime.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal var masterKeyBuilder: (context: Context, alias: String) -> MasterKey = { ctx, alias ->
+        MasterKey.Builder(ctx, alias)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
+
+    /**
      * Returns an EncryptedSharedPreferences for [name], or null if
      * Keystore initialization fails. The returned object is cached
      * for the lifetime of the process because MasterKey construction
@@ -61,9 +72,7 @@ object EncryptedPrefs {
         }
 
         return try {
-            val masterKey = MasterKey.Builder(context, MASTER_KEY_ALIAS)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
+            val masterKey = masterKeyBuilder(context, MASTER_KEY_ALIAS)
 
             val prefs = EncryptedSharedPreferences.create(
                 context,
