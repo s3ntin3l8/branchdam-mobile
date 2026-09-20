@@ -313,83 +313,87 @@ func (e *Engine) SyncUploads(ctx context.Context, batchSize int) (int, error) {
 			}
 		}
 
-		// B.2.5: Stat before Open so a missing file surfaces as IO_ERROR.
-		if _, statErr := os.Stat(item.LocalPath); statErr != nil {
-			_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file stat failed: %v", statErr), 5)
-			e.clearActiveUpload()
-			continue
+		completed, _ := e.uploadPendingItem(ctx, item)
+		if completed {
+			completedCount++
 		}
-
-		file, openErr := os.Open(item.LocalPath)
-		if openErr != nil {
-			_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file open failed: %v", openErr), 5)
-			e.clearActiveUpload()
-			continue
-		}
-
-		cam := item.CameraModel
-		if cam == "" && e.c != nil {
-			cam = e.c.AgentID()
-		}
-
-		uploadOpts := client.UploadOptions{
-			CameraModel:    cam,
-			FastHash:       item.FastHash,
-			Blake3Hash:     item.Blake3Hash,
-			SourcePathHash: item.SourcePathHash,
-			CapturedAtUnix: item.CapturedAtUnix,
-			ProgressFn: func(bytesSent int64, totalBytes int64) {
-				e.updateActiveUploadProgress(bytesSent, totalBytes)
-			},
-		}
-
-		resp, uploadErr := e.c.UploadStream(ctx, file, item.SizeBytes, item.TargetFilename, uploadOpts)
-		// B.2.5: file close moved to defer (declared inside the loop) so
-		// the close always runs even if a panic occurs in UploadStream.
-		file.Close()
 		e.clearActiveUpload()
-
-		if uploadErr != nil {
-			// B.2.6: handle the new structured dedup / hash-mismatch
-			// codes by surfacing them as typed errors; the engine
-			// distinguishes "soft dedup, mark complete" from "hard
-			// dedup failure, re-queue" via the Code.
-			var ce *client.ClientError
-			if errors.As(uploadErr, &ce) {
-				switch ce.Code {
-				case client.CodeDedupNoNodeUUID, client.CodeHashMismatch, client.CodeResponseTooLarge:
-					// Hard failure; mark as failed so it retries.
-					_ = e.q.MarkUploadFailed(item.ID, uploadErr.Error(), 5)
-					continue
-				}
-			}
-			if dedupResp, ok := client.AsDedupResponse(uploadErr); ok {
-				slog.Info("engine: upload dedup — server returned existing node",
-					"existingUUID", dedupResp.NodeUUID, "localPath", item.LocalPath)
-				_ = e.q.MarkUploadComplete(item.ID, dedupResp.NodeUUID)
-				completedCount++
-				continue
-			}
-			_ = e.q.MarkUploadFailed(item.ID, uploadErr.Error(), 5)
-			continue
-		}
-
-		if resp.IsDedup {
-			slog.Info("engine: upload dedup — server acknowledged existing content via X-Dedup",
-				"existingUUID", resp.NodeUUID, "localPath", item.LocalPath)
-		}
-
-		if err := e.q.MarkUploadComplete(item.ID, resp.NodeUUID); err != nil {
-			continue
-		}
-		if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, resp.NodeUUID); err != nil {
-			slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
-		}
-
-		completedCount++
 	}
 
 	return completedCount, nil
+}
+
+// uploadPendingItem attempts to open, hash-check, and stream upload a single pending item.
+// Uses a helper method so defer file.Close() runs cleanly per-item.
+func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem) (completed bool, err error) {
+	// B.2.5: Stat before Open so a missing file surfaces as IO_ERROR.
+	if _, statErr := os.Stat(item.LocalPath); statErr != nil {
+		_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file stat failed: %v", statErr), 5)
+		return false, statErr
+	}
+
+	file, openErr := os.Open(item.LocalPath)
+	if openErr != nil {
+		_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file open failed: %v", openErr), 5)
+		return false, openErr
+	}
+	// B.2.5: defer close inside helper method so cleanup is guaranteed.
+	defer file.Close()
+
+	cam := item.CameraModel
+	if cam == "" && e.c != nil {
+		cam = e.c.AgentID()
+	}
+
+	uploadOpts := client.UploadOptions{
+		CameraModel:    cam,
+		FastHash:       item.FastHash,
+		Blake3Hash:     item.Blake3Hash,
+		SourcePathHash: item.SourcePathHash,
+		CapturedAtUnix: item.CapturedAtUnix,
+		ProgressFn: func(bytesSent int64, totalBytes int64) {
+			e.updateActiveUploadProgress(bytesSent, totalBytes)
+		},
+	}
+
+	resp, uploadErr := e.c.UploadStream(ctx, file, item.SizeBytes, item.TargetFilename, uploadOpts)
+	if uploadErr != nil {
+		// B.2.6: handle the new structured dedup / hash-mismatch
+		// codes by surfacing them as typed errors; the engine
+		// distinguishes "soft dedup, mark complete" from "hard
+		// dedup failure, re-queue" via the Code.
+		var ce *client.ClientError
+		if errors.As(uploadErr, &ce) {
+			switch ce.Code {
+			case client.CodeDedupNoNodeUUID, client.CodeHashMismatch, client.CodeResponseTooLarge:
+				// Hard failure; mark as failed so it retries.
+				_ = e.q.MarkUploadFailed(item.ID, uploadErr.Error(), 5)
+				return false, uploadErr
+			}
+		}
+		if dedupResp, ok := client.AsDedupResponse(uploadErr); ok {
+			slog.Info("engine: upload dedup — server returned existing node",
+				"existingUUID", dedupResp.NodeUUID, "localPath", item.LocalPath)
+			_ = e.q.MarkUploadComplete(item.ID, dedupResp.NodeUUID)
+			return true, nil
+		}
+		_ = e.q.MarkUploadFailed(item.ID, uploadErr.Error(), 5)
+		return false, uploadErr
+	}
+
+	if resp.IsDedup {
+		slog.Info("engine: upload dedup — server acknowledged existing content via X-Dedup",
+			"existingUUID", resp.NodeUUID, "localPath", item.LocalPath)
+	}
+
+	if err := e.q.MarkUploadComplete(item.ID, resp.NodeUUID); err != nil {
+		return false, err
+	}
+	if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, resp.NodeUUID); err != nil {
+		slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
+	}
+
+	return true, nil
 }
 
 // SyncEvents dispatches pending lifecycle events to the central branchDAM server.
@@ -440,7 +444,7 @@ func (e *Engine) SyncEvents(ctx context.Context, batchSize int) (int, error) {
 func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string) ([]SafeSpaceCandidate, error) {
 	candidateMap := make(map[string]SafeSpaceCandidate, len(localIDs))
 	var queryUUIDs []string
-	idToLocal := make(map[string]string)
+	idToLocal := make(map[string][]string)
 
 	for _, localID := range localIDs {
 		state, err := e.q.GetMediaByLocalID(localID)
@@ -461,7 +465,7 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 			IsEligible: false,
 		}
 		queryUUIDs = append(queryUUIDs, state.NodeUUID)
-		idToLocal[state.NodeUUID] = localID
+		idToLocal[state.NodeUUID] = append(idToLocal[state.NodeUUID], localID)
 	}
 
 	if len(queryUUIDs) > 0 {
@@ -471,19 +475,21 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 		}
 
 		for _, st := range statuses {
-			localID, exists := idToLocal[st.NodeUUID]
+			localIDsForNode, exists := idToLocal[st.NodeUUID]
 			if !exists {
 				continue
 			}
 
 			isEligible := st.Found && st.Verified && (st.Tier == "TIER3_MASTER_ARCHIVE" || st.Tier == "TIER2_DERIVATIVE_CACHE")
-			candidateMap[localID] = SafeSpaceCandidate{
-				LocalID:    localID,
-				NodeUUID:   st.NodeUUID,
-				Blake3Hash: candidateMap[localID].Blake3Hash,
-				IsVerified: st.Verified,
-				IsEligible: isEligible,
-				Tier:       st.Tier,
+			for _, localID := range localIDsForNode {
+				candidateMap[localID] = SafeSpaceCandidate{
+					LocalID:    localID,
+					NodeUUID:   st.NodeUUID,
+					Blake3Hash: candidateMap[localID].Blake3Hash,
+					IsVerified: st.Verified,
+					IsEligible: isEligible,
+					Tier:       st.Tier,
+				}
 			}
 		}
 	}

@@ -134,6 +134,53 @@ func TestEngineFullLifecycle(t *testing.T) {
 	}
 }
 
+func TestCheckSafeSpaceCandidates_MultipleLocalIDsSharingNodeUUID(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "shared_node_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open queue: %v", err)
+	}
+	defer q.Close()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/agent/node-status" {
+			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{
+				Statuses: []client.NodeStatusItem{
+					{
+						NodeUUID: "shared-node-uuid",
+						Found:    true,
+						Verified: true,
+						Tier:     "TIER3_MASTER_ARCHIVE",
+					},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Config{BaseURL: srv.URL, AgentID: "test-agent"})
+	eng := New(q, c)
+
+	_ = q.RecordLocalMedia("local_uri_a", "shared-node-uuid", "hash-a", "ACTIVE")
+	_ = q.RecordLocalMedia("local_uri_b", "shared-node-uuid", "hash-a", "ACTIVE")
+
+	candidates, err := eng.CheckSafeSpaceCandidates(context.Background(), []string{"local_uri_a", "local_uri_b"})
+	if err != nil {
+		t.Fatalf("CheckSafeSpaceCandidates failed: %v", err)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("expected 2 candidates, got %d", len(candidates))
+	}
+	for _, cand := range candidates {
+		if !cand.IsEligible || !cand.IsVerified {
+			t.Fatalf("expected candidate %s to be eligible and verified, got: %+v", cand.LocalID, cand)
+		}
+	}
+}
+
 func TestEnqueueLocalCapture_Dedup(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "engine_dedup_test.db")
