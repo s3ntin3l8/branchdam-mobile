@@ -283,7 +283,3 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         }
     }
 }
-            }
-        }
-    }
-}
