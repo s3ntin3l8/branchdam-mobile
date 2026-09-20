@@ -95,6 +95,14 @@ object EncryptedPrefs {
     }
 
     /**
+     * Resets the cached SharedPreferences instance between test runs.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun resetCacheForTesting() {
+        cachedPrefs = null
+    }
+
+    /**
      * Reports whether [EncryptedSharedPreferences] is functional on this device.
      */
     fun isEncryptedStorageAvailable(context: Context, name: String = SECURE_PREFS_NAME): Boolean {
