@@ -37,4 +37,21 @@ final class PhotoKitObserverTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: partFile.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile.path))
     }
+
+    func testPruneStagedMediaDirectory_PreservesFreshAndPendingFiles() {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let freshFile = tempDir.appendingPathComponent("fresh.mov")
+        let partFile = tempDir.appendingPathComponent("test.part")
+
+        try? "fresh-data".write(to: freshFile, atomically: true, encoding: .utf8)
+        try? "part-data".write(to: partFile, atomically: true, encoding: .utf8)
+
+        PhotoKitObserver.pruneStagedMediaDirectory(directory: tempDir, maxAgeSeconds: 3600)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partFile.path))
+    }
 }

@@ -99,6 +99,8 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
 
         if !discovered.isEmpty {
             if AppleCameraRollImportNotifier.shared.autoImportEnabled {
+                let stagingGroup = DispatchGroup()
+
                 for item in discovered {
                     let cleanId = item.localIdentifier.hasPrefix("ph://") ? String(item.localIdentifier.dropFirst(5)) : item.localIdentifier
                     let phAssets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
@@ -107,7 +109,9 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                         let primaryRes = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
                         if let res = primaryRes {
                             let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_\(item.filename)"
+                            stagingGroup.enter()
                             Self.stageResourceAtomically(resource: res, filename: safeFilename) { stagedPath in
+                                defer { stagingGroup.leave() }
                                 guard let targetPath = stagedPath else {
                                     NSLog("PhotoKitObserver: staging failed for primary asset %@, skipping enqueue", item.localIdentifier)
                                     return
@@ -128,7 +132,9 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                 // confirmation is safe — the engine deduplicates by local ID.
                 runLineageDetection(discovered)
 
-                BackgroundSyncManager.shared.triggerImmediateSync()
+                stagingGroup.notify(queue: .main) {
+                    BackgroundSyncManager.shared.triggerImmediateSync()
+                }
             } else {
                 AppleCameraRollImportNotifier.shared.stagePendingAssets(discovered)
                 AppleCameraRollImportNotifier.shared.postImportNotification(
@@ -264,19 +270,25 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     }
 
     /**
-     * Reaps orphaned .part files and staged media older than maxAgeSeconds.
+     * Reaps orphaned .part files and staged media older than maxAgeSeconds,
+     * provided the staged file path is not currently tracked as PENDING, IN_PROGRESS, or FAILED.
      */
     public static func pruneStagedMediaDirectory(directory: URL = stagedMediaDirectory(), maxAgeSeconds: TimeInterval = 86400 * 7) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey]) else { return }
         let now = Date()
+        let activeStatuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
+
         for file in files {
             if file.pathExtension == "part" {
                 try? fm.removeItem(at: file)
             } else if let attrs = try? fm.attributesOfItem(atPath: file.path),
                       let creationDate = attrs[.creationDate] as? Date,
                       now.timeIntervalSince(creationDate) > maxAgeSeconds {
-                try? fm.removeItem(at: file)
+                let status = activeStatuses[file.path] ?? "NOT_ENQUEUED"
+                if status == "COMPLETED" || status == "OFFLOADED" || status == "NOT_ENQUEUED" {
+                    try? fm.removeItem(at: file)
+                }
             }
         }
     }
