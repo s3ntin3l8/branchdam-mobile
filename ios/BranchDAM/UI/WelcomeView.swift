@@ -71,6 +71,7 @@ public struct WelcomeView: View {
                     // observer immediately so the user gets a live pipeline
                     // rather than waiting for a full app relaunch.
                     BranchDamCoreBridge.shared.startEngineIfNeeded()
+                    PhotoKitObserver.shared.startObserving()
                     showMainApp = true
                 }
             }

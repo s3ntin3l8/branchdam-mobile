@@ -83,6 +83,7 @@ public struct PhotoAuthorizationBanner: View {
                 let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
                 if status == .authorized || status == .limited {
                     BranchDamCoreBridge.shared.startEngineIfNeeded()
+                    PhotoKitObserver.shared.startObserving()
                 }
             }
         }

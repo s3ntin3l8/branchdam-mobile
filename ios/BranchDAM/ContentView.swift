@@ -101,6 +101,7 @@ public struct ContentView: View {
             // backgrounded, start the engine + observer now.
             if authorizationStatus == .authorized || authorizationStatus == .limited {
                 BranchDamCoreBridge.shared.startEngineIfNeeded()
+                PhotoKitObserver.shared.startObserving()
             }
         }
     }

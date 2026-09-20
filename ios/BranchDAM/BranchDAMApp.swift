@@ -13,6 +13,7 @@ struct BranchDAMApp: App {
         // first-launch permission request flow.
         if authorizationStatus == .authorized || authorizationStatus == .limited {
             BranchDamCoreBridge.shared.startEngineIfNeeded()
+            PhotoKitObserver.shared.startObserving()
         }
 
         BackgroundSyncManager.shared.registerBackgroundTasks()
