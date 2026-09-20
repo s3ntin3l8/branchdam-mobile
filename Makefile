@@ -28,8 +28,9 @@ lint:
 android:
 	cd android && if [ -f "./gradlew" ]; then ./gradlew assembleDebug; fi
 
+# Single gradlew invocation runs unit tests and release compilation in one daemon pass.
 android-test:
-	cd android && if [ -f "./gradlew" ]; then ./gradlew test; fi
+	cd android && if [ -f "./gradlew" ]; then ./gradlew testDebugUnitTest compileReleaseKotlin; fi
 
 # Build the gomobile-bound branchdam library (Android AAR + iOS xcframework).
 # Produces android/app/libs/branchdam.aar and ios/Frameworks/BranchDam.xcframework.

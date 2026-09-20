@@ -44,13 +44,15 @@ if ! command -v gomobile >/dev/null 2>&1; then
     go install "golang.org/x/mobile/cmd/gobind@${GOMOBILE_REV}"
 fi
 
-# Allow callers to skip a target. Usage: build-mobile.sh --android-only / --ios-only
+# Allow callers to skip a target. Usage: build-mobile.sh --android-only / --ios-only / --ios-sim-only
 BUILD_ANDROID=1
 BUILD_IOS=1
+IOS_TARGETS="ios,iossimulator,macos"
 for arg in "$@"; do
     case "$arg" in
         --android-only) BUILD_IOS=0 ;;
         --ios-only) BUILD_ANDROID=0 ;;
+        --ios-sim-only) BUILD_ANDROID=0; IOS_TARGETS="iossimulator" ;;
         --help|-h)
             sed -n '2,18p' "$0"
             exit 0
@@ -109,7 +111,7 @@ if [[ "${BUILD_IOS}" -eq 1 ]]; then
         exit 1
     fi
 
-    echo "=== Building iOS xcframework (ios, iossimulator, macos) ==="
+    echo "=== Building iOS xcframework (${IOS_TARGETS}) ==="
     mkdir -p ios/Frameworks
     # The Swift module name is taken from the .xcframework directory
     # basename; Obj-C class names are built as <Prefix><Title(pkgName)>.
@@ -124,7 +126,7 @@ if [[ "${BUILD_IOS}" -eq 1 ]]; then
     # destination. maccatalyst is avoided because Xcode 26+ clang rejects the
     # ios13.0-macabi deployment target that gomobile hardcodes.
     gomobile bind \
-        -target ios,iossimulator,macos \
+        -target "${IOS_TARGETS}" \
         -o ios/Frameworks/branchdam.xcframework \
         "${PUBLIC_PKG}"
     echo "xcframework: $(ls -la ios/Frameworks/branchdam.xcframework)"
