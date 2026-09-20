@@ -60,6 +60,11 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     }
 
     public func fetchAndEnqueueRecentAssets(minDate: Date? = nil) -> [DiscoveredAsset] {
+        guard BranchDamCoreBridge.shared.isInitialized else {
+            NSLog("PhotoKitObserver: engine bridge uninitialized, skipping asset discovery")
+            return []
+        }
+
         let since = minDate ?? lastScannedDate
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "creationDate > %@", since as NSDate)
