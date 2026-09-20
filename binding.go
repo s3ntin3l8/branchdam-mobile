@@ -195,15 +195,15 @@ func BindingReclaimSafeSpace(localID string) error {
 }
 
 // BindingCheckSafeSpaceCandidates checks a batch of local IDs for
-// eligibility. localIDs is a comma-separated list. Returns a
-// comma-separated "localID:eligible:reason" string.
+// eligibility. localIDs is a comma-separated list. Returns a JSON-encoded
+// string array of SafeSpaceVerdict objects.
 func BindingCheckSafeSpaceCandidates(localIDs string) (string, error) {
 	e, err := getBindingEngine()
 	if err != nil {
 		return "", err
 	}
 	if localIDs == "" {
-		return "", nil
+		return "[]", nil
 	}
 	ids := splitIDs(localIDs)
 	candidates := make([]SafeSpaceCandidate, len(ids))
@@ -214,11 +214,11 @@ func BindingCheckSafeSpaceCandidates(localIDs string) (string, error) {
 	if checkErr != nil {
 		return "", checkErr
 	}
-	parts := make([]string, 0, len(verdicts))
-	for _, v := range verdicts {
-		parts = append(parts, v.LocalID+":"+fmt.Sprintf("%t", v.Eligible)+":"+v.Reason)
+	b, err := json.Marshal(verdicts)
+	if err != nil {
+		return "", err
 	}
-	return strings.Join(parts, ","), nil
+	return string(b), nil
 }
 
 func splitIDs(s string) []string {

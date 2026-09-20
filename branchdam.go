@@ -544,9 +544,9 @@ type SafeSpaceCandidate struct {
 
 // SafeSpaceVerdict is the engine's per-candidate verdict.
 type SafeSpaceVerdict struct {
-	LocalID  string
-	Eligible bool
-	Reason   string
+	LocalID  string `json:"localId"`
+	Eligible bool   `json:"eligible"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 // CheckSafeSpaceCandidates queries the server for the current verified + tier
