@@ -81,7 +81,7 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;25.1.8937393'
 
       - name: Download Built AAR
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: branchdam-aar
           path: android/app/libs/
