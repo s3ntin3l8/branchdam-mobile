@@ -49,16 +49,24 @@ func newTestEngineWithServer(t *testing.T) (*Engine, string) {
 			_ = json.NewEncoder(w).Encode(client.AgentEventResponse{EventID: "evt-1"})
 		case "/api/v1/agent/node-status":
 			statuses++
-			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{
-				Statuses: []client.NodeStatusItem{
-					{
-						NodeUUID: r.Header.Get("X-Debug-Lookup"),
-						Found:    true,
-						Verified: true,
-						Tier:     "TIER3_MASTER_ARCHIVE",
-					},
-				},
-			})
+			// Mirror the real server: one entry per requested UUID,
+			// echoing its nodeUuid, here always a live verified master.
+			var req client.NodeStatusRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			out := make([]client.NodeStatusItem, 0, len(req.NodeUUIDs))
+			for _, id := range req.NodeUUIDs {
+				out = append(out, client.NodeStatusItem{
+					NodeUUID:       id,
+					Found:          true,
+					Verified:       true,
+					Tier:           "TIER3_MASTER_ARCHIVE",
+					LifecycleState: "ACTIVE",
+				})
+			}
+			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{Statuses: out})
 		default:
 			http.NotFound(w, r)
 		}

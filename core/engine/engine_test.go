@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,10 +55,11 @@ func TestEngineFullLifecycle(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{
 				Statuses: []client.NodeStatusItem{
 					{
-						NodeUUID: "018f-test-node-1",
-						Found:    true,
-						Tier:     "TIER3_MASTER_ARCHIVE",
-						Verified: true,
+						NodeUUID:       "018f-test-node-1",
+						Found:          true,
+						Tier:           "TIER3_MASTER_ARCHIVE",
+						LifecycleState: "ACTIVE",
+						Verified:       true,
 					},
 				},
 			})
@@ -148,10 +151,11 @@ func TestCheckSafeSpaceCandidates_MultipleLocalIDsSharingNodeUUID(t *testing.T) 
 			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{
 				Statuses: []client.NodeStatusItem{
 					{
-						NodeUUID: "shared-node-uuid",
-						Found:    true,
-						Verified: true,
-						Tier:     "TIER3_MASTER_ARCHIVE",
+						NodeUUID:       "shared-node-uuid",
+						Found:          true,
+						Verified:       true,
+						Tier:           "TIER3_MASTER_ARCHIVE",
+						LifecycleState: "ACTIVE",
 					},
 				},
 			})
@@ -767,5 +771,245 @@ func TestEngine_ResetUploadByBlake3Hash_UpdatesPath(t *testing.T) {
 	}
 	if items[0].LocalPath != file2 {
 		t.Fatalf("LocalPath = %q, want %q", items[0].LocalPath, file2)
+	}
+}
+
+// newNodeStatusServer mimics branchDAM's POST /api/v1/agent/node-status:
+// one entry per requested UUID (Found=false when the UUID is unknown),
+// and a 400 for an empty or >400-UUID request. batchSizes records the
+// size of every request the engine sent.
+func newNodeStatusServer(t *testing.T, known map[string]client.NodeStatusItem) (srv *httptest.Server, batchSizes *[]int) {
+	t.Helper()
+	sizes := []int{}
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/agent/node-status" {
+			http.NotFound(w, r)
+			return
+		}
+		var req client.NodeStatusRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		sizes = append(sizes, len(req.NodeUUIDs))
+		if len(req.NodeUUIDs) == 0 || len(req.NodeUUIDs) > 400 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		out := make([]client.NodeStatusItem, 0, len(req.NodeUUIDs))
+		for _, id := range req.NodeUUIDs {
+			st, ok := known[id]
+			if !ok {
+				st = client.NodeStatusItem{NodeUUID: id}
+			}
+			out = append(out, st)
+		}
+		_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{Statuses: out})
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &sizes
+}
+
+// TestReclaimGate_RequiresLiveTier3Master: a local original may only be
+// reclaimed when the server's copy is a found, hash-verified Tier-3 master
+// in a live lifecycle state. Both reclaim-eligibility paths
+// (CheckSafeSpaceCandidates and SafeSpaceReclaim) must agree, and a
+// rejected reclaim must never set the offloaded flag.
+func TestReclaimGate_RequiresLiveTier3Master(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     client.NodeStatusItem
+		eligible   bool
+		reasonPart string
+	}{
+		{"active tier3 verified", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"}, true, ""},
+		{"hidden tier3 verified", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "HIDDEN"}, true, ""},
+		{"trashed master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "TRASHED"}, false, "lifecycle ineligible: TRASHED"},
+		{"missing master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "MISSING"}, false, "lifecycle ineligible: MISSING"},
+		{"archived (superseded) master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ARCHIVED"}, false, "lifecycle ineligible: ARCHIVED"},
+		{"lifecycle absent", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE"}, false, "lifecycle ineligible: <none>"},
+		{"legacy non-server tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER2_DERIVATIVE_CACHE", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER2_DERIVATIVE_CACHE"},
+		{"exports tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER2_EXPORTS", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER2_EXPORTS"},
+		{"scratch tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER1_LOCAL_SCRATCH", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER1_LOCAL_SCRATCH"},
+		{"tier absent", client.NodeStatusItem{Found: true, Verified: true, LifecycleState: "ACTIVE"}, false, "tier ineligible: <none>"},
+		{"not verified", client.NodeStatusItem{Found: true, Verified: false, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"}, false, "not verified on server"},
+		{"not found", client.NodeStatusItem{Found: false}, false, "node not found on server"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const nodeUUID = "node-under-test"
+			const localID = "local-under-test"
+			st := tc.status
+			st.NodeUUID = nodeUUID
+			srv, _ := newNodeStatusServer(t, map[string]client.NodeStatusItem{nodeUUID: st})
+
+			q, err := queue.Open(filepath.Join(t.TempDir(), "gate.db"))
+			if err != nil {
+				t.Fatalf("open queue: %v", err)
+			}
+			defer q.Close()
+			eng := New(q, client.New(client.Config{BaseURL: srv.URL, APIKey: "k", AgentID: "a"}))
+			if err := q.RecordLocalMedia(localID, nodeUUID, "b3", "ACTIVE"); err != nil {
+				t.Fatalf("RecordLocalMedia: %v", err)
+			}
+
+			// Scan path.
+			cands, err := eng.CheckSafeSpaceCandidates(context.Background(), []string{localID})
+			if err != nil {
+				t.Fatalf("CheckSafeSpaceCandidates: %v", err)
+			}
+			if len(cands) != 1 {
+				t.Fatalf("got %d candidates, want 1", len(cands))
+			}
+			if cands[0].IsEligible != tc.eligible {
+				t.Fatalf("scan IsEligible = %v, want %v (candidate %+v)", cands[0].IsEligible, tc.eligible, cands[0])
+			}
+			if tc.eligible && cands[0].Reason != "" {
+				t.Fatalf("eligible candidate carries Reason %q", cands[0].Reason)
+			}
+			if !tc.eligible && !strings.Contains(cands[0].Reason, tc.reasonPart) {
+				t.Fatalf("scan Reason = %q, want substring %q", cands[0].Reason, tc.reasonPart)
+			}
+
+			// Reclaim path.
+			verdict, err := eng.SafeSpaceReclaim(context.Background(), localID)
+			if verdict.Eligible != tc.eligible {
+				t.Fatalf("reclaim Eligible = %v, want %v (verdict %+v, err %v)", verdict.Eligible, tc.eligible, verdict, err)
+			}
+			if tc.eligible {
+				if err != nil {
+					t.Fatalf("reclaim err = %v, want nil", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("reclaim err = nil, want ineligible error")
+				}
+				if !strings.Contains(verdict.Reason, tc.reasonPart) {
+					t.Fatalf("reclaim Reason = %q, want substring %q", verdict.Reason, tc.reasonPart)
+				}
+			}
+			offloaded, err := q.IsMediaOffloaded(localID)
+			if err != nil {
+				t.Fatalf("IsMediaOffloaded: %v", err)
+			}
+			if offloaded != tc.eligible {
+				t.Fatalf("offloaded flag = %v, want %v", offloaded, tc.eligible)
+			}
+		})
+	}
+}
+
+// TestSafeSpaceReclaim_IgnoresStatusForOtherNode: the reclaim decision must
+// be based on the entry whose nodeUuid matches the asset's node, never on
+// whatever entry happens to come first.
+func TestSafeSpaceReclaim_IgnoresStatusForOtherNode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{
+			Statuses: []client.NodeStatusItem{{
+				NodeUUID: "some-other-node", Found: true, Verified: true,
+				Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE",
+			}},
+		})
+	}))
+	defer srv.Close()
+
+	q, err := queue.Open(filepath.Join(t.TempDir(), "mismatch.db"))
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+	eng := New(q, client.New(client.Config{BaseURL: srv.URL, APIKey: "k", AgentID: "a"}))
+	if err := q.RecordLocalMedia("local-x", "node-x", "b3", "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
+
+	verdict, err := eng.SafeSpaceReclaim(context.Background(), "local-x")
+	if err == nil || verdict.Eligible {
+		t.Fatalf("expected ineligible verdict, got %+v, err %v", verdict, err)
+	}
+	if offloaded, _ := q.IsMediaOffloaded("local-x"); offloaded {
+		t.Fatalf("offloaded flag set from another node's status")
+	}
+}
+
+// TestCheckSafeSpaceCandidates_BatchesNodeStatusAt400: the server rejects
+// node-status requests carrying more than 400 UUIDs with a 400, which used
+// to fail the whole Safe-Space scan. 401 distinct nodes must go out as two
+// requests (400 + 1) and every candidate must come back evaluated.
+func TestCheckSafeSpaceCandidates_BatchesNodeStatusAt400(t *testing.T) {
+	const n = client.MaxNodeStatusBatch + 1
+	known := make(map[string]client.NodeStatusItem, n)
+	localIDs := make([]string, 0, n)
+
+	q, err := queue.Open(filepath.Join(t.TempDir(), "batch.db"))
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+	for i := 0; i < n; i++ {
+		nodeUUID := fmt.Sprintf("node-%04d", i)
+		localID := fmt.Sprintf("local-%04d", i)
+		known[nodeUUID] = client.NodeStatusItem{
+			NodeUUID: nodeUUID, Found: true, Verified: true,
+			Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE",
+		}
+		if err := q.RecordLocalMedia(localID, nodeUUID, "b3", "ACTIVE"); err != nil {
+			t.Fatalf("RecordLocalMedia: %v", err)
+		}
+		localIDs = append(localIDs, localID)
+	}
+	srv, sizes := newNodeStatusServer(t, known)
+	eng := New(q, client.New(client.Config{BaseURL: srv.URL, APIKey: "k", AgentID: "a"}))
+
+	cands, err := eng.CheckSafeSpaceCandidates(context.Background(), localIDs)
+	if err != nil {
+		t.Fatalf("CheckSafeSpaceCandidates: %v", err)
+	}
+	if got := *sizes; len(got) != 2 || got[0] != 400 || got[1] != 1 {
+		t.Fatalf("node-status request sizes = %v, want [400 1]", got)
+	}
+	if len(cands) != n {
+		t.Fatalf("got %d candidates, want %d", len(cands), n)
+	}
+	for i, c := range cands {
+		if c.LocalID != localIDs[i] {
+			t.Fatalf("candidate %d LocalID = %q, want %q (order must follow input)", i, c.LocalID, localIDs[i])
+		}
+		if !c.IsEligible {
+			t.Fatalf("candidate %s not eligible: %+v", c.LocalID, c)
+		}
+	}
+}
+
+// TestCheckSafeSpaceCandidates_DedupesSharedNodeUUIDs: several local IDs
+// mapping to one node send that UUID once, so the batch budget is spent on
+// distinct nodes only.
+func TestCheckSafeSpaceCandidates_DedupesSharedNodeUUIDs(t *testing.T) {
+	srv, sizes := newNodeStatusServer(t, map[string]client.NodeStatusItem{
+		"shared": {NodeUUID: "shared", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"},
+	})
+	q, err := queue.Open(filepath.Join(t.TempDir(), "dedupe.db"))
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+	eng := New(q, client.New(client.Config{BaseURL: srv.URL, APIKey: "k", AgentID: "a"}))
+	for _, id := range []string{"a", "b", "c"} {
+		if err := q.RecordLocalMedia(id, "shared", "b3", "ACTIVE"); err != nil {
+			t.Fatalf("RecordLocalMedia: %v", err)
+		}
+	}
+	cands, err := eng.CheckSafeSpaceCandidates(context.Background(), []string{"a", "b", "c"})
+	if err != nil {
+		t.Fatalf("CheckSafeSpaceCandidates: %v", err)
+	}
+	if got := *sizes; len(got) != 1 || got[0] != 1 {
+		t.Fatalf("node-status request sizes = %v, want [1]", got)
+	}
+	for _, c := range cands {
+		if !c.IsEligible {
+			t.Fatalf("candidate %s not eligible: %+v", c.LocalID, c)
+		}
 	}
 }

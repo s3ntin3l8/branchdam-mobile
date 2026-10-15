@@ -136,12 +136,58 @@ func (e *Engine) RequestCancel() {
 }
 
 type SafeSpaceCandidate struct {
-	LocalID    string `json:"localId"`
-	NodeUUID   string `json:"nodeUuid"`
-	Blake3Hash string `json:"blake3Hash"`
-	IsVerified bool   `json:"isVerified"`
-	IsEligible bool   `json:"isEligible"`
-	Tier       string `json:"tier"`
+	LocalID        string `json:"localId"`
+	NodeUUID       string `json:"nodeUuid"`
+	Blake3Hash     string `json:"blake3Hash"`
+	IsVerified     bool   `json:"isVerified"`
+	IsEligible     bool   `json:"isEligible"`
+	Tier           string `json:"tier"`
+	LifecycleState string `json:"lifecycleState"`
+	// Reason names the first reclaim gate the candidate failed. Empty
+	// when IsEligible is true.
+	Reason string `json:"reason,omitempty"`
+}
+
+// ReclaimTier is the only server storage tier whose copy authorises
+// deleting the phone's original: the Tier-3 master archive. The server's
+// tiers are TIER0_LOCAL_STAGING, TIER1_LOCAL_SCRATCH, TIER2_EXPORTS,
+// TIER3_MASTER_ARCHIVE and PROJECTS; none but Tier 3 is a durable master.
+const ReclaimTier = "TIER3_MASTER_ARCHIVE"
+
+// reclaimLiveLifecycleStates are the server lifecycle states in which the
+// archived master still exists and is reachable -- the same "live"
+// definition the server's node-status endpoint and edge views use.
+// TRASHED, MISSING and ARCHIVED (superseded) masters must never authorise a
+// reclaim: deleting the phone copy would leave no live copy anywhere.
+var reclaimLiveLifecycleStates = map[string]bool{
+	"ACTIVE": true,
+	"HIDDEN": true,
+}
+
+// reclaimIneligibleReason evaluates one node-status entry against every
+// reclaim gate and returns "" when the local original may be deleted, or a
+// reason naming the first gate that failed otherwise. Gates, in order:
+// found on the server, hash-verified, on the Tier-3 master archive, and in
+// a live lifecycle state (ACTIVE or HIDDEN).
+func reclaimIneligibleReason(st client.NodeStatusItem) string {
+	switch {
+	case !st.Found:
+		return "node not found on server"
+	case !st.Verified:
+		return "not verified on server"
+	case st.Tier != ReclaimTier:
+		return "tier ineligible: " + orNone(st.Tier)
+	case !reclaimLiveLifecycleStates[st.LifecycleState]:
+		return "lifecycle ineligible: " + orNone(st.LifecycleState)
+	}
+	return ""
+}
+
+func orNone(v string) string {
+	if v == "" {
+		return "<none>"
+	}
+	return v
 }
 
 // SafeSpaceVerdict is the engine's per-candidate verdict. Reason is
@@ -453,6 +499,7 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 				LocalID:    localID,
 				IsVerified: false,
 				IsEligible: false,
+				Reason:     "localID not found in local state",
 			}
 			continue
 		}
@@ -463,12 +510,19 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 			Blake3Hash: state.Blake3Hash,
 			IsVerified: false,
 			IsEligible: false,
+			// Overwritten below if the server answers for this node.
+			Reason: "server has no record of node",
 		}
-		queryUUIDs = append(queryUUIDs, state.NodeUUID)
+		if _, seen := idToLocal[state.NodeUUID]; !seen {
+			queryUUIDs = append(queryUUIDs, state.NodeUUID)
+		}
 		idToLocal[state.NodeUUID] = append(idToLocal[state.NodeUUID], localID)
 	}
 
 	if len(queryUUIDs) > 0 {
+		// GetNodeStatuses splits the query into server-sized batches
+		// (client.MaxNodeStatusBatch), so a large library does not fail
+		// the whole scan with a 400.
 		statuses, err := e.c.GetNodeStatuses(ctx, queryUUIDs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query node statuses: %w", err)
@@ -480,15 +534,17 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 				continue
 			}
 
-			isEligible := st.Found && st.Verified && (st.Tier == "TIER3_MASTER_ARCHIVE" || st.Tier == "TIER2_DERIVATIVE_CACHE")
+			reason := reclaimIneligibleReason(st)
 			for _, localID := range localIDsForNode {
 				candidateMap[localID] = SafeSpaceCandidate{
-					LocalID:    localID,
-					NodeUUID:   st.NodeUUID,
-					Blake3Hash: candidateMap[localID].Blake3Hash,
-					IsVerified: st.Verified,
-					IsEligible: isEligible,
-					Tier:       st.Tier,
+					LocalID:        localID,
+					NodeUUID:       st.NodeUUID,
+					Blake3Hash:     candidateMap[localID].Blake3Hash,
+					IsVerified:     st.Verified,
+					IsEligible:     reason == "",
+					Tier:           st.Tier,
+					LifecycleState: st.LifecycleState,
+					Reason:         reason,
 				}
 			}
 		}
@@ -505,8 +561,9 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 
 // SafeSpaceReclaim marks an asset as intentionally offloaded to suppress
 // trashing deletion events. B.2.7: this is the engine-owned atomic
-// reclaim — the server is re-queried to confirm the current verified +
-// tier state, and the local flag is set only inside the same logical
+// reclaim — the server is re-queried to confirm the node is found,
+// hash-verified, on the Tier-3 master archive and live (ACTIVE or
+// HIDDEN), and the local flag is set only inside the same logical
 // operation. If the server says "not eligible", the flag is not set
 // and the verdict's Reason explains why.
 //
@@ -550,22 +607,21 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 		return SafeSpaceVerdict{LocalID: localID, Reason: "server status query failed"},
 			fmt.Errorf("get node status: %w", err)
 	}
-	if len(statuses) == 0 {
+	// Only trust the entry the server returned for this node; an entry
+	// for any other UUID says nothing about this asset.
+	var st *client.NodeStatusItem
+	for i := range statuses {
+		if statuses[i].NodeUUID == state.NodeUUID {
+			st = &statuses[i]
+			break
+		}
+	}
+	if st == nil {
 		return SafeSpaceVerdict{LocalID: localID, Reason: "server has no record of node"},
 			errors.New("server has no record of node")
 	}
-	st := statuses[0]
-	if !st.Found {
-		return SafeSpaceVerdict{LocalID: localID, Reason: "node not found on server"},
-			errors.New("node not found on server")
-	}
-	if !st.Verified {
-		return SafeSpaceVerdict{LocalID: localID, Reason: "not verified on server"},
-			errors.New("not verified on server")
-	}
-	if st.Tier != "TIER3_MASTER_ARCHIVE" && st.Tier != "TIER2_DERIVATIVE_CACHE" {
-		return SafeSpaceVerdict{LocalID: localID, Reason: "tier ineligible: " + st.Tier},
-			errors.New("tier ineligible: " + st.Tier)
+	if reason := reclaimIneligibleReason(*st); reason != "" {
+		return SafeSpaceVerdict{LocalID: localID, Reason: reason}, errors.New(reason)
 	}
 
 	// All gates passed. Mark the local asset as offloaded.

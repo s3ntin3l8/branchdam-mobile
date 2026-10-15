@@ -157,7 +157,7 @@ To pair the mobile app with your branchDAM server:
   - `X-Capture-Timestamp`: Capture time in Unix epoch seconds.
   - `X-API-Key`: Companion authentication credential (single header; `Authorization` is reserved for future short-lived bearer tokens and is not sent today — T2-6).
 - **Safe Space Deletion Model**:
-  Assets are only marked eligible for local deletion after the server responds with HTTP `200 OK` / `201 Created` and the BLAKE3 checksum is verified on the master storage tier.
+  Assets are only marked eligible for local deletion after `POST /api/v1/agent/node-status` reports the node as found, BLAKE3-verified, on `TIER3_MASTER_ARCHIVE`, and live (`lifecycleState` `ACTIVE` or `HIDDEN`); a trashed, missing or archived master never authorises a reclaim. Node-status lookups are sent in batches of at most 400 UUIDs (the server's per-request limit). A reclaim deletes only the phone copy and never emits a delete event for it.
 
 ---
 

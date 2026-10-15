@@ -338,7 +338,10 @@ public struct GalleryDetailView: View {
             }) { success, error in
                 DispatchQueue.main.async {
                     if success {
-                        _ = BranchDamCoreBridge.shared.enqueueDeleteEvent(nodeUUID: item.id)
+                        // No delete event here: this is a Safe-Space reclaim,
+                        // and EVENT_NODE_DELETED would trash the Tier-3 master
+                        // the reclaim relies on. The offloaded flag set by
+                        // reclaimSafeSpace keeps trash sync from reporting it.
                         self.dismiss()
                     } else {
                         // Rollback offloaded state in Go core so local file does not leak
