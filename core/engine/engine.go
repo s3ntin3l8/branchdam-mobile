@@ -246,7 +246,18 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 	// B.2.5: defer close before the first non-error return.
 	defer file.Close()
 
-	fastHash, fullHash, sizeBytes, err := hasher.HashReader(file)
+	// Size comes from the opened handle: the sampled FastHash needs it up
+	// front, and HashReader rejects a stream that doesn't match it (a file
+	// still being written or modified while it is hashed).
+	info, err := file.Stat()
+	if err != nil {
+		return nil, &client.ClientError{
+			Code:    client.CodeIOError,
+			Message: fmt.Sprintf("stat local file: %v", err),
+			Cause:   err,
+		}
+	}
+	fastHash, fullHash, sizeBytes, err := hasher.HashReader(file, info.Size())
 	if err != nil {
 		return nil, &client.ClientError{
 			Code:    client.CodeIOError,
