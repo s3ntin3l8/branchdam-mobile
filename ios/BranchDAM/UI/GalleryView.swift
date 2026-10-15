@@ -127,9 +127,11 @@ public class GalleryViewModel: ObservableObject {
             }) { success, error in
                 Task { @MainActor in
                     if success {
-                        for asset in assetsToDelete {
-                            _ = BranchDamCoreBridge.shared.enqueueDeleteEvent(nodeUUID: asset.localIdentifier)
-                        }
+                        // No delete event here: a Safe-Space reclaim frees the
+                        // phone copy only because the Tier-3 master is kept.
+                        // EVENT_NODE_DELETED would trash that master on the
+                        // server. The offloaded flag set by reclaimSafeSpace
+                        // keeps trash sync from reporting this deletion.
                         self.batchStatusMessage = "Reclaimed \(assetsToDelete.count) items"
                         await self.load()
                     } else {

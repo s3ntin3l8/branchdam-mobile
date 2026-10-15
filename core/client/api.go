@@ -57,17 +57,37 @@ func (c *Client) SubmitEvent(ctx context.Context, eventUUID, eventType, payloadJ
 	return &resp, nil
 }
 
-// GetNodeStatuses queries verification state and tier for nodes via POST /api/v1/agent/node-status.
+// MaxNodeStatusBatch is the largest number of node UUIDs the server accepts
+// in one POST /api/v1/agent/node-status request (branchDAM's
+// agentNodeStatusMaxUUIDs). A larger request is rejected outright with a
+// 400, so GetNodeStatuses splits its input into chunks of at most this size.
+const MaxNodeStatusBatch = 400
+
+// GetNodeStatuses queries verification state, tier and lifecycle state for
+// nodes via POST /api/v1/agent/node-status. The input is sent in chunks of at
+// most MaxNodeStatusBatch UUIDs and the per-chunk results are concatenated in
+// request order. An empty input returns an empty result without a request
+// (the server rejects an empty nodeUuids list). Any chunk failing fails the
+// whole call: a partial answer must never be mistaken for a complete one.
 func (c *Client) GetNodeStatuses(ctx context.Context, nodeUUIDs []string) ([]NodeStatusItem, error) {
-	reqBody := NodeStatusRequest{
-		NodeUUIDs: nodeUUIDs,
+	if len(nodeUUIDs) == 0 {
+		return []NodeStatusItem{}, nil
 	}
 
-	var resp NodeStatusResponse
-	if err := c.postJSON(ctx, "/api/v1/agent/node-status", reqBody, &resp); err != nil {
-		return nil, wrapCallError("get node status failed", err)
+	out := make([]NodeStatusItem, 0, len(nodeUUIDs))
+	for start := 0; start < len(nodeUUIDs); start += MaxNodeStatusBatch {
+		end := min(start+MaxNodeStatusBatch, len(nodeUUIDs))
+		reqBody := NodeStatusRequest{
+			NodeUUIDs: nodeUUIDs[start:end],
+		}
+
+		var resp NodeStatusResponse
+		if err := c.postJSON(ctx, "/api/v1/agent/node-status", reqBody, &resp); err != nil {
+			return nil, wrapCallError("get node status failed", err)
+		}
+		out = append(out, resp.Statuses...)
 	}
-	return resp.Statuses, nil
+	return out, nil
 }
 
 // SendTelemetry dispatches mobile storage telemetry via POST /api/v1/agent/telemetry.

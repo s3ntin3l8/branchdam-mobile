@@ -155,6 +155,132 @@ func TestGetNodeStatuses(t *testing.T) {
 	}
 }
 
+// TestGetNodeStatuses_DecodesLifecycleState: the reclaim gate depends on
+// lifecycleState, so the DTO must decode it from the server's response.
+func TestGetNodeStatuses_DecodesLifecycleState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"statuses":[{"nodeUuid":"n1","found":true,"lifecycleState":"TRASHED","tier":"TIER3_MASTER_ARCHIVE","verified":true}]}`)
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	statuses, err := c.GetNodeStatuses(context.Background(), []string{"n1"})
+	if err != nil {
+		t.Fatalf("GetNodeStatuses failed: %v", err)
+	}
+	if len(statuses) != 1 || statuses[0].LifecycleState != "TRASHED" {
+		t.Fatalf("lifecycleState not decoded: %+v", statuses)
+	}
+}
+
+// nodeStatusEchoServer answers node-status like branchDAM does (one entry
+// per requested UUID, 400 for an empty or >400-UUID request) and records
+// each request's size. failOnCall > 0 makes that call (1-based) return 500.
+func nodeStatusEchoServer(t *testing.T, failOnCall int) (*httptest.Server, *[]int) {
+	t.Helper()
+	sizes := []int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req NodeStatusRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		sizes = append(sizes, len(req.NodeUUIDs))
+		if failOnCall > 0 && len(sizes) == failOnCall {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if len(req.NodeUUIDs) == 0 || len(req.NodeUUIDs) > 400 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		out := make([]NodeStatusItem, 0, len(req.NodeUUIDs))
+		for _, id := range req.NodeUUIDs {
+			out = append(out, NodeStatusItem{NodeUUID: id, Found: true})
+		}
+		_ = json.NewEncoder(w).Encode(NodeStatusResponse{Statuses: out})
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &sizes
+}
+
+func makeNodeUUIDs(n int) []string {
+	ids := make([]string, n)
+	for i := range ids {
+		ids[i] = uuid.NewString()
+	}
+	return ids
+}
+
+// TestGetNodeStatuses_BatchesAt400: the server rejects more than 400 UUIDs
+// per request, so 401 UUIDs must be split into two requests (400 + 1) and
+// the results concatenated in input order.
+func TestGetNodeStatuses_BatchesAt400(t *testing.T) {
+	srv, sizes := nodeStatusEchoServer(t, 0)
+	c := New(Config{BaseURL: srv.URL, APIKey: "key", AgentID: "agent-1"})
+
+	ids := makeNodeUUIDs(MaxNodeStatusBatch + 1)
+	statuses, err := c.GetNodeStatuses(context.Background(), ids)
+	if err != nil {
+		t.Fatalf("GetNodeStatuses failed: %v", err)
+	}
+	if got := *sizes; len(got) != 2 || got[0] != 400 || got[1] != 1 {
+		t.Fatalf("request sizes = %v, want [400 1]", got)
+	}
+	if len(statuses) != len(ids) {
+		t.Fatalf("got %d statuses, want %d", len(statuses), len(ids))
+	}
+	for i, st := range statuses {
+		if st.NodeUUID != ids[i] {
+			t.Fatalf("status %d NodeUUID = %q, want %q", i, st.NodeUUID, ids[i])
+		}
+	}
+}
+
+// TestGetNodeStatuses_ExactBatchIsOneRequest: exactly 400 UUIDs is one
+// request, not two.
+func TestGetNodeStatuses_ExactBatchIsOneRequest(t *testing.T) {
+	srv, sizes := nodeStatusEchoServer(t, 0)
+	c := New(Config{BaseURL: srv.URL, APIKey: "key", AgentID: "agent-1"})
+
+	if _, err := c.GetNodeStatuses(context.Background(), makeNodeUUIDs(MaxNodeStatusBatch)); err != nil {
+		t.Fatalf("GetNodeStatuses failed: %v", err)
+	}
+	if got := *sizes; len(got) != 1 || got[0] != 400 {
+		t.Fatalf("request sizes = %v, want [400]", got)
+	}
+}
+
+// TestGetNodeStatuses_EmptyInputSendsNoRequest: the server rejects an
+// empty nodeUuids list, so an empty input must not hit the network.
+func TestGetNodeStatuses_EmptyInputSendsNoRequest(t *testing.T) {
+	srv, sizes := nodeStatusEchoServer(t, 0)
+	c := New(Config{BaseURL: srv.URL, APIKey: "key", AgentID: "agent-1"})
+
+	statuses, err := c.GetNodeStatuses(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("GetNodeStatuses failed: %v", err)
+	}
+	if len(statuses) != 0 || len(*sizes) != 0 {
+		t.Fatalf("statuses = %v, requests = %v; want none", statuses, *sizes)
+	}
+}
+
+// TestGetNodeStatuses_FailedBatchFailsWholeCall: a partial answer must
+// never be returned as if it were complete.
+func TestGetNodeStatuses_FailedBatchFailsWholeCall(t *testing.T) {
+	srv, _ := nodeStatusEchoServer(t, 2)
+	c := New(Config{BaseURL: srv.URL, APIKey: "key", AgentID: "agent-1"})
+
+	statuses, err := c.GetNodeStatuses(context.Background(), makeNodeUUIDs(MaxNodeStatusBatch+1))
+	if err == nil {
+		t.Fatalf("expected error when the second batch fails, got %d statuses", len(statuses))
+	}
+	if statuses != nil {
+		t.Fatalf("expected nil statuses on error, got %d", len(statuses))
+	}
+}
+
 func TestSendTelemetry(t *testing.T) {
 	var received bool
 	var receivedBody map[string]any

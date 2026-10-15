@@ -519,3 +519,74 @@ func TestSetCancelFlag_ResetOnClaim(t *testing.T) {
 }
 
 // (strings.Contains from the stdlib is used above for substring checks.)
+
+// TestReclaimSafeSpace_TrashedMasterIneligible: a verified Tier-3 master
+// the server has trashed must not authorise deleting the phone original.
+// The FFI maps it to VERIFIED_REQUIRED and the reason names the lifecycle
+// gate.
+func TestReclaimSafeSpace_TrashedMasterIneligible(t *testing.T) {
+	e, _ := newTestEngineWithNodeStatus(t, map[string]client.NodeStatusItem{
+		"trashed-node": {
+			NodeUUID:       "trashed-node",
+			Found:          true,
+			Verified:       true,
+			Tier:           "TIER3_MASTER_ARCHIVE",
+			LifecycleState: "TRASHED",
+		},
+	})
+	if err := e.queue.RecordLocalMedia("ph://trashed-1", "trashed-node", "b3-trashed-1", "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
+	verdict, err := e.ReclaimSafeSpace("ph://trashed-1")
+	if err == nil || verdict.Eligible {
+		t.Fatalf("expected ineligible verdict, got %+v, err %v", verdict, err)
+	}
+	be, ok := err.(*Error)
+	if !ok || be.Code != CodeVerifiedRequired {
+		t.Fatalf("err = %v (%T), want *Error with Code %s", err, err, CodeVerifiedRequired)
+	}
+	if !strings.Contains(verdict.Reason, "lifecycle ineligible: TRASHED") {
+		t.Fatalf("Reason = %q, want substring 'lifecycle ineligible: TRASHED'", verdict.Reason)
+	}
+	if off, _ := e.IsMediaOffloaded("ph://trashed-1"); off {
+		t.Fatalf("offloaded flag set for a trashed master")
+	}
+}
+
+// TestCheckSafeSpaceCandidates_ReasonNamesFailingGate: the FFI verdict for
+// an ineligible candidate keeps the VERIFIED_REQUIRED code as its prefix and
+// names the gate that failed; an eligible candidate has no reason.
+func TestCheckSafeSpaceCandidates_ReasonNamesFailingGate(t *testing.T) {
+	e, _ := newTestEngineWithNodeStatus(t, map[string]client.NodeStatusItem{
+		"live":    {NodeUUID: "live", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"},
+		"missing": {NodeUUID: "missing", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "MISSING"},
+		"export":  {NodeUUID: "export", Found: true, Verified: true, Tier: "TIER2_EXPORTS", LifecycleState: "ACTIVE"},
+	})
+	for local, node := range map[string]string{"ph://live": "live", "ph://missing": "missing", "ph://export": "export"} {
+		if err := e.queue.RecordLocalMedia(local, node, "b3-"+node, "ACTIVE"); err != nil {
+			t.Fatalf("RecordLocalMedia: %v", err)
+		}
+	}
+	verdicts, err := e.CheckSafeSpaceCandidates([]SafeSpaceCandidate{
+		{LocalID: "ph://live"}, {LocalID: "ph://missing"}, {LocalID: "ph://export"},
+	})
+	if err != nil {
+		t.Fatalf("CheckSafeSpaceCandidates: %v", err)
+	}
+	want := []struct {
+		eligible bool
+		reason   string
+	}{
+		{true, ""},
+		{false, CodeVerifiedRequired + ": lifecycle ineligible: MISSING"},
+		{false, CodeVerifiedRequired + ": tier ineligible: TIER2_EXPORTS"},
+	}
+	if len(verdicts) != len(want) {
+		t.Fatalf("got %d verdicts, want %d", len(verdicts), len(want))
+	}
+	for i, w := range want {
+		if verdicts[i].Eligible != w.eligible || verdicts[i].Reason != w.reason {
+			t.Fatalf("verdict %d = %+v, want eligible=%v reason=%q", i, verdicts[i], w.eligible, w.reason)
+		}
+	}
+}

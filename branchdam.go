@@ -549,10 +549,12 @@ type SafeSpaceVerdict struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
-// CheckSafeSpaceCandidates queries the server for the current verified + tier
-// status of each candidate's node and returns a verdict per candidate.
-// Candidates without a nodeUUID are reported as ineligible with a
-// not-found reason.
+// CheckSafeSpaceCandidates queries the server for the current verified, tier
+// and lifecycle status of each candidate's node and returns a verdict per
+// candidate. A candidate is eligible only when its node is hash-verified, on
+// the Tier-3 master archive and live (ACTIVE or HIDDEN). Ineligible verdicts
+// carry "VERIFIED_REQUIRED: <failing gate>" as their Reason; candidates
+// without a nodeUUID are reported as ineligible with a not-found reason.
 func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]SafeSpaceVerdict, error) {
 	if err := e.requireOpen(); err != nil {
 		return nil, err
@@ -574,9 +576,13 @@ func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]Sa
 	for _, c := range raw {
 		reason := ""
 		if !c.IsEligible {
-			// Audit: VERIFIED_REQUIRED is the canonical reason a
-			// candidate is ineligible.
+			// Audit: VERIFIED_REQUIRED is the canonical reason code a
+			// candidate is ineligible; the suffix names the gate that
+			// failed (not verified, wrong tier, not live, ...).
 			reason = CodeVerifiedRequired
+			if c.Reason != "" {
+				reason += ": " + c.Reason
+			}
 		}
 		out = append(out, SafeSpaceVerdict{LocalID: c.LocalID, Eligible: c.IsEligible, Reason: reason})
 	}
@@ -584,7 +590,8 @@ func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]Sa
 }
 
 // ReclaimSafeSpace marks LocalID as offloaded after re-checking the server
-// and only if the current state is verified + tier 2/3. The local file
+// and only if the node is currently verified, on the Tier-3 master archive
+// and live (ACTIVE or HIDDEN). The local file
 // deletion is the shell's responsibility and should only happen after
 // this returns Eligible=true.
 func (e *Engine) ReclaimSafeSpace(localID string) (SafeSpaceVerdict, error) {
