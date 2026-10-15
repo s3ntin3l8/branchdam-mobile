@@ -64,7 +64,7 @@ func TestStreamingHasher_PartialWriteFailure(t *testing.T) {
 	sentinel := errors.New("simulated mid-stream failure")
 	r := &errReader{remaining: 1024, err: sentinel}
 
-	_, _, _, err := HashReader(r)
+	_, _, _, err := HashReader(r, 4096)
 	if err == nil {
 		t.Fatalf("expected error from HashReader on partial read failure")
 	}
@@ -83,7 +83,7 @@ func TestStreamingHasher_LargeStreamCorrectness(t *testing.T) {
 	}
 
 	// Hash via the streaming API.
-	sh := NewStreamingHasher()
+	sh := NewStreamingHasher(size)
 	if _, err := io.Copy(sh, bytes.NewReader(data)); err != nil {
 		t.Fatalf("io.Copy: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestStreamingHasher_LargeStreamCorrectness(t *testing.T) {
 	streamSize := sh.BytesRead()
 
 	// Hash via the one-shot API.
-	oneShotFast, oneShotFull, oneShotSize, err := HashReader(bytes.NewReader(data))
+	oneShotFast, oneShotFull, oneShotSize, err := HashReader(bytes.NewReader(data), size)
 	if err != nil {
 		t.Fatalf("HashReader: %v", err)
 	}

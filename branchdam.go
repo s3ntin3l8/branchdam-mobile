@@ -308,7 +308,11 @@ func (e *Engine) ComputeHashes(localPath string, progress ProgressFunc) (Hashes,
 	}
 	defer f.Close()
 
-	fastHash, fullHash, _, err := hasher.HashReader(f)
+	info, err := f.Stat()
+	if err != nil {
+		return Hashes{}, newError(CodeIOError, "stat: %v", err)
+	}
+	fastHash, fullHash, _, err := hasher.HashReader(f, info.Size())
 	if err != nil {
 		return Hashes{}, newError(CodeIOError, "hash: %v", err)
 	}
