@@ -260,8 +260,11 @@ func (e *Engine) planNodeDeleted(evt *queue.EventItem) dispatchPlan {
 		return planf(actionSkip, "delete not sent: %q was reclaimed (offloaded), the server master is kept", in.LocalID)
 	}
 	if m.nodeUUID == "" {
-		if m.uploadPending && !e.deferralExpired(evt) {
-			return planf(actionDefer, "waiting for the upload of %q to finish", in.LocalID)
+		if m.uploadPending {
+			if !e.deferralExpired(evt) {
+				return planf(actionDefer, "waiting for the upload of %q to finish", in.LocalID)
+			}
+			return planf(actionSkip, "delete not sent: the upload of %q did not complete within %s", in.LocalID, EventDeferralMaxAge)
 		}
 		return planf(actionSkip, "delete not sent: %q was never uploaded", in.LocalID)
 	}

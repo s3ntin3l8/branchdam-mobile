@@ -236,13 +236,19 @@ func TestSyncEvents_LegacyQueuedRows(t *testing.T) {
 	enqueueRaw(t, q, EventEdgeAttached,
 		`{"parentLocalId":"ph://AAAA-1111/L0/001","childLocalId":"ph://BBBB-2222/L0/001","relationship":"DERIVED_FROM","confidence":1.000000,"resolver":"ios_apple_proraw_pair"}`)
 	enqueueRaw(t, q, EventNodeDeleted, `{"localId":"`+childNodeUUID+`"}`)
+	// A delete queued with the "ph://" spelling resolves through the bare
+	// identifier the upload was recorded under.
+	enqueueRaw(t, q, EventNodeDeleted, `{"localId":"ph://AAAA-1111/L0/001"}`)
 
-	if n := syncEvents(t, eng, 10); n != 2 {
-		t.Fatalf("sent = %d, want 2", n)
+	if n := syncEvents(t, eng, 10); n != 3 {
+		t.Fatalf("sent = %d, want 3", n)
 	}
 	reqs := srv.sent()
-	if len(reqs) != 2 {
-		t.Fatalf("server saw %d requests, want 2", len(reqs))
+	if len(reqs) != 3 {
+		t.Fatalf("server saw %d requests, want 3", len(reqs))
+	}
+	if want := `{"nodeUuid":"` + parentNodeUUID + `"}`; reqs[2].Payload != want {
+		t.Errorf("legacy ph:// delete payload = %s, want %s", reqs[2].Payload, want)
 	}
 	if !strings.Contains(reqs[0].Payload, `"sourceNodeUuid":"`+parentNodeUUID+`","targetNodeUuid":"`+childNodeUUID+`"`) {
 		t.Errorf("legacy edge payload = %s", reqs[0].Payload)
@@ -424,6 +430,36 @@ func TestSyncEvents_DeleteWaitsForInFlightUpload(t *testing.T) {
 	}
 	if p := srv.sent()[0].Payload; p != `{"nodeUuid":"`+parentNodeUUID+`"}` {
 		t.Errorf("payload = %s", p)
+	}
+}
+
+// TestSyncEvents_DeleteForStalledUploadExpires: a delete that waited for an
+// upload that never completed is SKIPPED after EventDeferralMaxAge, with a
+// reason that names the stalled upload rather than "never uploaded".
+func TestSyncEvents_DeleteForStalledUploadExpires(t *testing.T) {
+	eng, q, srv := newEventTestEngine(t)
+	const hash = "d00d0000000000000000000000000000000000000000000000000000000000d1" // pragma: allowlist secret
+	if err := q.RecordLocalMedia("stalled", "", hash, "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
+	if _, err := q.EnqueueUpload(&queue.UploadItem{LocalPath: "/y", TargetFilename: "y.jpg", Blake3Hash: hash}); err != nil {
+		t.Fatalf("EnqueueUpload: %v", err)
+	}
+	id := enqueueDelete(t, q, "stalled")
+	old := time.Now().Add(-EventDeferralMaxAge - time.Hour).Unix()
+	if _, err := q.DB().Exec(`UPDATE event_queue SET created_at_unix = ? WHERE id = ?`, old, id); err != nil {
+		t.Fatalf("age event: %v", err)
+	}
+	syncEvents(t, eng, 10)
+	ev := eventRow(t, q, id)
+	if ev.Status != queue.EventSkipped || !strings.Contains(ev.ErrorMsg, "did not complete within") {
+		t.Fatalf("stalled delete: status=%s err=%q, want SKIPPED naming the stalled upload", ev.Status, ev.ErrorMsg)
+	}
+	if strings.Contains(ev.ErrorMsg, "never uploaded") {
+		t.Errorf("stalled delete reason %q must not claim the item was never uploaded", ev.ErrorMsg)
+	}
+	if len(srv.sent()) != 0 {
+		t.Errorf("server saw %d requests, want 0", len(srv.sent()))
 	}
 }
 
