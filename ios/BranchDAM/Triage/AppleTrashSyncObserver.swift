@@ -17,11 +17,13 @@ public class AppleTrashSyncObserver {
             return nil
         }
 
-        guard let uuid = nodeUuid, !uuid.isEmpty else {
+        guard nodeUuid?.isEmpty == false else {
+            // Never uploaded: nothing on the server to delete.
             return nil
         }
 
-        // Emits EVENT_NODE_DELETED
-        return BranchDamCoreBridge.shared.enqueueDeleteEvent(nodeUUID: uuid)
+        // Emits EVENT_NODE_DELETED, keyed by the local ID; the core resolves
+        // it to the node UUID at sync time.
+        return BranchDamCoreBridge.shared.enqueueDeleteEvent(localID: localId)
     }
 }

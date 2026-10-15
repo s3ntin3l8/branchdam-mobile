@@ -156,6 +156,8 @@ To pair the mobile app with your branchDAM server:
   - `X-Fast-Hash`: Streaming fast hash (xxHash) for duplicate detection.
   - `X-Capture-Timestamp`: Capture time in Unix epoch seconds.
   - `X-API-Key`: Companion authentication credential (single header; `Authorization` is reserved for future short-lived bearer tokens and is not sent today — T2-6).
+- **Lineage & Delete Events (`POST /api/v1/agent/events`)**:
+  Shells queue events by the same local ID the media was enqueued for upload under (Android: the MediaStore content URI; iOS: the bare PHAsset `localIdentifier`). At sync time the core resolves local IDs to server node UUIDs and sends the server's own schema: `EVENT_EDGE_ATTACHED` as `{sourceNodeUuid (parent), targetNodeUuid (child), relationshipType, confidence, tier: 1, resolver}` once both items are uploaded (waiting edges expire after 30 days), and `EVENT_NODE_DELETED` as `{nodeUuid}`. Edges below confidence 0.50, unknown relationship types, and deletes for never-uploaded or reclaimed media are never sent. A 4xx answer other than 401/403/408/429 fails that event permanently; transport errors and 5xx are retried.
 - **Safe Space Deletion Model**:
   Assets are only marked eligible for local deletion after `POST /api/v1/agent/node-status` reports the node as found, BLAKE3-verified, on `TIER3_MASTER_ARCHIVE`, and live (`lifecycleState` `ACTIVE` or `HIDDEN`); a trashed, missing or archived master never authorises a reclaim. Node-status lookups are sent in batches of at most 400 UUIDs (the server's per-request limit). A reclaim deletes only the phone copy and never emits a delete event for it.
 

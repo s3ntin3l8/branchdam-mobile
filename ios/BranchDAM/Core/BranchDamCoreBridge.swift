@@ -177,6 +177,11 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
+    /// Enqueues a lineage edge between two local media items. Despite the
+    /// labels, parentUUID and childUUID are local IDs: the bare PHAsset
+    /// localIdentifier the media was enqueued for upload under (or a
+    /// synthetic child ID such as "<localIdentifier>/pairedVideo"). The core
+    /// resolves them to server node UUIDs once both are uploaded.
     public func enqueueLineageEvent(
         parentUUID: String,
         childUUID: String,
@@ -206,13 +211,17 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
-    public func enqueueDeleteEvent(nodeUUID: String) -> String {
+    /// Enqueues EVENT_NODE_DELETED for a local media item, identified by the
+    /// local ID it was enqueued for upload under (not a node UUID). The core
+    /// sends it as the uploaded node's UUID and drops it for media that was
+    /// never uploaded or was reclaimed.
+    public func enqueueDeleteEvent(localID: String) -> String {
         #if canImport(branchdam)
         guard isInitialized else { return "" }
         var eventUuid: String = ""
         workQueue.sync {
             do {
-                eventUuid = try branchdam.bindingEnqueueDeleteEvent(nodeUUID)
+                eventUuid = try branchdam.bindingEnqueueDeleteEvent(localID)
             } catch {
                 NSLog("enqueueDeleteEvent failed: %@", String(describing: error))
             }

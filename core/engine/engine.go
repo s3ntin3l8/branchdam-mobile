@@ -442,7 +442,15 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem) 
 	return true, nil
 }
 
-// SyncEvents dispatches pending lifecycle events to the central branchDAM server.
+// SyncEvents dispatches pending lifecycle events to the central branchDAM
+// server and returns how many were accepted. Lineage and delete events are
+// translated from their queued local-ID form into the server's schema first
+// (see planEvent): an event whose media has not reached the server yet is
+// deferred without using a retry, one with nothing to act on is SKIPPED,
+// and one the server could never accept is FAILED without being sent. A
+// 4xx answer other than 401/403/408/429 is terminal for that event (FAILED
+// with the status and response body), so one bad payload cannot jam the
+// queue; transport errors, 5xx and those four codes are retried.
 func (e *Engine) SyncEvents(ctx context.Context, batchSize int) (int, error) {
 	if batchSize <= 0 {
 		batchSize = 10
@@ -470,8 +478,36 @@ func (e *Engine) SyncEvents(ctx context.Context, batchSize int) (int, error) {
 			return sentCount, ctx.Err()
 		}
 
-		_, err := e.c.SubmitEvent(ctx, evt.EventUUID, evt.EventType, evt.PayloadJSON)
+		plan := e.planEvent(evt)
+		switch plan.action {
+		case actionDefer:
+			_ = e.q.MarkEventDeferred(evt.ID, plan.reason)
+			continue
+		case actionSkip:
+			slog.Info("engine: event not sent", "eventUUID", evt.EventUUID, "eventType", evt.EventType, "reason", plan.reason)
+			_ = e.q.MarkEventTerminal(evt.ID, queue.EventSkipped, plan.reason)
+			continue
+		case actionFail:
+			slog.Warn("engine: event dropped", "eventUUID", evt.EventUUID, "eventType", evt.EventType, "reason", plan.reason)
+			_ = e.q.MarkEventTerminal(evt.ID, queue.EventFailed, plan.reason)
+			continue
+		case actionRetry:
+			_ = e.q.MarkEventFailed(evt.ID, plan.reason, 5)
+			continue
+		}
+
+		_, err := e.c.SubmitEvent(ctx, evt.EventUUID, evt.EventType, plan.payload)
 		if err != nil {
+			var ce *client.ClientError
+			if errors.As(err, &ce) && ce.StatusCode != 0 && !client.IsRetryableStatus(ce.StatusCode) {
+				reason := fmt.Sprintf("server rejected event: http %d", ce.StatusCode)
+				if ce.Body != "" {
+					reason += ": " + ce.Body
+				}
+				slog.Warn("engine: event rejected by server", "eventUUID", evt.EventUUID, "eventType", evt.EventType, "status", ce.StatusCode)
+				_ = e.q.MarkEventTerminal(evt.ID, queue.EventFailed, reason)
+				continue
+			}
 			_ = e.q.MarkEventFailed(evt.ID, err.Error(), 5)
 			continue
 		}

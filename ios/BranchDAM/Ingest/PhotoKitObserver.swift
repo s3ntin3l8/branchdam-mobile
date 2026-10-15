@@ -188,6 +188,9 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         return contextAssets
     }
 
+    // Lineage events use the same local ID as the upload enqueue: the bare
+    // PHAsset localIdentifier (no "ph://" prefix), so the core can resolve
+    // both endpoints to their server node UUIDs.
     private func runLineageDetection(_ assets: [DiscoveredAsset]) {
         lineageQueue.async {
             let contextAssets = self.fetchRecentContextAssets()
@@ -201,8 +204,8 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             let jpegs: [DiscoveredAsset] = candidateAssets.filter({ (asset: DiscoveredAsset) -> Bool in (asset.isRaw == false) && (asset.isVideo == false) })
             if !raws.isEmpty && !jpegs.isEmpty {
                 let pairs = ApplePairDetector.findProRawPairs(
-                    masters: raws.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) },
-                    derivatives: jpegs.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, dateUnix: $0.creationDateUnix) }
+                    masters: raws.map { (id: $0.localIdentifier, filename: $0.filename, dateUnix: $0.creationDateUnix) },
+                    derivatives: jpegs.map { (id: $0.localIdentifier, filename: $0.filename, dateUnix: $0.creationDateUnix) }
                 )
                 _ = ApplePairDetector.registerPairs(pairs: pairs)
             }
@@ -214,8 +217,8 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             })
             if !editDerivatives.isEmpty {
                 let edits = AppleEditCorrelator.findAppEdits(
-                    masters: assets.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename) },
-                    derivatives: editDerivatives.map { (id: "ph://\($0.localIdentifier)", filename: $0.filename, app: "ios_editor") }
+                    masters: assets.map { (id: $0.localIdentifier, filename: $0.filename) },
+                    derivatives: editDerivatives.map { (id: $0.localIdentifier, filename: $0.filename, app: "ios_editor") }
                 )
                 _ = AppleEditCorrelator.registerEditLineage(edits: edits)
             }
@@ -228,7 +231,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                 if let phAsset = phAssets.firstObject {
                     let resources = PHAssetResource.assetResources(for: phAsset)
                     if let pairedVideoRes = resources.first(where: { $0.type == .pairedVideo }) {
-                        let videoLocalId = "ph://\(item.localIdentifier)/pairedVideo"
+                        let videoLocalId = "\(item.localIdentifier)/pairedVideo"
                         let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_pairedVideo.mov"
 
                         Self.stageResourceAtomically(resource: pairedVideoRes, filename: safeFilename) { stagedPath in
@@ -246,7 +249,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                                 )
                                 if queueId > 0 {
                                     _ = LivePhotoExtractor.linkLivePhoto(
-                                        stillId: "ph://\(item.localIdentifier)",
+                                        stillId: item.localIdentifier,
                                         videoId: videoLocalId,
                                         stillFilename: item.filename,
                                         videoFilename: pairedVideoRes.originalFilename

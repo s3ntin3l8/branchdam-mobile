@@ -149,9 +149,11 @@ func wrapCallError(prefix string, err error) error {
 		// Replace the message with the prefix context but keep the
 		// structured Code so the branchdam FFI can still match on it.
 		return &ClientError{
-			Code:    ce.Code,
-			Message: prefix + ": " + ce.Message,
-			Cause:   ce.Cause,
+			Code:       ce.Code,
+			Message:    prefix + ": " + ce.Message,
+			Cause:      ce.Cause,
+			StatusCode: ce.StatusCode,
+			Body:       ce.Body,
 		}
 	}
 	return fmt.Errorf("%s: %w", prefix, err)
@@ -217,9 +219,15 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader 
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body := respBody
+		if len(body) > MaxErrorBodyBytes {
+			body = body[:MaxErrorBodyBytes]
+		}
 		return &ClientError{
-			Code:    CodeNetworkError,
-			Message: fmt.Sprintf("http error %d", resp.StatusCode),
+			Code:       CodeNetworkError,
+			Message:    fmt.Sprintf("http error %d", resp.StatusCode),
+			StatusCode: resp.StatusCode,
+			Body:       strings.TrimSpace(strings.ToValidUTF8(string(body), "")),
 		}
 	}
 

@@ -88,6 +88,46 @@ func (q *Queue) GetMediaByLocalID(localID string) (*LocalMediaState, error) {
 	return &item, nil
 }
 
+// GetMediaByNodeUUID returns one local media row recorded for nodeUUID
+// (the earliest), or sql.ErrNoRows when this device has none.
+func (q *Queue) GetMediaByNodeUUID(nodeUUID string) (*LocalMediaState, error) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	var item LocalMediaState
+	var isOffloadedInt int
+	query := `SELECT local_id, node_uuid, blake3_hash, lifecycle_state, is_offloaded, created_at_unix, updated_at_unix
+	FROM local_media_state WHERE node_uuid = ? ORDER BY created_at_unix ASC, local_id ASC LIMIT 1`
+	err := q.db.QueryRow(query, nodeUUID).Scan(
+		&item.LocalID, &item.NodeUUID, &item.Blake3Hash, &item.LifecycleState, &isOffloadedInt,
+		&item.CreatedAtUnix, &item.UpdatedAtUnix,
+	)
+	if err != nil {
+		return nil, err
+	}
+	item.IsOffloaded = (isOffloadedInt == 1)
+	return &item, nil
+}
+
+// IsNodeOffloaded reports whether any local media row mapped to nodeUUID
+// was reclaimed (offloaded). Several local items can share one server node
+// (duplicate content), and if any of them was reclaimed the server master
+// is the only remaining copy of that content.
+func (q *Queue) IsNodeOffloaded(nodeUUID string) (bool, error) {
+	if nodeUUID == "" {
+		return false, nil
+	}
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	var exists int
+	err := q.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM local_media_state WHERE node_uuid = ? AND is_offloaded = 1)`, nodeUUID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("query offloaded state for node failed: %w", err)
+	}
+	return exists == 1, nil
+}
+
 // UpdateLocalMediaNodeUUID updates local media state with the server node UUID.
 func (q *Queue) UpdateLocalMediaNodeUUID(blake3Hash, nodeUUID string) error {
 	q.mu.Lock()

@@ -15,6 +15,11 @@ const (
 	EventPending EventStatus = "PENDING"
 	EventSent    EventStatus = "SENT"
 	EventFailed  EventStatus = "FAILED"
+	// EventSkipped is terminal: the event was deliberately not sent
+	// because there is nothing on the server it should act on (for
+	// example a delete for media that was never uploaded, or for media
+	// that was reclaimed and whose server master must be kept).
+	EventSkipped EventStatus = "SKIPPED"
 )
 
 type UploadItem struct {

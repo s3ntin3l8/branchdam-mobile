@@ -363,3 +363,63 @@ func TestMediaStateAndGetMediaStatus(t *testing.T) {
 		t.Fatalf("expected allStatuses[%s] = COMPLETED, got %s", localID, allStatuses[localID])
 	}
 }
+
+// TestEventDeferAndTerminal: a deferred event returns to PENDING without a
+// retry being counted and rotates behind never-attempted events; a terminal
+// mark ends it regardless of the retry budget and only accepts terminal
+// statuses.
+func TestEventDeferAndTerminal(t *testing.T) {
+	q := newTestQueue(t)
+	first, _ := q.EnqueueEvent("EVENT_EDGE_ATTACHED", `{}`)
+	claimed, err := q.ClaimPendingEvents(1, 0, 5)
+	if err != nil || len(claimed) != 1 || claimed[0].EventUUID != first {
+		t.Fatalf("claim: %v %+v", err, claimed)
+	}
+	if err := q.MarkEventDeferred(claimed[0].ID, "waiting"); err != nil {
+		t.Fatalf("MarkEventDeferred: %v", err)
+	}
+	ev, err := q.GetEvent(claimed[0].ID)
+	if err != nil {
+		t.Fatalf("GetEvent: %v", err)
+	}
+	if ev.Status != EventPending || ev.RetryCount != 0 || ev.ErrorMsg != "waiting" || ev.LastAttemptUnix == 0 {
+		t.Fatalf("deferred event = %+v, want PENDING, 0 retries, reason recorded, attempt stamped", ev)
+	}
+
+	second, _ := q.EnqueueEvent("EVENT_NODE_DELETED", `{}`)
+	claimed, err = q.ClaimPendingEvents(1, 0, 5)
+	if err != nil || len(claimed) != 1 || claimed[0].EventUUID != second {
+		t.Fatalf("after a deferral the never-attempted event must be claimed first, got %v %+v", err, claimed)
+	}
+
+	if err := q.MarkEventTerminal(claimed[0].ID, EventPending, "x"); err == nil {
+		t.Fatal("MarkEventTerminal accepted a non-terminal status")
+	}
+	if err := q.MarkEventTerminal(claimed[0].ID, EventSkipped, "nothing to do"); err != nil {
+		t.Fatalf("MarkEventTerminal: %v", err)
+	}
+	if ev, _ := q.GetEvent(claimed[0].ID); ev.Status != EventSkipped || ev.ErrorMsg != "nothing to do" {
+		t.Fatalf("terminal event = %+v, want SKIPPED with reason", ev)
+	}
+}
+
+// TestNodeLookupAndOffload: GetMediaByNodeUUID and IsNodeOffloaded see every
+// local item mapped to a node.
+func TestNodeLookupAndOffload(t *testing.T) {
+	q := newTestQueue(t)
+	_ = q.RecordLocalMedia("a", "node-1", "", "ACTIVE")
+	_ = q.RecordLocalMedia("b", "node-1", "", "ACTIVE")
+	if m, err := q.GetMediaByNodeUUID("node-1"); err != nil || m.NodeUUID != "node-1" {
+		t.Fatalf("GetMediaByNodeUUID = %+v, %v", m, err)
+	}
+	if _, err := q.GetMediaByNodeUUID("node-2"); err == nil {
+		t.Fatal("GetMediaByNodeUUID(unknown) returned no error")
+	}
+	if off, _ := q.IsNodeOffloaded("node-1"); off {
+		t.Fatal("IsNodeOffloaded before any reclaim = true")
+	}
+	_ = q.SetMediaOffloaded("b", true)
+	if off, err := q.IsNodeOffloaded("node-1"); err != nil || !off {
+		t.Fatalf("IsNodeOffloaded after reclaiming b = %v, %v; want true", off, err)
+	}
+}

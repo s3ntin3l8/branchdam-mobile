@@ -51,7 +51,10 @@ func (q *Queue) EnqueueEvent(eventType, payloadJSON string) (string, error) {
 }
 
 // ClaimPendingEvents atomically claims a batch of event items eligible
-// for transmission. Atomic via UPDATE...RETURNING.
+// for transmission. Atomic via UPDATE...RETURNING. Never-attempted events
+// come first, then the least recently attempted: an event that was
+// deferred or retried goes to the back, so a run of events waiting on
+// something (MarkEventDeferred) can never starve the rest of the queue.
 func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries int) ([]*EventItem, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -69,7 +72,7 @@ func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries
 	  WHERE status = 'PENDING'
 	    AND retry_count < ?
 	    AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
-	  ORDER BY id ASC
+	  ORDER BY last_attempt_unix ASC, id ASC
 	  LIMIT ?
 	)
 	RETURNING id, event_uuid, event_type, payload_json, status, retry_count,
@@ -138,4 +141,71 @@ func (q *Queue) CountPendingEvents() (int64, error) {
 	var count int64
 	err := q.db.QueryRow(`SELECT COUNT(*) FROM event_queue WHERE status = 'PENDING'`).Scan(&count)
 	return count, err
+}
+
+// MarkEventDeferred returns a claimed event to PENDING without counting a
+// failed attempt: the event is valid but cannot be sent yet (for example a
+// lineage edge whose endpoints have not been uploaded). last_attempt_unix
+// is stamped so the event rotates behind fresh events and waits out the
+// retry backoff; reason is recorded in error_msg.
+func (q *Queue) MarkEventDeferred(id int64, reason string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	now := nowUnix()
+	query := `
+	UPDATE event_queue
+	SET status = 'PENDING',
+	    error_msg = ?,
+	    last_attempt_unix = ?,
+	    updated_at_unix = ?
+	WHERE id = ?
+	`
+	_, err := q.db.Exec(query, reason, now, now, id)
+	return err
+}
+
+// MarkEventTerminal moves an event straight to a terminal status (FAILED or
+// SKIPPED) regardless of its retry budget, recording reason in error_msg.
+// Used when resending the event unchanged can never succeed.
+func (q *Queue) MarkEventTerminal(id int64, status EventStatus, reason string) error {
+	if status != EventFailed && status != EventSkipped {
+		return fmt.Errorf("MarkEventTerminal: %q is not a terminal event status", status)
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	now := nowUnix()
+	query := `
+	UPDATE event_queue
+	SET status = ?,
+	    error_msg = ?,
+	    last_attempt_unix = ?,
+	    updated_at_unix = ?
+	WHERE id = ?
+	`
+	_, err := q.db.Exec(query, string(status), reason, now, now, id)
+	return err
+}
+
+// GetEvent returns one event row by its local id.
+func (q *Queue) GetEvent(id int64) (*EventItem, error) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	var item EventItem
+	var statusStr string
+	err := q.db.QueryRow(`
+	SELECT id, event_uuid, event_type, payload_json, status, retry_count,
+	       last_attempt_unix, error_msg, created_at_unix, updated_at_unix
+	FROM event_queue WHERE id = ?`, id).Scan(
+		&item.ID, &item.EventUUID, &item.EventType, &item.PayloadJSON, &statusStr,
+		&item.RetryCount, &item.LastAttemptUnix, &item.ErrorMsg,
+		&item.CreatedAtUnix, &item.UpdatedAtUnix,
+	)
+	if err != nil {
+		return nil, err
+	}
+	item.Status = EventStatus(statusStr)
+	return &item, nil
 }

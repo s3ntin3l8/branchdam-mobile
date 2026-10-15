@@ -25,11 +25,16 @@ object TrashSyncObserver {
      * If the item was an intentional offload (Free Up Space), suppression
      * is applied. Otherwise, enqueues EVENT_NODE_DELETED to remove the
      * derivative export from Immich.
+     *
+     * The delete event is keyed by the item's content URI: that is the
+     * local ID media is enqueued for upload under (MediaScanner builds it
+     * with ContentUris.withAppendedId on the same collection URI), and the
+     * core resolves it to the server node UUID at sync time. Items that
+     * were never uploaded are dropped by the core, not sent.
      */
     fun processTrashedItems(
         context: Context,
-        processedUris: MutableSet<String>,
-        nodeUuidLookup: (contentUri: String) -> String?
+        processedUris: MutableSet<String>
     ): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return 0
@@ -55,14 +60,12 @@ object TrashSyncObserver {
                 continue
             }
 
-            val nodeUuid = nodeUuidLookup(item.contentUri)
-            if (!nodeUuid.isNullOrEmpty()) {
-                EngineHolder.enqueueDeleteEvent(nodeUuid)
+            if (EngineHolder.enqueueDeleteEvent(item.contentUri).isNotEmpty()) {
                 eventsEnqueued++
             }
 
             // Mark processed regardless of enqueue success to avoid
-            // silent infinite retry loops for items with no server node UUID.
+            // silent infinite retry loops.
             processedUris.add(item.contentUri)
         }
 
