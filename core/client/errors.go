@@ -1,5 +1,7 @@
 package client
 
+import "errors"
+
 // ClientError is a structured error type for the core client. The Code
 // field is the source of truth for programmatic handling; the branchdam
 // FFI surface maps these to branchdam.Error codes.
@@ -41,7 +43,33 @@ const (
 	CodeNetworkError     = "NETWORK_ERROR"
 	CodeIOError          = "IO_ERROR"
 	CodeInvalidInput     = "INVALID_INPUT"
+	// CodeAuthFailed: the server answered 401 or 403. The device's
+	// credentials were rejected (key revoked or rotated, pairing removed,
+	// agent ID mismatch); retrying will not help until it is re-paired.
+	CodeAuthFailed = "AUTH_FAILED"
 )
+
+// CodeForStatus returns the ClientError code for a non-2xx HTTP status:
+// CodeAuthFailed for 401 and 403, CodeNetworkError for everything else.
+func CodeForStatus(status int) string {
+	if IsAuthStatus(status) {
+		return CodeAuthFailed
+	}
+	return CodeNetworkError
+}
+
+// IsAuthStatus reports whether status means the server rejected the
+// device's credentials (401 or 403).
+func IsAuthStatus(status int) bool {
+	return status == 401 || status == 403
+}
+
+// IsAuthError reports whether err is (or wraps) a ClientError for a
+// credential rejection.
+func IsAuthError(err error) bool {
+	var ce *ClientError
+	return errors.As(err, &ce) && ce.Code == CodeAuthFailed
+}
 
 // MaxErrorBodyBytes caps how much of a non-2xx response body is kept on
 // ClientError.Body.

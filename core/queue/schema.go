@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS upload_queue (
     error_msg           TEXT    NOT NULL DEFAULT '',
     node_uuid           TEXT    NOT NULL DEFAULT '',
     created_at_unix     INTEGER NOT NULL,
-    updated_at_unix     INTEGER NOT NULL
+    updated_at_unix     INTEGER NOT NULL,
+    mtime_unix_nano     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_upload_queue_status_retry
@@ -52,4 +53,22 @@ CREATE TABLE IF NOT EXISTS local_media_state (
 
 CREATE INDEX IF NOT EXISTS idx_local_media_node_uuid
 ON local_media_state(node_uuid);
+
+-- pending_import holds camera-roll items the user has not yet confirmed
+-- for import (state PENDING) and items the user chose to skip (state
+-- SUPPRESSED), so neither is lost when the app process dies.
+CREATE TABLE IF NOT EXISTS pending_import (
+    local_id            TEXT    PRIMARY KEY,
+    local_path          TEXT    NOT NULL DEFAULT '',
+    filename            TEXT    NOT NULL DEFAULT '',
+    mime_type           TEXT    NOT NULL DEFAULT '',
+    size_bytes          INTEGER NOT NULL DEFAULT 0,
+    captured_at_unix    INTEGER NOT NULL DEFAULT 0,
+    state               TEXT    NOT NULL DEFAULT 'PENDING',
+    created_at_unix     INTEGER NOT NULL,
+    updated_at_unix     INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_import_state
+ON pending_import(state, captured_at_unix);
 `

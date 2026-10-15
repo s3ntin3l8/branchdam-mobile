@@ -224,7 +224,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader 
 			body = body[:MaxErrorBodyBytes]
 		}
 		return &ClientError{
-			Code:       CodeNetworkError,
+			Code:       CodeForStatus(resp.StatusCode),
 			Message:    fmt.Sprintf("http error %d", resp.StatusCode),
 			StatusCode: resp.StatusCode,
 			Body:       strings.TrimSpace(strings.ToValidUTF8(string(body), "")),

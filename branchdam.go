@@ -19,6 +19,7 @@ package branchdam
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -135,6 +136,12 @@ const (
 	CodeContextCanceled  = "CONTEXT_CANCELED"
 	CodeIOError          = "IO_ERROR"
 	CodePayloadTooLarge  = "PAYLOAD_TOO_LARGE"
+	// CodeAuthFailed: the server rejected this device's credentials (HTTP
+	// 401 or 403: key revoked or rotated, pairing removed, agent ID
+	// mismatch). Retrying cannot help; the shell should ask the user to
+	// re-pair. NETWORK_ERROR stays reserved for transport failures and
+	// other HTTP errors (5xx and the like).
+	CodeAuthFailed = "AUTH_FAILED"
 )
 
 // newError is a small constructor for branchdam-typed errors.
@@ -143,7 +150,10 @@ func newError(code, format string, args ...any) *Error {
 }
 
 // errToError converts a Go error to a *Error; nil → nil. If the Go error
-// already wraps a *Error, it is returned as-is.
+// already wraps a *Error, it is returned as-is; one that wraps a
+// client.ClientError keeps that error's code (the client codes share the
+// FFI codes' names), so a 401/403 reaches the shell as AUTH_FAILED and a
+// transport failure or 5xx as NETWORK_ERROR. Anything else is INTERNAL.
 func errToError(err error) *Error {
 	if err == nil {
 		return nil
@@ -151,6 +161,10 @@ func errToError(err error) *Error {
 	var be *Error
 	if errors.As(err, &be) {
 		return be
+	}
+	var ce *client.ClientError
+	if errors.As(err, &ce) && ce.Code != "" {
+		return &Error{Code: ce.Code, Message: err.Error()}
 	}
 	return &Error{Code: "INTERNAL", Message: err.Error()}
 }
@@ -161,6 +175,8 @@ func errToError(err error) *Error {
 //
 //   - Network/IO errors (client.ClientError with NETWORK_ERROR or
 //     IO_ERROR) → INTERNAL (transient; shell should retry)
+//   - Credential rejection (client.ClientError with AUTH_FAILED) →
+//     AUTH_FAILED (the device must be re-paired; not a verdict)
 //   - engine.ErrLocalFlagSetFailed (typed sentinel from
 //     core/engine) → DB_ERROR (transient; the local flag write
 //     failed, shell should retry)
@@ -182,6 +198,9 @@ func reclaimErrorToBranchdamError(err error) *Error {
 	if errors.As(err, &ce) {
 		if ce.Code == client.CodeNetworkError || ce.Code == client.CodeIOError {
 			return newError("INTERNAL", "reclaim transient: %s", err.Error())
+		}
+		if ce.Code == client.CodeAuthFailed {
+			return newError(CodeAuthFailed, "reclaim: %s", err.Error())
 		}
 	}
 
@@ -443,12 +462,20 @@ func (e *Engine) EnqueueDeleteEvent(localID string) (string, error) {
 
 // SyncOptions controls a SyncBatch call.
 type SyncOptions struct {
-	TimeoutSecs      int
-	BatchSize        int
+	// TimeoutSecs bounds how long the batch keeps starting new work
+	// (default 60). An upload already streaming when it passes is not cut
+	// off: it runs under its own size-based budget (engine.UploadBudget).
+	TimeoutSecs int
+	BatchSize   int
+	// RetryBackoffSecs is the base of the exponential retry backoff:
+	// a row waits RetryBackoffSecs << retryCount seconds after a failed
+	// attempt, capped at one hour (default 10).
 	RetryBackoffSecs int64
-	MaxRetries       int
-	IncludeEvents    bool
-	IncludeUploads   bool
+	// MaxRetries is how many failed attempts move a row to FAILED
+	// (default 5). Cancelled or interrupted attempts don't count.
+	MaxRetries     int
+	IncludeEvents  bool
+	IncludeUploads bool
 }
 
 // SyncResult reports what SyncBatch did. Counts are best-effort; if the
@@ -465,8 +492,11 @@ type SyncResult struct {
 // is complex and the SyncOptions already carry the equivalent
 // information).
 //
-// The SQLite-backed cancel flag (B.2.2) is also honored via the
-// queue.CancelRequested() check between items.
+// The in-process cancel flag (B.2.2, SetCancelFlag) stops the batch and
+// aborts an upload in flight. Whatever stops a batch early -- the cancel
+// flag, the timeout, or the server rejecting the device's credentials
+// (AUTH_FAILED) -- every queued item it had claimed but not finished goes
+// back to the queue without using a retry.
 func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 	if err := e.requireOpen(); err != nil {
 		return SyncResult{}, err
@@ -485,36 +515,38 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 	}
 	retryBackoff := opts.RetryBackoffSecs
 	if retryBackoff <= 0 {
-		retryBackoff = 10
+		retryBackoff = engine.DefaultRetryBackoffSecs
 	}
 	maxRetries := opts.MaxRetries
 	if maxRetries <= 0 {
-		maxRetries = 5
+		maxRetries = engine.DefaultMaxRetries
 	}
+
+	policy := engine.SyncPolicy{RetryBackoffSecs: retryBackoff, MaxRetries: maxRetries}
 
 	stdCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
 	defer cancel()
 
 	var result SyncResult
 	if opts.IncludeUploads {
-		n, err := e.engine.SyncUploads(stdCtx, batchSize)
+		n, err := e.engine.SyncUploadsWithPolicy(stdCtx, batchSize, policy)
+		result.Uploaded = int64(n)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return result, newError(CodeContextCanceled, "sync uploads cancelled: %v", err)
 			}
 			return result, errToError(err)
 		}
-		result.Uploaded = int64(n)
 	}
 	if opts.IncludeEvents {
-		n, err := e.engine.SyncEvents(stdCtx, batchSize)
+		n, err := e.engine.SyncEventsWithPolicy(stdCtx, batchSize, policy)
+		result.EventsSent = int64(n)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return result, newError(CodeContextCanceled, "sync events cancelled: %v", err)
 			}
 			return result, errToError(err)
 		}
-		result.EventsSent = int64(n)
 	}
 	return result, nil
 }
@@ -702,6 +734,102 @@ func (e *Engine) SetMediaOffloaded(localID string, isOffloaded bool) error {
 		return newError(CodeDBError, "set offloaded: %v", err)
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Pending imports
+// ---------------------------------------------------------------------------
+
+// StagePendingImport persists a camera-roll item that is waiting for the
+// user to confirm its import, so the intent survives the app process dying
+// before the user answers. Re-staging refreshes the metadata. An item the
+// user already skipped (SuppressPendingImport) stays skipped and staged is
+// false; staged is true when the item is now pending.
+func (e *Engine) StagePendingImport(localID, localPath, filename, mimeType string, sizeBytes, capturedAtUnix int64) (bool, error) {
+	if err := e.requireOpen(); err != nil {
+		return false, err
+	}
+	if localID == "" {
+		return false, newError(CodeInvalidInput, "LocalID is required")
+	}
+	staged, err := e.queue.StagePendingImport(queue.PendingImport{
+		LocalID:        localID,
+		LocalPath:      localPath,
+		Filename:       filename,
+		MimeType:       mimeType,
+		SizeBytes:      sizeBytes,
+		CapturedAtUnix: capturedAtUnix,
+	})
+	if err != nil {
+		return false, newError(CodeDBError, "stage pending import: %v", err)
+	}
+	return staged, nil
+}
+
+// ListPendingImportsJSON returns the items still awaiting an import
+// decision, oldest capture first, as a JSON array of queue.PendingImport
+// objects (localId, localPath, filename, mimeType, sizeBytes,
+// capturedAtUnix, state, createdAtUnix, updatedAtUnix). limit <= 0 returns
+// all of them.
+func (e *Engine) ListPendingImportsJSON(limit int) (string, error) {
+	if err := e.requireOpen(); err != nil {
+		return "[]", err
+	}
+	items, err := e.queue.ListPendingImports(limit)
+	if err != nil {
+		return "[]", newError(CodeDBError, "list pending imports: %v", err)
+	}
+	b, err := json.Marshal(items)
+	if err != nil {
+		return "[]", newError("INTERNAL", "encode pending imports: %v", err)
+	}
+	return string(b), nil
+}
+
+// DeletePendingImport forgets localID: after it was imported, or to lift
+// a skip. deleted is false when nothing was recorded for it.
+func (e *Engine) DeletePendingImport(localID string) (bool, error) {
+	if err := e.requireOpen(); err != nil {
+		return false, err
+	}
+	if localID == "" {
+		return false, newError(CodeInvalidInput, "LocalID is required")
+	}
+	deleted, err := e.queue.DeletePendingImport(localID)
+	if err != nil {
+		return false, newError(CodeDBError, "delete pending import: %v", err)
+	}
+	return deleted, nil
+}
+
+// SuppressPendingImport records that the user skipped localID, so later
+// scans don't offer it again. It need not have been staged first.
+func (e *Engine) SuppressPendingImport(localID string) error {
+	if err := e.requireOpen(); err != nil {
+		return err
+	}
+	if localID == "" {
+		return newError(CodeInvalidInput, "LocalID is required")
+	}
+	if err := e.queue.SuppressPendingImport(localID); err != nil {
+		return newError(CodeDBError, "suppress pending import: %v", err)
+	}
+	return nil
+}
+
+// IsImportSuppressed reports whether the user skipped localID.
+func (e *Engine) IsImportSuppressed(localID string) (bool, error) {
+	if err := e.requireOpen(); err != nil {
+		return false, err
+	}
+	if localID == "" {
+		return false, newError(CodeInvalidInput, "LocalID is required")
+	}
+	suppressed, err := e.queue.IsImportSuppressed(localID)
+	if err != nil {
+		return false, newError(CodeDBError, "is import suppressed: %v", err)
+	}
+	return suppressed, nil
 }
 
 // ---------------------------------------------------------------------------

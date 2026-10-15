@@ -40,6 +40,9 @@ type UploadItem struct {
 	NodeUUID        string       `json:"nodeUuid,omitempty"`
 	CreatedAtUnix   int64        `json:"createdAtUnix"`
 	UpdatedAtUnix   int64        `json:"updatedAtUnix"`
+	// ModTimeUnixNano is the file's modification time when it was hashed
+	// for this row; 0 on rows queued before it was recorded.
+	ModTimeUnixNano int64 `json:"modTimeUnixNano,omitempty"`
 }
 
 type EventItem struct {
