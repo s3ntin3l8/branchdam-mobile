@@ -81,7 +81,8 @@ public struct SafeSpaceView: View {
         var verifiedNum = 0
 
         fetchResult.enumerateObjects { asset, _, _ in
-            let id = "ph://\(asset.localIdentifier)"
+            // Same local ID the gallery reclaim marks offloaded.
+            let id = asset.localIdentifier
             if BranchDamCoreBridge.shared.isMediaOffloaded(localID: id) {
                 let estimatedSize = Int64(asset.pixelWidth * asset.pixelHeight * 3 / 4)
                 let size = estimatedSize > 0 ? estimatedSize : Int64(5 * 1024 * 1024)

@@ -7,6 +7,14 @@ type ClientError struct {
 	Code    string
 	Message string
 	Cause   error
+	// StatusCode is the HTTP status of a non-2xx response; 0 when the
+	// request never produced a response (transport failure) or the
+	// error is not HTTP-related.
+	StatusCode int
+	// Body is the start of a non-2xx response body (at most
+	// MaxErrorBodyBytes), kept so callers can record why the server
+	// rejected a request. Like Cause, it is not part of Error().
+	Body string
 }
 
 // Error implements the error interface. The body/cause is intentionally
@@ -34,6 +42,27 @@ const (
 	CodeIOError          = "IO_ERROR"
 	CodeInvalidInput     = "INVALID_INPUT"
 )
+
+// MaxErrorBodyBytes caps how much of a non-2xx response body is kept on
+// ClientError.Body.
+const MaxErrorBodyBytes = 512
+
+// IsRetryableStatus reports whether a request that failed with HTTP status
+// code should be retried as-is. 5xx, 401 (credentials may be rotated or
+// re-paired), 403 (pairing may be restored), 408 and 429 are transient;
+// every other 4xx means the request itself is unacceptable and resending it
+// unchanged will fail the same way.
+func IsRetryableStatus(code int) bool {
+	switch {
+	case code >= 500:
+		return true
+	case code == 401, code == 403, code == 408, code == 429:
+		return true
+	case code >= 400:
+		return false
+	}
+	return true
+}
 
 // MaxResponseBodyBytes caps the size of any HTTP response body the
 // client will buffer. Above this, the response is treated as

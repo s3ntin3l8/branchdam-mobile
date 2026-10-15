@@ -165,6 +165,66 @@ func TestEnqueueLineageEvent_RejectsBadConfidence(t *testing.T) {
 	}
 }
 
+// TestEnqueueLineageEvent_RelationshipTypes: the server's relationship
+// types and the known mobile alias are accepted; anything else is
+// INVALID_INPUT at enqueue, because the server would refuse it fatally after
+// accepting the event.
+func TestEnqueueLineageEvent_RelationshipTypes(t *testing.T) {
+	e, _ := newTestEngineWithServer(t)
+	for _, rel := range []string{"DERIVED_FROM", "FINAL_EXPORT", "PROXY_OF", "PROJECT_SIDECAR", "DUPLICATE_OF", "MOTION_PHOTO_CONTAINS"} {
+		if _, err := e.EnqueueLineageEvent("p", "c", rel, "r", ConfidenceExact); err != nil {
+			t.Errorf("EnqueueLineageEvent(%s): %v", rel, err)
+		}
+	}
+	for _, rel := range []string{"derived_from", "SIBLING_OF", "LIVE_PHOTO"} {
+		_, err := e.EnqueueLineageEvent("p", "c", rel, "r", ConfidenceExact)
+		be, ok := err.(*Error)
+		if !ok || be.Code != "INVALID_INPUT" {
+			t.Errorf("EnqueueLineageEvent(%s) err = %v, want INVALID_INPUT", rel, err)
+		}
+	}
+}
+
+// TestEnqueueEvents_PayloadIsJSON: the queued payload is real JSON even for
+// local IDs with characters Go's %q escapes differently from JSON (the
+// previous fmt-built payloads were not parseable for those).
+func TestEnqueueEvents_PayloadIsJSON(t *testing.T) {
+	e, _ := newTestEngineWithServer(t)
+	odd := "content://media/x\x01\u00e9\"\n\x7f"
+	if _, err := e.EnqueueDeleteEvent(odd); err != nil {
+		t.Fatalf("EnqueueDeleteEvent: %v", err)
+	}
+	if _, err := e.EnqueueLineageEvent(odd, odd+"/child", "DERIVED_FROM", "r", ConfidenceExact); err != nil {
+		t.Fatalf("EnqueueLineageEvent: %v", err)
+	}
+	rows, err := e.queue.DB().Query(`SELECT payload_json FROM event_queue ORDER BY id`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+	n := 0
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal([]byte(payload), &m); err != nil {
+			t.Fatalf("queued payload %q is not JSON: %v", payload, err)
+		}
+		if m["localId"] != nil && m["localId"] != odd {
+			t.Errorf("localId round-trip = %q, want %q", m["localId"], odd)
+		}
+		if m["parentLocalId"] != nil && m["parentLocalId"] != odd {
+			t.Errorf("parentLocalId round-trip = %q, want %q", m["parentLocalId"], odd)
+		}
+		n++
+	}
+	if n != 2 {
+		t.Fatalf("queued %d events, want 2", n)
+	}
+}
+
 // TestSyncBatch_EndToEnd: a real upload + a real event go through
 // the engine and the server, returning non-zero counts. Exercises
 // the SyncBatch public surface end-to-end (B.1 + B.2.1 + B.2.4).
@@ -184,8 +244,11 @@ func TestSyncBatch_EndToEnd(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("EnqueueMedia: %v", err)
 	}
-	if _, err := e.EnqueueLineageEvent("ph://m", "ph://c", "DERIVED_FROM", "android_camera_pair", ConfidenceExact); err != nil {
-		t.Fatalf("EnqueueLineageEvent: %v", err)
+	// A delete for the item enqueued above: SyncBatch uploads first, so
+	// the event resolves to the uploaded node and is sent in the same
+	// batch.
+	if _, err := e.EnqueueDeleteEvent("ph://sync-1"); err != nil {
+		t.Fatalf("EnqueueDeleteEvent: %v", err)
 	}
 
 	result, err := e.SyncBatch(SyncOptions{

@@ -105,8 +105,10 @@ func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel
 	})
 }
 
-// BindingEnqueueLineageEvent enqueues a lineage relationship event.
-// confidence is a 0.0–1.0 score.
+// BindingEnqueueLineageEvent enqueues a lineage relationship event between
+// two local media items, identified by the local IDs they were enqueued for
+// upload under. confidence is a 0.0–1.0 score; see
+// Engine.EnqueueLineageEvent for how it is sent.
 func BindingEnqueueLineageEvent(parentLocalID, childLocalID,
 	relationshipType, resolver string, confidence float64) (string, error) {
 
@@ -119,7 +121,9 @@ func BindingEnqueueLineageEvent(parentLocalID, childLocalID,
 		Confidence(confidence))
 }
 
-// BindingEnqueueDeleteEvent enqueues a local-delete lifecycle event.
+// BindingEnqueueDeleteEvent enqueues a local-delete lifecycle event for the
+// local ID the media was enqueued for upload under (not a node UUID); see
+// Engine.EnqueueDeleteEvent.
 func BindingEnqueueDeleteEvent(localID string) (string, error) {
 	e, err := getBindingEngine()
 	if err != nil {

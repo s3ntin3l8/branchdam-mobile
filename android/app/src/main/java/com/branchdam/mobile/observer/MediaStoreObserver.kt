@@ -137,9 +137,7 @@ class MediaStoreObserver(
         // D.4: Trash sync -- MATCH_ONLY returns all items in the 30-day
         // recycle bin. The in-memory processedTrashedUris set prevents
         // re-enqueueing delete events across successive onChange calls.
-        val deletedCount = TrashSyncObserver.processTrashedItems(context, processedTrashedUris) { contentUri ->
-            contentUri
-        }
+        val deletedCount = TrashSyncObserver.processTrashedItems(context, processedTrashedUris)
         if (deletedCount > 0) {
             SyncScheduler.triggerImmediateSync(context)
         }

@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -918,5 +919,46 @@ func TestCheckContent_NetworkError(t *testing.T) {
 	_, err := c.CheckContent(context.Background(), "", "abc123")
 	if err == nil {
 		t.Fatal("expected error on connection refused")
+	}
+}
+
+// TestSubmitEvent_NonSuccessKeepsStatusAndBody: a non-2xx answer surfaces
+// the HTTP status and the (bounded) response body on the ClientError, so
+// the engine can tell a terminal rejection from a transient failure and
+// record why -- while Error() still never echoes the body (S-7).
+func TestSubmitEvent_NonSuccessKeepsStatusAndBody(t *testing.T) {
+	long := strings.Repeat("x", 2*MaxErrorBodyBytes)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = io.WriteString(w, `{"detail":"eventType must be one of ..."}`+long)
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+	_, err := c.SubmitEvent(context.Background(), "", "EVENT_NODE_DELETED", `{"nodeUuid":"x"}`)
+	var ce *ClientError
+	if !errors.As(err, &ce) {
+		t.Fatalf("err = %v, want *ClientError", err)
+	}
+	if ce.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("StatusCode = %d, want 422", ce.StatusCode)
+	}
+	if !strings.HasPrefix(ce.Body, `{"detail":"eventType must be one of ..."}`) || len(ce.Body) > MaxErrorBodyBytes {
+		t.Errorf("Body = %q (len %d), want the response body truncated to %d bytes", ce.Body[:min(len(ce.Body), 60)], len(ce.Body), MaxErrorBodyBytes)
+	}
+	if strings.Contains(err.Error(), "eventType must be one of") {
+		t.Errorf("Error() echoes the response body: %s", err.Error())
+	}
+}
+
+func TestIsRetryableStatus(t *testing.T) {
+	for code, want := range map[int]bool{
+		400: false, 404: false, 409: false, 413: false, 422: false,
+		401: true, 403: true, 408: true, 429: true,
+		500: true, 502: true, 503: true,
+	} {
+		if got := IsRetryableStatus(code); got != want {
+			t.Errorf("IsRetryableStatus(%d) = %v, want %v", code, got, want)
+		}
 	}
 }

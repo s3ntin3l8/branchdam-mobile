@@ -447,7 +447,14 @@ func TestSetCancelFlag_FlipsBothQueues(t *testing.T) {
 		t.Fatalf("EnqueueMedia: %v", err)
 	}
 
-	// Enqueue an event.
+	// Enqueue an event whose endpoints are already on the server, so it
+	// is dispatchable without the (cancelled) upload.
+	if err := e.queue.RecordLocalMedia("ph://m", "0190f1a2-3b4c-7d5e-8f6a-1b2c3d4e5f60", "", "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
+	if err := e.queue.RecordLocalMedia("ph://c", "0190f1a2-3b4c-7d5e-8f6a-1b2c3d4e5f61", "", "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia: %v", err)
+	}
 	if _, err := e.EnqueueLineageEvent("ph://m", "ph://c", "DERIVED_FROM", "android_camera_pair", ConfidenceExact); err != nil {
 		t.Fatalf("EnqueueLineageEvent: %v", err)
 	}

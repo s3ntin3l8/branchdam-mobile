@@ -102,8 +102,9 @@ func TestEngineFullLifecycle(t *testing.T) {
 		t.Fatalf("expected 1 upload, got %d (server saw %d)", uploadedCount, len(uploadedFiles))
 	}
 
-	// 3. Enqueue and sync event
-	_, err = q.EnqueueEvent("EVENT_EDGE_ATTACHED", `{"child":"018f-test-node-1"}`)
+	// 3. Enqueue and sync an event for the uploaded item (queued by local
+	// ID, sent by the node UUID the upload returned).
+	_, err = q.EnqueueEvent(EventNodeDeleted, `{"localId":"local_uri_1"}`)
 	if err != nil {
 		t.Fatalf("EnqueueEvent failed: %v", err)
 	}

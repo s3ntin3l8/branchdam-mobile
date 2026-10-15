@@ -334,6 +334,17 @@ const (
 // EnqueueLineageEvent enqueues an EVENT_EDGE_ATTACHED with the given
 // relationship. Returns the assigned event UUID.
 //
+// parentLocalID and childLocalID are the same local IDs the media was
+// enqueued for upload under (EnqueueMedia's LocalID). The event is queued
+// in that local form and translated at sync time: it waits until both
+// items have been uploaded and then goes to the server with their node
+// UUIDs (parent as source, child as target, tier 1). relationshipType must
+// be one of the server's relationship types (DERIVED_FROM, FINAL_EXPORT,
+// PROXY_OF, PROJECT_SIDECAR, DUPLICATE_OF) or a known mobile alias
+// (MOTION_PHOTO_CONTAINS, sent as DERIVED_FROM); anything else is
+// INVALID_INPUT. A confidence below 0.50 is accepted here but never sent:
+// the server refuses such edges.
+//
 // The serialised payload is capped at queue.MaxEventPayloadBytes
 // (64 KiB); oversized input is rejected with INVALID_INPUT rather
 // than DB_ERROR — the queue never saw the row, so the shell must fix
@@ -362,16 +373,25 @@ func (e *Engine) EnqueueLineageEvent(
 	if relationshipType == "" {
 		return "", newError(CodeInvalidInput, "relationshipType is required")
 	}
+	if _, err := engine.ServerRelationshipType(relationshipType); err != nil {
+		return "", newError(CodeInvalidInput, "%v", err)
+	}
 	if resolver == "" {
 		return "", newError(CodeInvalidInput, "resolver is required")
 	}
 
-	payload, err := buildLineagePayload(parentLocalID, childLocalID, relationshipType, float64(confidence), resolver)
+	payload, err := engine.EncodeLineageIntent(engine.LineageIntent{
+		ParentLocalID: parentLocalID,
+		ChildLocalID:  childLocalID,
+		Relationship:  relationshipType,
+		Confidence:    float64(confidence),
+		Resolver:      resolver,
+	})
 	if err != nil {
 		return "", newError(CodeInvalidInput, "build lineage payload: %v", err)
 	}
 
-	eventUUID, err := e.queue.EnqueueEvent("EVENT_EDGE_ATTACHED", payload)
+	eventUUID, err := e.queue.EnqueueEvent(engine.EventEdgeAttached, payload)
 	if err != nil {
 		if errors.Is(err, queue.ErrPayloadTooLarge) {
 			return "", newError(CodeInvalidInput, "enqueue lineage event: %v", err)
@@ -381,7 +401,12 @@ func (e *Engine) EnqueueLineageEvent(
 	return eventUUID, nil
 }
 
-// EnqueueDeleteEvent enqueues an EVENT_NODE_DELETED for the given LocalID.
+// EnqueueDeleteEvent enqueues an EVENT_NODE_DELETED for the given LocalID,
+// the same local ID the media was enqueued for upload under. At sync time
+// it is sent as the server node UUID the item was uploaded as, which the
+// server moves to trash. It is never sent for media that was never
+// uploaded, or for media that was reclaimed (offloaded): after a reclaim
+// the server master is the only copy.
 //
 // The serialised payload is capped at queue.MaxEventPayloadBytes
 // (64 KiB); an oversized localID is rejected with INVALID_INPUT
@@ -394,8 +419,11 @@ func (e *Engine) EnqueueDeleteEvent(localID string) (string, error) {
 	if localID == "" {
 		return "", newError(CodeInvalidInput, "LocalID is required")
 	}
-	payload := fmt.Sprintf(`{"localId":%q}`, localID)
-	eventUUID, err := e.queue.EnqueueEvent("EVENT_NODE_DELETED", payload)
+	payload, err := engine.EncodeDeleteIntent(engine.DeleteIntent{LocalID: localID})
+	if err != nil {
+		return "", newError(CodeInvalidInput, "build delete payload: %v", err)
+	}
+	eventUUID, err := e.queue.EnqueueEvent(engine.EventNodeDeleted, payload)
 	if err != nil {
 		if errors.Is(err, queue.ErrPayloadTooLarge) {
 			return "", newError(CodeInvalidInput, "enqueue delete event: %v", err)
@@ -403,18 +431,6 @@ func (e *Engine) EnqueueDeleteEvent(localID string) (string, error) {
 		return "", newError(CodeDBError, "enqueue delete event: %v", err)
 	}
 	return eventUUID, nil
-}
-
-// buildLineagePayload constructs a stable JSON payload for an
-// EVENT_EDGE_ATTACHED event. Kept as a small package-private helper so the
-// EnqueueLineageEvent function body stays readable.
-func buildLineagePayload(parentLocalID, childLocalID, relationshipType string, confidence float64, resolver string) (string, error) {
-	// Stable, deterministic key order via fmt.Sprintf template; not a hot
-	// path so the lack of json.Marshal is fine.
-	return fmt.Sprintf(
-		`{"parentLocalId":%q,"childLocalId":%q,"relationship":%q,"confidence":%f,"resolver":%q}`,
-		parentLocalID, childLocalID, relationshipType, confidence, resolver,
-	), nil
 }
 
 // ---------------------------------------------------------------------------
