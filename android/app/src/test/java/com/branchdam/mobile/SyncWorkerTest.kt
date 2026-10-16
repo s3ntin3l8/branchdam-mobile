@@ -91,6 +91,14 @@ class SyncWorkerOutcomeTest {
     }
 
     @Test
+    fun testCancelledBatchGetsOneAttemptBeyondTheTransientBudget() {
+        val cancelled = SyncBatchOutcome.Failed(CoreErrorCodes.CONTEXT_CANCELED, "branchdam: CONTEXT_CANCELED: sync uploads cancelled")
+        val max = SyncWorker.MAX_ATTEMPTS
+        assertEquals(SyncWorker.Decision.RETRY, SyncWorker.decide(cancelled, max, max))
+        assertEquals(SyncWorker.Decision.FAILURE, SyncWorker.decide(cancelled, max + 1, max))
+    }
+
+    @Test
     fun testSuccessPersistsLastSyncTimeAndClearsRepairFlag() {
         SyncWorker.recordOutcome(prefs, SyncWorker.Decision.AUTH_FAILED, 1_000L)
         assertEquals(1_000L, prefs.getLong(BranchDamKeys.SYNC_AUTH_FAILED_AT, 0L))

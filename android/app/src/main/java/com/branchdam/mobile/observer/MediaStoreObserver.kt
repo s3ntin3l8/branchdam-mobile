@@ -102,7 +102,9 @@ class MediaStoreObserver(
      * that died sit below the scan cursor and are never staged again.
      */
     private val importAnnouncer = PendingImportAnnouncer(
-        post = { count -> ImportConfirmationNotifier.showImportConfirmation(context, count) },
+        post = { count, stagedBefore ->
+            ImportConfirmationNotifier.showImportConfirmation(context, count, stagedBefore)
+        },
     )
 
     fun register() {

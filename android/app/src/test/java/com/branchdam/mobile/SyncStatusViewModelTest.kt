@@ -197,6 +197,30 @@ class SyncStatusViewModelTest {
     }
 
     @Test
+    fun testWifiOnlySyncOnMeteredNetworkIsWaitingNotSyncing() {
+        val held = SyncStatusViewModel.workerSnapshot(
+            state = androidx.work.WorkInfo.State.ENQUEUED,
+            runAttemptCount = 0,
+            lastSyncTime = 0L,
+            authFailedAt = 0L,
+            engineReady = true,
+            waitingForWifi = true,
+        )
+        assertFalse("nothing can run until Wi-Fi returns", held.isSyncing)
+        assertEquals(com.branchdam.mobile.ui.sync.WAITING_FOR_WIFI_MESSAGE, held.workerState)
+
+        val ready = SyncStatusViewModel.workerSnapshot(
+            state = androidx.work.WorkInfo.State.ENQUEUED,
+            runAttemptCount = 0,
+            lastSyncTime = 0L,
+            authFailedAt = 0L,
+            engineReady = true,
+        )
+        assertTrue(ready.isSyncing)
+        assertEquals("Enqueued", ready.workerState)
+    }
+
+    @Test
     fun testViewModelReadsButNeverWritesLastSyncTime() = runTest(testDispatcher) {
         prefs().edit().clear().putLong(BranchDamKeys.LAST_SYNC_TIME, 12_345L).commit()
         SyncStatusViewModel.testConnectionFn = { true }

@@ -57,7 +57,7 @@ class PendingImportAnnouncerTest {
 
         // New process: nothing was staged by this process's scans.
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(post = { posted += it })
+        val announcer = PendingImportAnnouncer(post = { count, _ -> posted += count })
 
         assertTrue(announcer.refresh())
         assertEquals("the persisted set is announced", listOf(2), posted)
@@ -67,7 +67,7 @@ class PendingImportAnnouncerTest {
     fun testUnchangedSetIsNotRepostedOnEveryScan() {
         var pending = listOf(row(1), row(2))
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { count, _ -> posted += count })
 
         assertTrue(announcer.refresh())
         assertFalse("an unrelated MediaStore change must not re-post", announcer.refresh())
@@ -85,7 +85,7 @@ class PendingImportAnnouncerTest {
     @Test
     fun testNothingPendingPostsNothing() {
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { emptyList() }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { emptyList() }, post = { count, _ -> posted += count })
 
         assertFalse(announcer.refresh())
         assertFalse(announcer.refresh(stagedThisPass = 3))
@@ -97,7 +97,7 @@ class PendingImportAnnouncerTest {
         // The engine is not open yet on the first (startup) refresh.
         var pending: List<PendingImport>? = null
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { count, _ -> posted += count })
 
         assertFalse(announcer.refresh())
         assertTrue(posted.isEmpty())
@@ -109,10 +109,23 @@ class PendingImportAnnouncerTest {
     }
 
     @Test
+    fun testActionsCoverExactlyTheAnnouncedRows() {
+        // The cutoff is the newest announced row, not the post time: a row
+        // staged in the same second the notification goes up is not swept
+        // by a Skip the user tapped without seeing it.
+        val pending = listOf(row(1).copy(createdAtUnix = 100L), row(2).copy(createdAtUnix = 140L))
+        val cutoffs = mutableListOf<Long>()
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { _, before -> cutoffs += before })
+
+        assertTrue(announcer.refresh())
+        assertEquals(listOf(140L), cutoffs)
+    }
+
+    @Test
     fun testAnsweredSetIsAnnouncedAgainWhenRowsReappear() {
         var pending = listOf(row(1))
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { count, _ -> posted += count })
 
         assertTrue(announcer.refresh())
         pending = emptyList() // the user answered

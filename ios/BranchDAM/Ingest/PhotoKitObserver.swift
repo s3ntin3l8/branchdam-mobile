@@ -240,9 +240,11 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             AppleTrashSyncObserver.processRemovedAsset(localId: id)
             // The asset is gone, so whether it was a Live Photo is only
             // known from the queue: its paired video was enqueued under
-            // this child ID.
+            // this child ID. An unreadable status (nil) emits the delete
+            // too: processRemovedAsset decides per asset, and reading it as
+            // "not enqueued" would drop a real removal.
             let pairedVideoId = AppleCameraRollImportNotifier.pairedVideoLocalID(stillLocalID: id)
-            if BranchDamCoreBridge.shared.getMediaStatus(localID: pairedVideoId) != "NOT_ENQUEUED" {
+            if notifier.uploadStatus(localID: pairedVideoId) != "NOT_ENQUEUED" {
                 AppleTrashSyncObserver.processRemovedAsset(localId: pairedVideoId)
             }
         }

@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
@@ -196,6 +197,12 @@ object ImportConfirmationNotifier {
                 for (item in targets) {
                     suppressItem(item.localId)
                 }
+            }
+            else -> {
+                // ACTIONS gates both callers; an action added there without
+                // a branch here must not report the tap as handled.
+                Log.w("ImportConfirmation", "no handler for import confirmation action $action")
+                return false
             }
         }
 

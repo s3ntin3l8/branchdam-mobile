@@ -79,6 +79,28 @@ final class CameraRollIntakeTests: XCTestCase {
                      "both reads failing is unknown, not NOT_ENQUEUED")
     }
 
+    func testAFailedUploadIsOfferedAgainByTheScan() {
+        // The scan stages an asset unless its status means it is queued;
+        // a FAILED upload is re-offered, since importing it again is what
+        // retries it.
+        let status = CameraRollIntake.uploadStatus(localID: "A", bulk: ["A": "FAILED"]) { _ in nil }
+        XCTAssertEqual(status, "FAILED")
+        XCTAssertFalse(UploadStatus.isQueued(status ?? ""))
+
+        var staged = [String]()
+        let result = CameraRollIntake.commit(
+            assets: [asset("A", 100)],
+            startCursor: Date(timeIntervalSince1970: 0)
+        ) { candidate in
+            let s = CameraRollIntake.uploadStatus(localID: candidate.localIdentifier, bulk: ["A": "FAILED"]) { _ in nil }
+            guard let s, !UploadStatus.isQueued(s) else { return .alreadyDecided }
+            staged.append(candidate.localIdentifier)
+            return .persisted
+        }
+        XCTAssertEqual(staged, ["A"])
+        XCTAssertEqual(result.persisted.map(\.localIdentifier), ["A"])
+    }
+
     private func asset(_ id: String, _ seconds: TimeInterval) -> DiscoveredAsset {
         DiscoveredAsset(
             localIdentifier: id,
