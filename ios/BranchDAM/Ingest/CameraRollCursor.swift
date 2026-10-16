@@ -34,6 +34,11 @@ public final class CameraRollCursorStore: @unchecked Sendable {
     public var lastScannedDate: Date {
         lock.lock()
         defer { lock.unlock() }
+        return lastScannedDateLocked()
+    }
+
+    /// lock held.
+    private func lastScannedDateLocked() -> Date {
         let key = BranchDamKeys.cameraRollLastScannedTimestamp.rawValue
         if let seconds = defaults.object(forKey: key) as? Double {
             return Date(timeIntervalSince1970: seconds)
@@ -45,10 +50,9 @@ public final class CameraRollCursorStore: @unchecked Sendable {
 
     /// Moves the date cursor forward to [date]; never backwards.
     public func advanceDate(to date: Date) {
-        let current = lastScannedDate
-        guard date > current else { return }
         lock.lock()
         defer { lock.unlock() }
+        guard date > lastScannedDateLocked() else { return }
         defaults.set(date.timeIntervalSince1970, forKey: BranchDamKeys.cameraRollLastScannedTimestamp.rawValue)
     }
 

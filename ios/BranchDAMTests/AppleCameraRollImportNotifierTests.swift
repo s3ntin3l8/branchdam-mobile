@@ -36,7 +36,8 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
     private func run(
         _ notifier: AppleCameraRollImportNotifier,
         _ action: AppleCameraRollImportNotifier.Action,
-        stagedBefore: Int64 = .max
+        stagedBefore: Int64 = .max,
+        timeout: TimeInterval = 2.0
     ) -> Bool {
         let done = expectation(description: "action handled")
         let handled = HandledFlag()
@@ -44,7 +45,7 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
             handled.value = ok
             done.fulfill()
         }
-        wait(for: [done], timeout: 2.0)
+        wait(for: [done], timeout: timeout)
         return handled.value
     }
 
@@ -115,6 +116,57 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
         XCTAssertEqual(videoID, "A/L0/001/pairedVideo")
         XCTAssertEqual(Set(engine.enqueued.map { $0.localID }), ["A/L0/001", "B/L0/001", videoID])
         XCTAssertEqual(links.entries, ["A/L0/001 -> A/L0/001/pairedVideo (IMG_A/L0.HEIC, IMG_LIVE.MOV)"])
+    }
+
+    func testFailedMotionTrackKeepsTheRowAndALaterPassQueuesOnlyTheVideo() {
+        _ = engine.stagePendingImport(PendingImportItem(localId: "A/L0/001", filename: "a.heic", capturedAtUnix: 1, createdAtUnix: 0))
+        let failing = AppleCameraRollImportNotifier(
+            engine: engine,
+            stager: FakeAssetStager(livePhotos: ["A/L0/001"], failingVideos: ["A/L0/001"]),
+            afterImport: { _, _ in },
+            linkPairedVideo: { _, _, _, _ in }
+        )
+
+        XCTAssertTrue(run(failing, .importNow))
+        XCTAssertEqual(engine.enqueued.map { $0.localID }, ["A/L0/001"])
+        XCTAssertEqual(failing.getPendingAssets().map(\.localId), ["A/L0/001"],
+                       "the row must survive until the motion track is queued")
+
+        let working = AppleCameraRollImportNotifier(
+            engine: engine,
+            stager: FakeAssetStager(livePhotos: ["A/L0/001"]),
+            afterImport: { _, _ in },
+            linkPairedVideo: { _, _, _, _ in }
+        )
+        XCTAssertTrue(run(working, .importNow))
+        XCTAssertEqual(engine.enqueued.map { $0.localID }, ["A/L0/001", "A/L0/001/pairedVideo"],
+                       "the already-queued still is not staged or queued again")
+        XCTAssertTrue(working.getPendingAssets().isEmpty)
+    }
+
+    func testImportStagesAFewAssetsAtATime() {
+        let stager = ConcurrencyProbeStager()
+        let notifier = AppleCameraRollImportNotifier(engine: engine, stager: stager, afterImport: { _, _ in })
+        for i in 0..<10 {
+            _ = notifier.stagePendingAsset(asset("A/L0/\(i)"))
+        }
+
+        XCTAssertTrue(run(notifier, .importNow, timeout: 10))
+
+        XCTAssertEqual(engine.enqueued.count, 10)
+        XCTAssertLessThanOrEqual(stager.maxInFlight, AppleCameraRollImportNotifier.importChunkSize)
+        XCTAssertGreaterThan(stager.maxInFlight, 0)
+    }
+
+    func testGalleryImportStagesInsteadOfEnqueueingAPhotoKitPath() async {
+        let notifier = makeNotifier()
+        let queued = await notifier.importAssets([
+            PendingImportItem(localId: "G/L0/001", filename: "g.heic", capturedAtUnix: 1, createdAtUnix: 0)
+        ])
+
+        XCTAssertEqual(queued, 1)
+        XCTAssertEqual(engine.enqueued.map { $0.localID }, ["G/L0/001"])
+        XCTAssertTrue(engine.enqueued.allSatisfy { $0.localPath.hasPrefix("/staged/") })
     }
 
     func testAssetWhoseStagingFailsStaysPending() {
@@ -200,6 +252,33 @@ private final class AfterImportRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return _calls
+    }
+}
+
+/// Stages asynchronously with a short delay and records how many stagings
+/// were in flight at once.
+private final class ConcurrencyProbeStager: AssetStager, @unchecked Sendable {
+    private let lock = NSLock()
+    private var inFlight = 0
+    private var _maxInFlight = 0
+
+    var maxInFlight: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _maxInFlight
+    }
+
+    func stage(localIdentifier: String, filename: String, completion: @escaping @Sendable (String?) -> Void) {
+        lock.lock()
+        inFlight += 1
+        _maxInFlight = max(_maxInFlight, inFlight)
+        lock.unlock()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.02) {
+            self.lock.lock()
+            self.inFlight -= 1
+            self.lock.unlock()
+            completion("/staged/\(localIdentifier.replacingOccurrences(of: "/", with: "_"))")
+        }
     }
 }
 

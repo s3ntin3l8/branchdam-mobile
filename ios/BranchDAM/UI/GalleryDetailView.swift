@@ -314,19 +314,16 @@ public struct GalleryDetailView: View {
         let localID = item.id
 
         Task {
-            // Enqueueing hashes the file in the engine; keep it off the
-            // main actor.
-            let uploadId = await BranchDamCoreBridge.shared.enqueueMediaAsync(
-                localPath: "ph://\(localID)",
-                filename: filename,
-                capturedAtUnix: unix,
-                localID: localID
-            )
+            // The asset is staged to a real file before it is queued (the
+            // engine can't read a "ph://" path), off the main actor.
+            let queued = await AppleCameraRollImportNotifier.shared.importAssets([
+                PendingImportItem(localId: localID, filename: filename, capturedAtUnix: unix, createdAtUnix: 0)
+            ])
 
             BackgroundSyncManager.shared.triggerImmediateSync()
 
             withAnimation {
-                actionMessage = uploadId > 0 ? "Enqueued for upload" : "Upload enqueue failed"
+                actionMessage = queued > 0 ? "Enqueued for upload" : "Upload enqueue failed"
             }
             isActioning = false
 

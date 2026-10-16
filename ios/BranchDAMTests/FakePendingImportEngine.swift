@@ -69,6 +69,11 @@ final class FakePendingImportEngine: PendingImportEngine, @unchecked Sendable {
         enqueued.append((localPath, localID))
         return enqueueResult
     }
+
+    func mediaStatus(localID: String) -> String {
+        lock.lock(); defer { lock.unlock() }
+        return enqueueResult > 0 && enqueued.contains(where: { $0.localID == localID }) ? "PENDING" : "NOT_ENQUEUED"
+    }
 }
 
 /// `AssetStager` that "copies" an asset to a fake path, or fails for the
@@ -77,14 +82,20 @@ struct FakeAssetStager: AssetStager {
     var failing: Set<String> = []
     /// Local IDs that are Live Photos (have a motion track to stage).
     var livePhotos: Set<String> = []
+    /// Live Photos whose motion track fails to stage.
+    var failingVideos: Set<String> = []
 
-    func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void) {
+    func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (PairedVideoStaging) -> Void) {
         guard livePhotos.contains(localIdentifier) else {
-            completion(nil)
+            completion(.none)
+            return
+        }
+        if failingVideos.contains(localIdentifier) {
+            completion(.failed)
             return
         }
         let safe = localIdentifier.replacingOccurrences(of: "/", with: "_")
-        completion(StagedResource(path: "/staged/\(safe)_pairedVideo.mov", filename: "IMG_LIVE.MOV"))
+        completion(.staged(StagedResource(path: "/staged/\(safe)_pairedVideo.mov", filename: "IMG_LIVE.MOV")))
     }
 
     func stage(localIdentifier: String, filename: String, completion: @escaping @Sendable (String?) -> Void) {

@@ -6,9 +6,18 @@ import UserNotifications
 /// engine can read, calling back with its path (nil on failure).
 public protocol AssetStager: Sendable {
     func stage(localIdentifier: String, filename: String, completion: @escaping @Sendable (String?) -> Void)
-    /// Stages a Live Photo's motion track; nil when the asset has none (or
-    /// staging failed).
-    func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void)
+    /// Stages a Live Photo's motion track.
+    func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (PairedVideoStaging) -> Void)
+}
+
+/// What staging a Live Photo's motion track produced.
+public enum PairedVideoStaging: Equatable, Sendable {
+    /// The asset has no motion track (not a Live Photo, or gone).
+    case none
+    /// Staged to a local file.
+    case staged(StagedResource)
+    /// It has one, but the copy failed; worth retrying later.
+    case failed
 }
 
 /// A resource staged to a local file, with the name it should be uploaded
@@ -24,8 +33,8 @@ public struct StagedResource: Equatable, Sendable {
 }
 
 extension AssetStager {
-    public func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void) {
-        completion(nil)
+    public func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (PairedVideoStaging) -> Void) {
+        completion(.none)
     }
 }
 
@@ -54,17 +63,21 @@ public struct PhotoKitAssetStager: AssetStager {
         }
     }
 
-    public func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void) {
+    public func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (PairedVideoStaging) -> Void) {
         let cleanId = localIdentifier.hasPrefix("ph://") ? String(localIdentifier.dropFirst(5)) : localIdentifier
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil).firstObject,
               let video = PHAssetResource.assetResources(for: asset).first(where: { $0.type == .pairedVideo }) else {
-            completion(nil)
+            completion(.none)
             return
         }
         let videoFilename = video.originalFilename
         let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_pairedVideo.mov"
         PhotoKitObserver.stageResourceAtomically(resource: video, filename: safeFilename) { path in
-            completion(path.map { StagedResource(path: $0, filename: videoFilename) })
+            if let path = path {
+                completion(.staged(StagedResource(path: path, filename: videoFilename)))
+            } else {
+                completion(.failed)
+            }
         }
     }
 }
@@ -178,6 +191,10 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
 
     /// Persists [asset] as awaiting the user's decision. `.suppressed`
     /// (nothing staged) when the user already skipped it.
+    ///
+    /// `createdAtUnix` is passed as 0: the engine stamps the staging time
+    /// itself (the core's `created_at_unix`), and that stamp is what
+    /// `listPendingImports` returns and the notification cutoff compares.
     public func stagePendingAsset(_ asset: DiscoveredAsset) -> PendingImportStageResult {
         engine.stagePendingImport(PendingImportItem(
             localId: asset.localIdentifier,
@@ -326,32 +343,86 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
         }
     }
 
+    /// How many assets are staged at once. Each is a full-size copy into
+    /// Caches, so a large backlog (a first scan, or rows a killed process
+    /// left) is worked through a few at a time rather than all at once.
+    static let importChunkSize = 4
+
+    /// Imports [items] a chunk at a time; [completion] (on `queue`) gets
+    /// how many of them had something newly queued. Call on `queue`.
     private func importItems(_ items: [PendingImportItem], completion: @escaping @Sendable (Int) -> Void) {
+        importChunk(items[...], queuedSoFar: 0, completion: completion)
+    }
+
+    private func importChunk(
+        _ remaining: ArraySlice<PendingImportItem>,
+        queuedSoFar: Int,
+        completion: @escaping @Sendable (Int) -> Void
+    ) {
+        guard !remaining.isEmpty else {
+            completion(queuedSoFar)
+            return
+        }
+        let chunk = remaining.prefix(Self.importChunkSize)
+        let rest = remaining.dropFirst(chunk.count)
         let group = DispatchGroup()
         let counter = QueuedCounter()
-        for item in items {
+        for item in chunk {
             group.enter()
-            stager.stage(localIdentifier: item.localId, filename: item.filename) { [engine] path in
-                defer { group.leave() }
-                guard let path = path else {
-                    NSLog("AppleCameraRollImportNotifier: staging failed for %@; left pending", item.localId)
-                    return
-                }
-                let queueId = engine.enqueueStagedMedia(
-                    localPath: path,
-                    filename: item.filename,
-                    capturedAtUnix: item.capturedAtUnix,
-                    localID: item.localId
-                )
-                if queueId > 0 {
-                    engine.deletePendingImport(localID: item.localId)
-                    counter.increment()
-                    self.importPairedVideo(of: item, group: group)
-                }
+            importItem(item) { queuedSomething in
+                if queuedSomething { counter.increment() }
+                group.leave()
             }
         }
         group.notify(queue: queue) {
-            completion(counter.value)
+            self.importChunk(rest, queuedSoFar: queuedSoFar + counter.value, completion: completion)
+        }
+    }
+
+    /// Imports one asset: stages and queues the still unless the engine
+    /// already has it, then its Live Photo motion track, if any. The
+    /// pending row is forgotten only once both are queued (or there is no
+    /// motion track), so a failed video copy -- or a process killed
+    /// between the two -- leaves the row for a later pass, which skips the
+    /// already-queued still and retries just the video.
+    private func importItem(_ item: PendingImportItem, done: @escaping @Sendable (Bool) -> Void) {
+        let stillQueued = engine.mediaStatus(localID: item.localId) != "NOT_ENQUEUED"
+        if stillQueued {
+            importPairedVideo(of: item, queuedStill: false, done: done)
+            return
+        }
+        stager.stage(localIdentifier: item.localId, filename: item.filename) { [engine] path in
+            guard let path = path else {
+                NSLog("AppleCameraRollImportNotifier: staging failed for %@; left pending", item.localId)
+                done(false)
+                return
+            }
+            let queueId = engine.enqueueStagedMedia(
+                localPath: path,
+                filename: item.filename,
+                capturedAtUnix: item.capturedAtUnix,
+                localID: item.localId
+            )
+            guard queueId > 0 else {
+                NSLog("AppleCameraRollImportNotifier: enqueue failed for %@; left pending", item.localId)
+                done(false)
+                return
+            }
+            self.importPairedVideo(of: item, queuedStill: true, done: done)
+        }
+    }
+
+    /// Imports camera-roll assets picked in the gallery, through the same
+    /// stage-then-queue path as the import notification (never a "ph://"
+    /// path the engine can't read). Returns how many had something newly
+    /// queued.
+    public func importAssets(_ items: [PendingImportItem]) async -> Int {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.importItems(items) { queued in
+                    continuation.resume(returning: queued)
+                }
+            }
         }
     }
 }
@@ -363,24 +434,45 @@ extension AppleCameraRollImportNotifier {
         "\(stillLocalID)/pairedVideo"
     }
 
-    /// Queues a Live Photo's motion track once its still is queued, and
-    /// links the two. Runs for every import path (auto-import, Import now,
-    /// Later), so the video never depends on the import mode. Holds
-    /// [group] until done.
-    fileprivate func importPairedVideo(of item: PendingImportItem, group: DispatchGroup) {
-        group.enter()
-        stager.stagePairedVideo(localIdentifier: item.localId) { [engine, linkPairedVideo] staged in
-            defer { group.leave() }
-            guard let staged = staged else { return }
-            let videoID = Self.pairedVideoLocalID(stillLocalID: item.localId)
-            let queueId = engine.enqueueStagedMedia(
-                localPath: staged.path,
-                filename: staged.filename,
-                capturedAtUnix: item.capturedAtUnix,
-                localID: videoID
-            )
-            if queueId > 0 {
+    /// Queues a Live Photo's motion track once its still is queued, links
+    /// the two, and only then forgets the pending row. Runs for every
+    /// import path (auto-import, Import now, Later, the gallery), so the
+    /// video never depends on the import mode. [done] gets whether
+    /// anything (the still or the video) was newly queued.
+    fileprivate func importPairedVideo(
+        of item: PendingImportItem,
+        queuedStill: Bool,
+        done: @escaping @Sendable (Bool) -> Void
+    ) {
+        let videoID = Self.pairedVideoLocalID(stillLocalID: item.localId)
+        if engine.mediaStatus(localID: videoID) != "NOT_ENQUEUED" {
+            engine.deletePendingImport(localID: item.localId)
+            done(queuedStill)
+            return
+        }
+        stager.stagePairedVideo(localIdentifier: item.localId) { [engine, linkPairedVideo] result in
+            switch result {
+            case .none:
+                engine.deletePendingImport(localID: item.localId)
+                done(queuedStill)
+            case .failed:
+                NSLog("AppleCameraRollImportNotifier: staging the motion track of %@ failed; left pending", item.localId)
+                done(queuedStill)
+            case .staged(let staged):
+                let queueId = engine.enqueueStagedMedia(
+                    localPath: staged.path,
+                    filename: staged.filename,
+                    capturedAtUnix: item.capturedAtUnix,
+                    localID: videoID
+                )
+                guard queueId > 0 else {
+                    NSLog("AppleCameraRollImportNotifier: enqueue of the motion track of %@ failed; left pending", item.localId)
+                    done(queuedStill)
+                    return
+                }
                 linkPairedVideo(item.localId, videoID, item.filename, staged.filename)
+                engine.deletePendingImport(localID: item.localId)
+                done(true)
             }
         }
     }

@@ -92,6 +92,9 @@ public protocol PendingImportEngine: AnyObject, Sendable {
     func isImportSuppressed(localID: String) -> Bool
     /// Queues a staged file for upload; returns the queue row ID, 0 on failure.
     func enqueueStagedMedia(localPath: String, filename: String, capturedAtUnix: Int64, localID: String) -> Int64
+    /// The upload status of [localID]; "NOT_ENQUEUED" when the engine
+    /// doesn't know it.
+    func mediaStatus(localID: String) -> String
 }
 
 // MARK: - BranchDamCoreBridge
@@ -205,6 +208,10 @@ extension BranchDamCoreBridge: PendingImportEngine {
     public func enqueueStagedMedia(localPath: String, filename: String, capturedAtUnix: Int64, localID: String) -> Int64 {
         enqueueMedia(localPath: localPath, filename: filename, capturedAtUnix: capturedAtUnix, localID: localID)
     }
+
+    public func mediaStatus(localID: String) -> String {
+        getMediaStatus(localID: localID)
+    }
 }
 
 #if !canImport(branchdam)
@@ -219,7 +226,18 @@ final class MockPendingImports: @unchecked Sendable {
     func stage(_ item: PendingImportItem) -> PendingImportStageResult {
         lock.lock(); defer { lock.unlock() }
         if suppressed.contains(item.localId) { return .suppressed }
-        pending[item.localId] = item
+        // Like the core: the staging time is stamped here (and kept on a
+        // re-stage), whatever the caller passed.
+        let createdAt = pending[item.localId]?.createdAtUnix ?? Int64(Date().timeIntervalSince1970)
+        pending[item.localId] = PendingImportItem(
+            localId: item.localId,
+            localPath: item.localPath,
+            filename: item.filename,
+            mimeType: item.mimeType,
+            sizeBytes: item.sizeBytes,
+            capturedAtUnix: item.capturedAtUnix,
+            createdAtUnix: createdAt
+        )
         return .staged
     }
 
