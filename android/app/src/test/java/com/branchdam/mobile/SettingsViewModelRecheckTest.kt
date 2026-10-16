@@ -57,6 +57,11 @@ class SettingsViewModelRecheckTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         SettingsViewModel.testIoDispatcher = testDispatcher
+        // Robolectric has no Android Keystore: stand in a plain prefs
+        // file for the secure store so connect() can save the key.
+        SettingsViewModel.securePrefsProvider = {
+            it.getSharedPreferences("test_secure_prefs", android.content.Context.MODE_PRIVATE)
+        }
         // WorkManager is initialised in the SettingsViewModel branch
         // via syncOnMobileData reads — install a synchronous
         // WorkManager so the constructor doesn't crash.
@@ -76,6 +81,7 @@ class SettingsViewModelRecheckTest {
         SettingsViewModel.testConnectionFn = { com.branchdam.mobile.EngineHolder.testConnection() }
         SettingsViewModel.reachabilityTimeoutMs = 5_000L
         SettingsViewModel.testIoDispatcher = Dispatchers.IO
+        SettingsViewModel.securePrefsProvider = { com.branchdam.mobile.EncryptedPrefs.get(it) }
         SettingsViewModel.engineInit = { _, _, _, _, _, _ ->
             com.branchdam.mobile.EngineHolder.initialize(
                 dbPath = "",
@@ -285,5 +291,39 @@ class SettingsViewModelRecheckTest {
         // Re-checking a folder after all were unchecked strips sentinel and includes only the re-checked folder
         viewModel.toggleFolderIncluded("Camera", availableFolders)
         assertEquals(setOf("Camera"), viewModel.includedFolders.value)
+    }
+
+    @Test
+    fun testApplyPairingConfig_withoutKeyStorageDoesNotConnect() = runTest(testDispatcher) {
+        // With no Keystore the key can't be stored, so connect() must
+        // refuse instead of initialising the engine with a key that
+        // background sync could never read back.
+        SettingsViewModel.securePrefsProvider = { null }
+        var engineInitCalls = 0
+        SettingsViewModel.engineInit = { _, _, _, _, _, _ ->
+            engineInitCalls++
+            true
+        }
+        SettingsViewModel.testConnectionFn = { true }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        val baseline = engineInitCalls
+
+        viewModel.applyPairingConfig(
+            PairingConfig(
+                serverUrl = "https://branchdam.example.com",
+                apiKey = "test-key",  // pragma: allowlist secret
+                agentId = "test-agent",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("engineInit must not run without key storage", baseline, engineInitCalls)
+        assertFalse(viewModel.isConnected.value)
+        assertTrue(
+            "the refusal must be explained",
+            viewModel.connectionError.value != null,
+        )
     }
 }

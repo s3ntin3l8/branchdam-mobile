@@ -1,6 +1,7 @@
 package branchdam
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -175,7 +176,8 @@ func TestIsHostInCleartextAllowlist(t *testing.T) {
 		{"attacker.example.com", []string{"localhost", "10.0.2.2"}, false},
 		{"localhost", nil, false},
 		{"localhost", []string{}, false},
-		{"LOCALHOST", []string{"localhost"}, false},
+		// Host names are case-insensitive, as UrlValidator treats them.
+		{"LOCALHOST", []string{"localhost"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {
@@ -215,5 +217,22 @@ func TestIsMediaOffloaded_FailClosedOnDBError(t *testing.T) {
 	}
 	if be.Code != "DB_ERROR" {
 		t.Fatalf("Code = %q, want %q", be.Code, "DB_ERROR")
+	}
+}
+
+// TestBindingOpenReleaseRefusesCleartext: the release shells pass no
+// cleartext hosts, so an http:// server URL is refused even on a LAN
+// address; only https opens.
+func TestBindingOpenReleaseRefusesCleartext(t *testing.T) {
+	defer BindingClose()
+	for _, u := range []string{"http://192.168.1.100:8080", "http://10.0.2.2:8080", "http://localhost:8080"} {
+		err := BindingOpen(filepath.Join(t.TempDir(), "engine.db"), u, "key", "agent", "test", "")
+		var be *Error
+		if !errors.As(err, &be) || be.Code != CodeInvalidInput {
+			t.Errorf("BindingOpen(%s) with no cleartext hosts: err = %v, want INVALID_INPUT", u, err)
+		}
+	}
+	if err := BindingOpen(filepath.Join(t.TempDir(), "engine.db"), "https://dam.example.com", "key", "agent", "test", ""); err != nil {
+		t.Fatalf("BindingOpen(https): %v", err)
 	}
 }

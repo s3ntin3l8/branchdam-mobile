@@ -141,8 +141,50 @@ To pair the mobile app with your branchDAM server:
 3. In the mobile app, tap **Scan Pairing QR** or point the camera at the code.
 4. The QR code encodes a secure `branchdam://` payload:
    ```
-   branchdam://?server=http://192.168.1.100:8080&key=<API_KEY>&agent=pixel-10-fold
+   branchdam://?server=https://dam.example.com&key=<API_KEY>&agent=pixel-10-fold
    ```
+   Release builds only accept an `https://` server URL (see below). Debug
+   builds of the Android app also accept `http://` for the emulator loopback
+   (`10.0.2.2`), `localhost`, `127.0.0.1` and `192.168.1.100`, and nothing
+   else.
+
+#### HTTPS on a home network
+Both apps send the API key with every request, so they only talk to the server
+over HTTPS (TLS 1.2 or newer). A release build refuses an `http://` server URL,
+LAN addresses included: the Android network security config permits no
+cleartext traffic, and the Go sync engine refuses `http://` itself on both
+platforms. To run branchDAM on a LAN:
+
+1. **Use a publicly trusted certificate (recommended, works on both
+   platforms).** Give the server a DNS name you control, for example
+   `dam.example.com`, and point it at the server's LAN address (a record in
+   your router's or Pi-hole's local DNS is enough). Get a Let's Encrypt
+   certificate for it with the **DNS-01** challenge, which does not need the
+   server to be reachable from the internet. A reverse proxy such as Caddy or
+   Traefik can do this for you and forward to branchDAM on `:8080`. On a
+   Tailscale network, `tailscale cert` gives a trusted certificate for the
+   machine's `*.ts.net` name the same way.
+2. **Private CA or self-signed certificate:**
+   - **iOS:** works. The engine verifies through the iOS trust store, so
+     install your CA certificate as a profile, then turn it on under
+     Settings > General > About > Certificate Trust Settings.
+   - **Android:** not supported. The sync engine verifies against the
+     system CA store only; it can't read CAs installed under Settings >
+     Security > Encryption & credentials. Use option 1.
+3. Pair with the `https://` address: the server URL inside the pairing QR is
+   what the app connects to, so it must be the name on the certificate, not
+   the bare IP.
+
+Pinning the server's certificate through the pairing QR (which would let a
+self-signed server work on Android) is not implemented.
+
+#### API key storage
+The API key is kept only in encrypted storage: the iOS Keychain, and on
+Android `EncryptedSharedPreferences` backed by the Android Keystore. If the
+Android Keystore is unavailable on a device, the app refuses to save the key
+and says so on the Connection screen; it never falls back to storing the key
+unencrypted, and it deletes a plaintext key an older release may have left
+behind.
 
 ### 2. Ingest Architecture & Protocol
 - **Handshake (`POST /api/v1/agent/handshake`)**:

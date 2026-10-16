@@ -20,11 +20,11 @@ import androidx.security.crypto.MasterKey
  *
  * The Keystore initialization can fail on devices with broken or
  * missing Keystore support (rare, mostly emulators). In that case
- * the helper logs an error and returns null; the call site is
- * expected to fall back to plain SharedPreferences. Falling back is
- * a security regression but lets the app start on a broken device
- * rather than crash on launch — the F plan calls this out as an
- * acceptable trade-off.
+ * the helper logs an error and returns null. The app still starts,
+ * but the API key is then neither stored nor read: there is no
+ * plaintext fallback for it (see [ConnectionSettingsStore]); the
+ * connection screen tells the user why. Only the non-secret server
+ * URL and agent ID are kept in plain SharedPreferences.
  */
 object EncryptedPrefs {
 

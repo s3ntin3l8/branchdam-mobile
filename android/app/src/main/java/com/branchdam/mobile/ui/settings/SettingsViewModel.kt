@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.branchdam.mobile.BranchDamApplication
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.BuildConfig
+import com.branchdam.mobile.ConnectionSettingsStore
 import com.branchdam.mobile.EncryptedPrefs
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.UrlValidator
@@ -48,10 +49,15 @@ typealias TestConnectionDetailedFn = suspend () -> String?
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val prefs: SharedPreferences = resolvePrefs(application)
+    /**
+     * The Keystore-backed prefs that hold the API key, or null when the
+     * Keystore is unavailable. There is deliberately no plaintext
+     * fallback: see [ConnectionSettingsStore].
+     */
+    private val securePrefs: SharedPreferences? = securePrefsProvider(application)
     private val nonSecretPrefs: SharedPreferences = application.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val initialConfig = BranchDamApplication.readEngineConfig(prefs)
+    private val initialConfig = BranchDamApplication.readSecureEngineConfig(application)
 
     private val _serverUrl = MutableStateFlow(initialConfig.serverUrl)
     val serverUrl: StateFlow<String> = _serverUrl.asStateFlow()
@@ -122,6 +128,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _urlError = MutableStateFlow<String?>(null)
     val urlError: StateFlow<String?> = _urlError.asStateFlow()
+
+    /**
+     * Non-null when the API key can't be stored on this device (the
+     * Android Keystore is unavailable). The connection screen shows it
+     * next to the API key field.
+     */
+    private val _keyStorageError = MutableStateFlow(
+        if (securePrefs == null) ConnectionSettingsStore.KEY_STORAGE_UNAVAILABLE_MESSAGE else null,
+    )
+    val keyStorageError: StateFlow<String?> = _keyStorageError.asStateFlow()
 
     init {
         // Cold-start refresh. The SettingsScreen also re-fires this
@@ -272,7 +288,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _isConnecting.value = true
         _connectionError.value = null
         viewModelScope.launch(testIoDispatcher) {
-            persistSettings()
+            val saved = persistSettings()
+            if (saved != ConnectionSettingsStore.SaveResult.SAVED) {
+                // Refuse to connect with a key that isn't stored: the
+                // background sync reads it from secure storage and would
+                // fail later with no explanation.
+                _isConnected.value = false
+                _isConnecting.value = false
+                _connectionError.value = ConnectionSettingsStore.messageFor(saved)
+                return@launch
+            }
             val context = getApplication<Application>()
             val dbPath = defaultEngineDbPath(context.filesDir)
             val devHosts = UrlValidator.cleartextHostsCsv(BuildConfig.DEBUG)
@@ -353,21 +378,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun persistSettings() {
-        prefs.edit()
-            .putString(BranchDamApplication.KEY_SERVER_URL, _serverUrl.value)
-            .putString(BranchDamApplication.KEY_API_KEY, _apiKey.value)
-            .putString(BranchDamApplication.KEY_AGENT_ID, _agentId.value)
-            .apply()
-
-        nonSecretPrefs.edit()
-            .putString(BranchDamApplication.KEY_SERVER_URL, _serverUrl.value)
-            .putString(BranchDamApplication.KEY_AGENT_ID, _agentId.value)
-            .apply()
-    }
+    private fun persistSettings(): ConnectionSettingsStore.SaveResult =
+        ConnectionSettingsStore.save(
+            secure = securePrefs,
+            plain = nonSecretPrefs,
+            serverUrl = _serverUrl.value,
+            apiKey = _apiKey.value,
+            agentId = _agentId.value,
+        )
 
     companion object {
         const val NO_FOLDERS_SENTINEL = "__NONE__"
+
+        /**
+         * Test seam for the Keystore-backed prefs. Defaults to
+         * [EncryptedPrefs.get]; Robolectric has no Android Keystore, so
+         * tests that need a stored key pass plain prefs here.
+         */
+        @androidx.annotation.VisibleForTesting
+        var securePrefsProvider: (Application) -> SharedPreferences? = { EncryptedPrefs.get(it) }
 
         /**
          * Default upper bound on the time `checkConnection` will wait
@@ -429,11 +458,5 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             return null
         }
 
-        private fun resolvePrefs(application: Application): SharedPreferences =
-            EncryptedPrefs.get(application)
-                ?: application.getSharedPreferences(
-                    BranchDamApplication.PREFS_NAME,
-                    Context.MODE_PRIVATE,
-                )
     }
 }
