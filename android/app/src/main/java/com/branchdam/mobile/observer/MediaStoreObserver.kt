@@ -11,10 +11,11 @@ import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.lineage.EditCorrelator
 import com.branchdam.mobile.lineage.MotionPhotoExtractor
 import com.branchdam.mobile.lineage.PairDetector
+import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncScheduler
+import com.branchdam.mobile.triage.ProcessedTrashStore
 import com.branchdam.mobile.triage.TrashSyncObserver
 import java.io.File
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -43,19 +44,15 @@ class MediaStoreObserver(
     )
 
     /**
-     * Tracks content URIs of trashed items already processed. Prevents
-     * re-enqueueing EVENT_NODE_DELETED for items lingering in the Android 11+
-     * recycle bin (up to 30 days) across successive onChange callbacks.
-     *
-     * Wrapped in [Collections.synchronizedSet] because the set is now
-     * mutated on [Dispatchers.IO] (inside the debounced scan coroutine)
-     * rather than the HandlerThread; the wrapper publishes writes
-     * across worker-thread switches via its intrinsic lock so the
-     * single-in-flight Debouncer's serial access pattern remains
-     * race-free even when Dispatchers.IO re-pools the worker thread
-     * between runs.
+     * Content URIs of trashed items whose delete event was already
+     * handled. Prevents re-enqueueing EVENT_NODE_DELETED for items
+     * lingering in the Android 11+ recycle bin (up to 30 days) across
+     * successive onChange callbacks and across process restarts: the
+     * set is persisted in SharedPreferences (it used to live in memory,
+     * so every app start re-sent a delete for everything in the bin).
+     * Only touched from the single-in-flight debounced scan.
      */
-    private val processedTrashedUris = Collections.synchronizedSet(mutableSetOf<String>())
+    private val processedTrash = ProcessedTrashStore(prefs)
 
     /**
      * Bounded to [Dispatchers.IO] so the ContentProvider queries and
@@ -135,17 +132,21 @@ class MediaStoreObserver(
         scanAndEnqueueNewMedia()
 
         // D.4: Trash sync -- MATCH_ONLY returns all items in the 30-day
-        // recycle bin. The in-memory processedTrashedUris set prevents
-        // re-enqueueing delete events across successive onChange calls.
-        val deletedCount = TrashSyncObserver.processTrashedItems(context, processedTrashedUris)
+        // recycle bin (images and videos). The persisted processedTrash
+        // set prevents re-enqueueing delete events across onChange calls
+        // and app restarts.
+        val deletedCount = TrashSyncObserver.processTrashedItems(context, processedTrash)
         if (deletedCount > 0) {
             SyncScheduler.triggerImmediateSync(context)
         }
     }
 
     /**
-     * Queries MediaStore for recent images and videos, enqueues new
-     * items via [EngineHolder], and runs the lineage pipeline. Runs on
+     * Queries MediaStore for recent images and videos and records each
+     * new item's intent -- an upload-queue row (auto-import) or a
+     * pending_import row awaiting the user's answer -- BEFORE the scan
+     * cursor moves past it (see [NewMediaIntake]). Items the user skipped
+     * are not offered again. Then runs the lineage pipeline. Runs on
      * [Dispatchers.IO] because the caller's [scope] is bounded there.
      */
     private suspend fun scanAndEnqueueNewMedia() {
@@ -153,45 +154,60 @@ class MediaStoreObserver(
         val images = MediaScanner.queryRecentImages(context, minDateTakenUnix = minTimestamp * 1000L)
         val videos = MediaScanner.queryRecentVideos(context, minDateTakenUnix = minTimestamp * 1000L)
 
-        val allMedia = (images + videos).sortedBy { it.dateTakenUnix }
-        val newItems = mutableListOf<MediaItem>()
+        val autoImport = ImportConfirmationNotifier.getAutoImportEnabled(context)
+        val result = NewMediaIntake.commit(
+            startCursor = minTimestamp,
+            scanned = images + videos,
+            persist = { item -> persistIntent(item, autoImport) },
+            saveCursor = { cursor ->
+                lastScannedTimestamp.set(cursor)
+                prefs.edit().putLong(BranchDamKeys.OBSERVER_LAST_SCANNED_TIMESTAMP, cursor).apply()
+            },
+        )
 
-        var maxTimestamp = minTimestamp
-        for (item in allMedia) {
-            if (item.filePath.isNotEmpty() && !com.branchdam.mobile.service.ImportConfirmationNotifier.isItemSuppressed(item.contentUri)) {
-                newItems.add(item)
-                if (item.dateTakenUnix > maxTimestamp) {
-                    maxTimestamp = item.dateTakenUnix
-                }
-            }
+        if (result.enqueued.isNotEmpty()) {
+            SyncScheduler.triggerImmediateSync(context)
+        }
+        if (result.staged.isNotEmpty()) {
+            // Announce everything still awaiting an answer, including
+            // items staged before a process death.
+            ImportConfirmationNotifier.showImportConfirmation(
+                context = context,
+                pendingCount = EngineHolder.listPendingImports()?.size ?: result.staged.size,
+            )
         }
 
+        // D.3: Lineage pipeline runs for BOTH auto-import and
+        // confirmation-based import. Confirmation-accepted items are
+        // enqueued later by the notification action, but lineage edges
+        // between the items in this batch are still valid and should
+        // be recorded now (the engine deduplicates by local ID).
+        val newItems = result.enqueued + result.staged
         if (newItems.isNotEmpty()) {
-            lastScannedTimestamp.set(maxTimestamp)
-            prefs.edit().putLong(BranchDamKeys.OBSERVER_LAST_SCANNED_TIMESTAMP, maxTimestamp).apply()
-
-            val autoImport = com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)
-            if (autoImport) {
-                for (item in newItems) {
-                    // Reads the original (unredacted) bytes on API 29+.
-                    UploadStaging.enqueue(context, item)
-                }
-                SyncScheduler.triggerImmediateSync(context)
-            } else {
-                com.branchdam.mobile.service.ImportConfirmationNotifier.stagePendingItems(newItems)
-                com.branchdam.mobile.service.ImportConfirmationNotifier.showImportConfirmation(
-                    context = context,
-                    newItemCount = newItems.size,
-                    itemIds = newItems.map { it.contentUri }.toTypedArray()
-                )
-            }
-
-            // D.3: Lineage pipeline runs for BOTH auto-import and
-            // confirmation-based import. Confirmation-accepted items are
-            // enqueued later by the notification action, but lineage edges
-            // between the items in this batch are still valid and should
-            // be recorded now (the engine deduplicates by local ID).
             runLineageDetection(newItems)
+        }
+    }
+
+    /**
+     * Records the intent for one scanned item. Auto-import queues it for
+     * upload; if that fails (e.g. the file can't be read right now) the
+     * item is staged as a pending import instead, so it is neither lost
+     * nor allowed to stall the cursor. Without auto-import it is staged
+     * for the confirmation notification.
+     */
+    private fun persistIntent(item: MediaItem, autoImport: Boolean): NewMediaIntake.Outcome {
+        if (autoImport) {
+            if (ImportConfirmationNotifier.isItemSuppressed(item.contentUri)) {
+                return NewMediaIntake.Outcome.ALREADY_DECIDED
+            }
+            // Reads the original (unredacted) bytes on API 29+.
+            val queueId = UploadStaging.enqueue(context, item)
+            if (queueId > 0L) return NewMediaIntake.Outcome.ENQUEUED
+        }
+        return when (ImportConfirmationNotifier.stagePendingItem(item)) {
+            EngineHolder.StageResult.STAGED -> NewMediaIntake.Outcome.STAGED
+            EngineHolder.StageResult.SUPPRESSED -> NewMediaIntake.Outcome.ALREADY_DECIDED
+            EngineHolder.StageResult.FAILED -> NewMediaIntake.Outcome.FAILED
         }
     }
 
@@ -231,7 +247,7 @@ class MediaStoreObserver(
                 val videoFile = File(motionPhotoDir, videoFilename)
 
                 val extracted = MotionPhotoExtractor.extractMicroVideo(context, uri, videoFile)
-                if (extracted && com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)) {
+                if (extracted && ImportConfirmationNotifier.getAutoImportEnabled(context)) {
                     val queueId = EngineHolder.enqueueMedia(
                         localPath = videoFile.absolutePath,
                         filename = videoFilename,

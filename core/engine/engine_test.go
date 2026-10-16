@@ -479,6 +479,82 @@ func TestSyncUploads_DedupNoNodeUUID_HardFailure(t *testing.T) {
 	}
 }
 
+// TestSyncUploads_Conflict409_RecordsNodeUUIDOnLocalMedia: when the upload
+// itself is answered with the server's 409 dedup (the check-content
+// pre-screen missed), the local media row must learn the existing node's
+// UUID just as it does on the pre-screen and 201 paths. Without it the
+// item's lineage events and Safe Space reclaim can never resolve a node.
+func TestSyncUploads_Conflict409_RecordsNodeUUIDOnLocalMedia(t *testing.T) {
+	tempDir := t.TempDir()
+	q, err := queue.Open(filepath.Join(tempDir, "engine_409_node_test.db"))
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/agent/upload" {
+			_, _ = io.ReadAll(r.Body)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(client.UploadResponse{
+				NodeUUID: "existing-node-409",
+				FilePath: "/storage/archive/PXL_409.dng",
+			})
+			return
+		}
+		// check-content (and anything else) misses, so the item is
+		// streamed and the dedup answer comes from the upload itself.
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "k", AgentID: "a"})
+	eng := New(q, c)
+
+	testFilePath := filepath.Join(tempDir, "PXL_409.dng")
+	if err := os.WriteFile(testFilePath, []byte("409 dedup bytes"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	const localID = "content://media/external/images/media/409"
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_409.dng", 1724000000, localID, "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+
+	before, err := q.GetMediaByLocalID(localID)
+	if err != nil {
+		t.Fatalf("GetMediaByLocalID before sync: %v", err)
+	}
+	if before.NodeUUID != "" {
+		t.Fatalf("precondition: local media row already has node %q", before.NodeUUID)
+	}
+
+	completed, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("SyncUploads: %v", err)
+	}
+	if completed != 1 {
+		t.Fatalf("expected the 409 dedup to complete the item, got %d completed", completed)
+	}
+
+	up, err := q.GetUploadItemByBlake3Hash(item.Blake3Hash)
+	if err != nil || up == nil {
+		t.Fatalf("GetUploadItemByBlake3Hash: %v", err)
+	}
+	if up.Status != queue.UploadCompleted || up.NodeUUID != "existing-node-409" {
+		t.Fatalf("upload row after 409 dedup: %+v", up)
+	}
+
+	after, err := q.GetMediaByLocalID(localID)
+	if err != nil {
+		t.Fatalf("GetMediaByLocalID after sync: %v", err)
+	}
+	if after.NodeUUID != "existing-node-409" {
+		t.Fatalf("local media row node = %q, want existing-node-409 (409 dedup must record it)", after.NodeUUID)
+	}
+}
+
 // TestSafeSpaceReclaim_Ineligible: B.2.7 — the engine-owned atomic
 // reclaim must NOT mark the asset offloaded when the server says the
 // node isn't verified+TIER3/2. The audit's invariant is "set the flag

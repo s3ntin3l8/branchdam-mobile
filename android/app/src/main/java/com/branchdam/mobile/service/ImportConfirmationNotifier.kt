@@ -9,11 +9,19 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.PendingImport
 import com.branchdam.mobile.observer.MediaItem
+import com.branchdam.mobile.observer.UploadStaging
 import com.branchdam.mobile.receiver.ImportConfirmationReceiver
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * The "new photos detected" confirmation flow for when auto-import is off.
+ *
+ * Items awaiting the user's answer, and the items the user skipped, live
+ * in the core's pending_import table (via [EngineHolder]), not in memory:
+ * "Import now" tapped after the process was killed still finds them, and
+ * a skipped item is not offered again on a later scan or after a restart.
+ */
 object ImportConfirmationNotifier {
 
     const val CHANNEL_ID = "branchdam_import_channel"
@@ -25,10 +33,15 @@ object ImportConfirmationNotifier {
     const val ACTION_SKIP = "com.branchdam.mobile.action.SKIP"
 
     const val EXTRA_ITEM_COUNT = "extra_item_count"
-    const val EXTRA_ITEM_IDS = "extra_item_ids"
 
-    private val suppressedIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-    private val pendingItemsMap = ConcurrentHashMap<String, MediaItem>()
+    /**
+     * Seconds since the epoch at which the notification was posted. An
+     * action applies to the pending items staged by then, so "Skip" never
+     * suppresses a photo the user was not shown. (Item IDs are not put in
+     * the intent: thousands of content URIs could exceed the binder
+     * transaction limit.)
+     */
+    const val EXTRA_STAGED_BEFORE_UNIX = "extra_staged_before_unix"
 
     fun getAutoImportEnabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences(SyncScheduler.PREFS_NAME, Context.MODE_PRIVATE)
@@ -40,35 +53,29 @@ object ImportConfirmationNotifier {
         prefs.edit().putBoolean(KEY_AUTO_IMPORT, enabled).apply()
     }
 
-    fun isItemSuppressed(localId: String): Boolean {
-        return suppressedIds.contains(localId)
-    }
+    /** Whether the user skipped [localId]. Blocking engine call. */
+    fun isItemSuppressed(localId: String): Boolean = EngineHolder.isImportSuppressed(localId)
 
-    fun suppressItem(localId: String) {
-        suppressedIds.add(localId)
-    }
+    /** Records that the user skipped [localId]. Blocking engine call. */
+    fun suppressItem(localId: String): Boolean = EngineHolder.suppressPendingImport(localId)
 
-    fun suppressItems(localIds: Collection<String>) {
-        suppressedIds.addAll(localIds)
-    }
+    /**
+     * Persists [item] as awaiting the user's decision. Returns
+     * [EngineHolder.StageResult.SUPPRESSED] (nothing staged) when the
+     * user already skipped it. Blocking engine call.
+     */
+    fun stagePendingItem(item: MediaItem): EngineHolder.StageResult =
+        EngineHolder.stagePendingImport(
+            localId = item.contentUri,
+            localPath = item.filePath,
+            filename = item.displayName,
+            mimeType = item.mimeType,
+            sizeBytes = item.sizeBytes,
+            capturedAtUnix = item.dateTakenUnix,
+        )
 
-    fun clearSuppressed() {
-        suppressedIds.clear()
-    }
-
-    fun stagePendingItems(items: List<MediaItem>) {
-        for (item in items) {
-            pendingItemsMap[item.contentUri] = item
-        }
-    }
-
-    fun getPendingItems(): List<MediaItem> {
-        return pendingItemsMap.values.toList()
-    }
-
-    fun clearPendingItems() {
-        pendingItemsMap.clear()
-    }
+    /** Items awaiting a decision; empty when they can't be read. */
+    fun getPendingItems(): List<PendingImport> = EngineHolder.listPendingImports() ?: emptyList()
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -83,42 +90,34 @@ object ImportConfirmationNotifier {
         }
     }
 
+    /**
+     * Posts (or replaces) the confirmation notification for the
+     * [pendingCount] items awaiting a decision.
+     */
     fun showImportConfirmation(
         context: Context,
-        newItemCount: Int,
-        itemIds: Array<String> = emptyArray()
+        pendingCount: Int,
+        stagedBeforeUnix: Long = System.currentTimeMillis() / 1000L,
     ) {
+        if (pendingCount <= 0) return
         createNotificationChannel(context)
 
-        val allStagedIds = (itemIds.toList() + pendingItemsMap.keys).distinct().toTypedArray()
-        val totalCount = if (allStagedIds.isNotEmpty()) allStagedIds.size else newItemCount
-
-        val importIntent = Intent(context, ImportConfirmationReceiver::class.java).apply {
-            action = ACTION_IMPORT_NOW
-            putExtra(EXTRA_ITEM_COUNT, totalCount)
-            putExtra(EXTRA_ITEM_IDS, allStagedIds)
-        }
-        val laterIntent = Intent(context, ImportConfirmationReceiver::class.java).apply {
-            action = ACTION_LATER
-            putExtra(EXTRA_ITEM_COUNT, totalCount)
-            putExtra(EXTRA_ITEM_IDS, allStagedIds)
-        }
-        val skipIntent = Intent(context, ImportConfirmationReceiver::class.java).apply {
-            action = ACTION_SKIP
-            putExtra(EXTRA_ITEM_COUNT, totalCount)
-            putExtra(EXTRA_ITEM_IDS, allStagedIds)
+        fun actionIntent(action: String) = Intent(context, ImportConfirmationReceiver::class.java).apply {
+            this.action = action
+            putExtra(EXTRA_ITEM_COUNT, pendingCount)
+            putExtra(EXTRA_STAGED_BEFORE_UNIX, stagedBeforeUnix)
         }
 
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
-        val importPending = PendingIntent.getBroadcast(context, 101, importIntent, flags)
-        val laterPending = PendingIntent.getBroadcast(context, 102, laterIntent, flags)
-        val skipPending = PendingIntent.getBroadcast(context, 103, skipIntent, flags)
+        val importPending = PendingIntent.getBroadcast(context, 101, actionIntent(ACTION_IMPORT_NOW), flags)
+        val laterPending = PendingIntent.getBroadcast(context, 102, actionIntent(ACTION_LATER), flags)
+        val skipPending = PendingIntent.getBroadcast(context, 103, actionIntent(ACTION_SKIP), flags)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("New Photos Detected")
-            .setContentText("$totalCount new photo(s) ready to import to branchDAM")
+            .setContentText("$pendingCount new photo(s) ready to import to branchDAM")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .addAction(android.R.drawable.ic_menu_upload, "Import now", importPending)
@@ -130,58 +129,91 @@ object ImportConfirmationNotifier {
     }
 
     /**
-     * Enqueues a confirmed item, reading its original bytes on API 29+
-     * (see [com.branchdam.mobile.observer.UploadStaging]). Without a
-     * Context (unit tests) the DATA path is used as before.
+     * Applies a notification action to the pending items staged at or
+     * before [stagedBeforeUnix]. Blocking engine calls: run it off the
+     * main thread (see [ImportConfirmationReceiver]).
+     *
+     * - Import now / Later: queue each item for upload and forget its
+     *   pending row once queued (a row whose enqueue failed stays
+     *   pending). Import now syncs at once; Later leaves it to the
+     *   periodic sync.
+     * - Skip: suppress each item so no later scan offers it again.
+     *
+     * Returns false, leaving the notification in place, when the pending
+     * items can't be read (the engine isn't open yet).
      */
-    private fun enqueueItem(context: Context?, item: MediaItem) {
-        if (context != null) {
-            com.branchdam.mobile.observer.UploadStaging.enqueue(context, item)
-        } else {
-            EngineHolder.enqueueMedia(
-                localPath = item.filePath,
-                filename = item.displayName,
-                capturedAtUnix = item.dateTakenUnix,
-                localId = item.contentUri
-            )
-        }
-    }
+    fun handleAction(
+        context: Context?,
+        action: String?,
+        stagedBeforeUnix: Long = Long.MAX_VALUE,
+    ): Boolean {
+        val pending = EngineHolder.listPendingImports() ?: return false
+        val targets = pending.filter { it.createdAtUnix <= stagedBeforeUnix }
 
-    fun handleAction(context: Context?, action: String?, itemIds: Array<String> = emptyArray()) {
         val notificationManager = context?.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.cancel(NOTIFICATION_ID)
 
-        val targetIds = if (itemIds.isNotEmpty()) itemIds.toSet() else pendingItemsMap.keys
-
         when (action) {
             ACTION_IMPORT_NOW -> {
-                for (id in targetIds) {
-                    val item = pendingItemsMap.remove(id)
-                    if (item != null && !isItemSuppressed(id)) {
-                        enqueueItem(context, item)
-                    }
-                }
-                if (context != null) {
+                if (importItems(context, targets) > 0 && context != null) {
                     SyncScheduler.triggerImmediateSync(context)
                 }
             }
             ACTION_LATER -> {
-                for (id in targetIds) {
-                    val item = pendingItemsMap.remove(id)
-                    if (item != null && !isItemSuppressed(id)) {
-                        enqueueItem(context, item)
-                    }
-                }
+                importItems(context, targets)
                 if (context != null) {
                     SyncScheduler.schedulePeriodicSync(context)
                 }
             }
             ACTION_SKIP -> {
-                suppressItems(targetIds)
-                for (id in targetIds) {
-                    pendingItemsMap.remove(id)
+                for (item in targets) {
+                    suppressItem(item.localId)
                 }
             }
         }
+        return true
+    }
+
+    /**
+     * Queues [items] for upload; returns how many were queued. With a
+     * Context each item goes through [UploadStaging], which reads its
+     * original (unredacted) bytes on API 29+, as auto-import does.
+     * Without one (unit tests) the recorded DATA path is enqueued.
+     */
+    private fun importItems(context: Context?, items: List<PendingImport>): Int {
+        var queued = 0
+        for (item in items) {
+            val queueId = if (context != null) {
+                UploadStaging.enqueue(context, item.toMediaItem())
+            } else {
+                EngineHolder.enqueueMedia(
+                    localPath = item.localPath,
+                    filename = item.filename,
+                    capturedAtUnix = item.capturedAtUnix,
+                    localId = item.localId,
+                )
+            }
+            if (queueId > 0L) {
+                EngineHolder.deletePendingImport(item.localId)
+                queued++
+            }
+        }
+        return queued
     }
 }
+
+/**
+ * Rebuilds the [MediaItem] [UploadStaging] needs from a persisted pending
+ * import. The MediaStore row ID is the content URI's last segment (it
+ * names the staged copy); the other fields were recorded at staging.
+ */
+internal fun PendingImport.toMediaItem(): MediaItem = MediaItem(
+    id = localId.substringAfterLast('/').toLongOrNull() ?: 0L,
+    contentUri = localId,
+    filePath = localPath,
+    displayName = filename,
+    mimeType = mimeType,
+    sizeBytes = sizeBytes,
+    dateTakenUnix = capturedAtUnix,
+    isRaw = filename.endsWith(".dng", ignoreCase = true) || mimeType == "image/x-adobe-dng",
+)

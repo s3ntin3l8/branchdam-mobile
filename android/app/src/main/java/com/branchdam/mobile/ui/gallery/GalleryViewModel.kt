@@ -365,16 +365,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun uploadItem(context: Context, mediaItem: MediaItem, onComplete: (Boolean) -> Unit) {
-        if (EngineHolder.isMediaOffloaded(mediaItem.contentUri)) {
-            onComplete(false)
-            return
-        }
-
         val galleryItem = _items.value.find { it.primaryMediaItem.id == mediaItem.id || it.companionMediaItem?.id == mediaItem.id }
         val primary = galleryItem?.primaryMediaItem ?: mediaItem
         val companion = galleryItem?.companionMediaItem
 
         viewModelScope.launch(ioDispatcher) {
+            // The offload lookup is a blocking engine call: keep it off
+            // the main thread, on the same dispatcher as the enqueue.
+            if (EngineHolder.isMediaOffloaded(mediaItem.contentUri)) {
+                withContext(Dispatchers.Main) { onComplete(false) }
+                return@launch
+            }
             val primaryId = UploadStaging.enqueue(context, primary)
             var companionId = 0L
             if (companion != null) {

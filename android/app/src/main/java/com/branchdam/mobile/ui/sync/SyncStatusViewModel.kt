@@ -3,13 +3,13 @@ package com.branchdam.mobile.ui.sync
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.branchdam.mobile.ActiveUploadProgress
 import com.branchdam.mobile.BranchDamKeys
+import com.branchdam.mobile.CoreErrorCodes
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.coreErrorCode
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.service.SyncWorker
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +31,15 @@ data class SyncStatusUiState(
     val workerState: String = "Idle",
     val pendingUploadsCount: Long = 0L,
     val activeUploadProgress: ActiveUploadProgress? = null,
+    /**
+     * The last sync was refused because the server rejected this
+     * device's credentials (core AUTH_FAILED): the user must re-pair.
+     */
+    val needsRepair: Boolean = false,
 )
+
+/** Shown instead of a generic failure when the device must be re-paired. */
+const val REPAIR_REQUIRED_MESSAGE = "Device not authorised — re-pair it in Settings"
 
 typealias TestConnectionFn = suspend () -> Boolean
 typealias TestConnectionDetailedFn = suspend () -> String?
@@ -84,33 +92,29 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             workManager.getWorkInfosForUniqueWorkFlow(SyncScheduler.IMMEDIATE_WORK_TAG).collect { infos ->
                 val latest = infos.maxByOrNull { it.runAttemptCount }
-                val state = latest?.state
-                val isSyncing = state == WorkInfo.State.ENQUEUED || state == WorkInfo.State.RUNNING
-                val workerState = when (state) {
-                    null -> if (EngineHolder.isInitialized()) "Idle" else "Engine not initialized"
-                    WorkInfo.State.ENQUEUED -> "Enqueued"
-                    WorkInfo.State.RUNNING -> "Running"
-                    WorkInfo.State.SUCCEEDED -> "Last sync succeeded"
-                    WorkInfo.State.FAILED -> "Failed (attempt ${latest.runAttemptCount}/${SyncWorker.MAX_ATTEMPTS})"
-                    WorkInfo.State.BLOCKED -> "Blocked"
-                    WorkInfo.State.CANCELLED -> "Cancelled"
-                }
-                val lastSyncTime = if (state == WorkInfo.State.SUCCEEDED) {
-                    System.currentTimeMillis()
-                } else {
-                    prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L)
-                }
-                if (state == WorkInfo.State.SUCCEEDED) {
-                    prefs.edit().putLong(BranchDamKeys.LAST_SYNC_TIME, lastSyncTime).apply()
-                }
-                val pendingUploads = EngineHolder.countPendingUploads()
+                val engineReady = EngineHolder.isInitialized()
+                // SyncWorker records the last sync time and the re-pair
+                // flag when a sync actually happens; this collector only
+                // reads them. (It used to stamp "now" whenever it saw a
+                // SUCCEEDED state, which WorkManager replays every time
+                // the screen opens.)
+                val snapshot = workerSnapshot(
+                    state = latest?.state,
+                    runAttemptCount = latest?.runAttemptCount ?: 0,
+                    lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
+                    authFailedAt = prefs.getLong(BranchDamKeys.SYNC_AUTH_FAILED_AT, 0L),
+                    engineReady = engineReady,
+                )
+                val isSyncing = snapshot.isSyncing
+                val pendingUploads = withContext(ioDispatcher) { EngineHolder.countPendingUploads() }
                 _uiState.update { current ->
                     current.copy(
-                        isConnected = EngineHolder.isInitialized(),
+                        isConnected = engineReady,
                         isSyncing = isSyncing,
-                        lastSyncTime = lastSyncTime,
-                        workerState = workerState,
+                        lastSyncTime = snapshot.lastSyncTime,
+                        workerState = snapshot.workerState,
                         pendingUploadsCount = pendingUploads,
+                        needsRepair = snapshot.needsRepair,
                     )
                 }
                 if (isSyncing) {
@@ -135,6 +139,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                 } ?: "Server unreachable"
 
                 when {
+                    coreErrorCode(rawError) == CoreErrorCodes.AUTH_FAILED -> REPAIR_REQUIRED_MESSAGE
                     rawError.contains("401") -> "Authentication Failed (HTTP 401) — Check API Key in Settings"
                     rawError.contains("403") -> "Access Denied (HTTP 403) — Forbidden by server"
                     rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
@@ -156,24 +161,74 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     fun refresh() {
         checkConnection()
         pollActiveUploadProgress()
-        val pendingUploads = EngineHolder.countPendingUploads()
-        _uiState.update { current ->
-            current.copy(
-                isConnected = EngineHolder.isInitialized(),
-                lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
-                pendingUploadsCount = pendingUploads,
-            )
+        viewModelScope.launch {
+            val pendingUploads = withContext(ioDispatcher) { EngineHolder.countPendingUploads() }
+            _uiState.update { current ->
+                current.copy(
+                    isConnected = EngineHolder.isInitialized(),
+                    lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
+                    pendingUploadsCount = pendingUploads,
+                    needsRepair = prefs.getLong(BranchDamKeys.SYNC_AUTH_FAILED_AT, 0L) > 0L,
+                )
+            }
         }
     }
 
+    /**
+     * "Sync Now": retries FAILED uploads and starts an immediate sync
+     * through [SyncScheduler.triggerImmediateSync], so it honours the
+     * "sync on mobile data" setting (Wi-Fi only unless the user opted
+     * in) like every other immediate sync. It used to enqueue an
+     * unconstrained request that uploaded over cellular regardless.
+     */
     fun triggerSync() {
-        EngineHolder.resetFailedUploads()
-        pollActiveUploadProgress()
-        val request = OneTimeWorkRequestBuilder<SyncWorker>().build()
-        workManager.enqueueUniqueWork(SyncScheduler.IMMEDIATE_WORK_TAG, ExistingWorkPolicy.REPLACE, request)
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(ioDispatcher) { EngineHolder.resetFailedUploads() }
+            SyncScheduler.triggerImmediateSync(app)
+            pollActiveUploadProgress()
+        }
     }
 
+    /** What the worker-status card shows for one WorkInfo emission. */
+    internal data class WorkerSnapshot(
+        val isSyncing: Boolean,
+        val workerState: String,
+        val lastSyncTime: Long,
+        val needsRepair: Boolean,
+    )
+
     companion object {
+        /**
+         * Maps the immediate-sync WorkInfo and the persisted sync
+         * records to the status card. Pure: the last sync time is
+         * whatever SyncWorker persisted, whatever state is replayed.
+         */
+        internal fun workerSnapshot(
+            state: WorkInfo.State?,
+            runAttemptCount: Int,
+            lastSyncTime: Long,
+            authFailedAt: Long,
+            engineReady: Boolean,
+        ): WorkerSnapshot {
+            val isSyncing = state == WorkInfo.State.ENQUEUED || state == WorkInfo.State.RUNNING
+            val needsRepair = authFailedAt > 0L
+            val workerState = if (needsRepair && !isSyncing) {
+                REPAIR_REQUIRED_MESSAGE
+            } else {
+                when (state) {
+                    null -> if (engineReady) "Idle" else "Engine not initialized"
+                    WorkInfo.State.ENQUEUED -> "Enqueued"
+                    WorkInfo.State.RUNNING -> "Running"
+                    WorkInfo.State.SUCCEEDED -> "Last sync succeeded"
+                    WorkInfo.State.FAILED -> "Failed (attempt $runAttemptCount/${SyncWorker.MAX_ATTEMPTS})"
+                    WorkInfo.State.BLOCKED -> "Blocked"
+                    WorkInfo.State.CANCELLED -> "Cancelled"
+                }
+            }
+            return WorkerSnapshot(isSyncing, workerState, lastSyncTime, needsRepair)
+        }
+
         /**
          * Default upper bound on the time `checkConnection` will wait
          * for the server handshake before treating it as unreachable.

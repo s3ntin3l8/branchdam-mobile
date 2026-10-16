@@ -738,7 +738,18 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 		if dedupResp, ok := client.AsDedupResponse(uploadErr); ok {
 			slog.Info("engine: upload dedup — server returned existing node",
 				"existingUUID", dedupResp.NodeUUID, "localPath", item.LocalPath)
-			_ = e.q.MarkUploadComplete(item.ID, dedupResp.NodeUUID)
+			if err := e.q.MarkUploadComplete(item.ID, dedupResp.NodeUUID); err != nil {
+				// Same as the success path below: hand the row back so
+				// the next sync asks again instead of stranding it.
+				e.releaseUploads([]*queue.UploadItem{item})
+				return uploadFailed, err
+			}
+			// Record the node on the local media row exactly as the
+			// pre-screen and success paths do; without it lineage events
+			// and Safe Space reclaim can't resolve this item's node.
+			if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, dedupResp.NodeUUID); err != nil {
+				slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
+			}
 			return uploadCompleted, nil
 		}
 		// Anything else, including the upload running past its own

@@ -64,6 +64,56 @@ object SyncNotificationHelper {
             .build()
     }
 
+    const val REPAIR_CHANNEL_ID = "branchdam_repair_channel"
+    const val REPAIR_CHANNEL_NAME = "branchDAM Pairing"
+    const val REPAIR_NOTIFICATION_ID = 4202
+    const val REPAIR_TITLE = "Re-pair this device"
+    const val REPAIR_TEXT = "The branchDAM server rejected this device's credentials. Scan a new pairing QR code in Settings to resume syncing."
+
+    /**
+     * Tells the user the server refused this device's credentials (core
+     * error AUTH_FAILED: key revoked or rotated, pairing removed). Unlike
+     * a network error this won't clear on its own, so it is a separate,
+     * dismissable notification on its own default-importance channel.
+     */
+    fun showRepairRequired(context: Context) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            manager.getNotificationChannel(REPAIR_CHANNEL_ID) == null
+        ) {
+            manager.createNotificationChannel(
+                NotificationChannel(REPAIR_CHANNEL_ID, REPAIR_CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT)
+            )
+        }
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pending = PendingIntent.getActivity(
+            context,
+            REPAIR_NOTIFICATION_ID,
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, REPAIR_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle(REPAIR_TITLE)
+            .setContentText(REPAIR_TEXT)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(REPAIR_TEXT))
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(pending)
+            .build()
+        manager.notify(REPAIR_NOTIFICATION_ID, notification)
+    }
+
+    /** Removes the [showRepairRequired] notification (after a successful sync). */
+    fun cancelRepairRequired(context: Context) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            ?: return
+        manager.cancel(REPAIR_NOTIFICATION_ID)
+    }
+
     fun foregroundServiceType(): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
