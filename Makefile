@@ -1,4 +1,4 @@
-.PHONY: all check test lint android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots clean
+.PHONY: all check test lint contract-sync android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots clean
 
 UNAME_S := $(shell uname -s)
 IOS_DEST := $(shell xcodebuild -showdestinations -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp 2>/dev/null | grep 'platform:iOS Simulator' | grep 'iPhone' | grep -v 'Placeholder' | head -1 | sed -n 's/.*id:\([^,]*\).*/id=\1/p')
@@ -19,6 +19,17 @@ ifeq ($(UNAME_S),Darwin)
 else
 	@echo "==> Linux detected: Skipping iOS xcodebuild tests."
 endif
+
+# BRANCHDAM points at a branchDAM checkout (default: a sibling directory).
+BRANCHDAM ?= ../branchdam
+# Refresh core/client/testdata/contract from branchDAM's generated
+# agent-API fixtures, then run the conformance tests against them.
+contract-sync:
+	@test -d "$(BRANCHDAM)/docs/contract/fixtures" || { echo "no $(BRANCHDAM)/docs/contract/fixtures -- set BRANCHDAM=<branchdam checkout>"; exit 1; }
+	rm -f core/client/testdata/contract/*.json
+	cp "$(BRANCHDAM)"/docs/contract/fixtures/*.json core/client/testdata/contract/
+	git -C "$(BRANCHDAM)" log -1 --format='branchdam %H %s' -- docs/contract/fixtures > core/client/testdata/contract/SOURCE
+	cd core && go test ./client/ ./engine/ -run Contract -count=1
 
 lint:
 	pre-commit run --all-files
