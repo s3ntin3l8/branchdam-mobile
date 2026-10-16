@@ -45,10 +45,28 @@ object BranchDamKeys {
 
     /**
      * Sync status: timestamp (ms since epoch) of the last completed
-     * sync cycle. Written by [com.branchdam.mobile.ui.sync.SyncStatusViewModel]
-     * after observing a successful [androidx.work.WorkInfo.State.SUCCEEDED].
+     * sync cycle. Written by [com.branchdam.mobile.service.SyncWorker]
+     * when a sync batch succeeds; read (never written) by
+     * [com.branchdam.mobile.ui.sync.SyncStatusViewModel].
      */
     const val LAST_SYNC_TIME = "branchdam_last_sync_time"
+
+    /**
+     * Sync status: timestamp (ms since epoch) of the last sync the
+     * server refused because it rejected this device's credentials
+     * (core error AUTH_FAILED), or absent/0 when the last sync did not
+     * fail that way. Written by [com.branchdam.mobile.service.SyncWorker]
+     * (set on AUTH_FAILED, cleared on success) so the Sync screen can
+     * ask the user to re-pair the device.
+     */
+    const val SYNC_AUTH_FAILED_AT = "branchdam_sync_auth_failed_at"
+
+    /**
+     * Trash sync: newline-separated content URIs of recycle-bin items
+     * whose delete event was already handled. Read and written by
+     * [com.branchdam.mobile.triage.ProcessedTrashStore].
+     */
+    const val TRASH_PROCESSED_URIS = "branchdam_trash_processed_uris"
 
     /**
      * Background sync interval in minutes. Read by [com.branchdam.mobile.service.SyncScheduler]

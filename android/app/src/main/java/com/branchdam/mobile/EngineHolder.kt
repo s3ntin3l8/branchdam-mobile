@@ -4,7 +4,9 @@ import android.util.Log
 import io.branchdam.core.branchdam.Branchdam
 import java.io.File
 import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -28,6 +30,15 @@ object EngineHolder {
     private var isInitialized = false
 
     private val nativeAvailable = AtomicBoolean(false)
+
+    /**
+     * Released once the first [initialize] attempt finishes, whether it
+     * succeeded or not. BranchDamApplication opens the engine on a
+     * background thread, so a component woken in a cold process (a
+     * notification action, say) waits on it via [awaitInitialized]
+     * instead of reading "not initialized" and dropping its work.
+     */
+    private val firstInitAttempt = FirstAttemptGate()
 
     init {
         try {
@@ -57,7 +68,20 @@ object EngineHolder {
             Log.w(TAG, "bindingOpen failed: $t")
             isInitialized = false
             false
+        } finally {
+            firstInitAttempt.release()
         }
+    }
+
+    /**
+     * Blocks the calling (background) thread until the first
+     * [initialize] attempt has finished, or [timeoutMs] passes, and
+     * returns [isInitialized]. Returns false at once when the native
+     * library is absent. Never call it on the main thread.
+     */
+    fun awaitInitialized(timeoutMs: Long): Boolean {
+        if (!nativeAvailable.get()) return false
+        return firstInitAttempt.await(timeoutMs) { isInitialized }
     }
 
     fun shutdown() {
@@ -118,16 +142,36 @@ object EngineHolder {
         }
     }
 
-    fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10): Boolean {
-        if (!nativeAvailable.get()) return false
+    fun syncBatch(timeoutSecs: Int = 120, batchSize: Int = 10): Boolean =
+        syncBatchDetailed(timeoutSecs, batchSize) is SyncBatchOutcome.Success
+
+    /**
+     * Runs one sync batch and reports how it ended, keeping the core's
+     * error code (AUTH_FAILED, CONTEXT_CANCELED, NETWORK_ERROR, ...) so
+     * the caller can tell "re-pair this device" from a transient
+     * failure.
+     *
+     * Blocks the calling thread until the batch finishes. When the
+     * calling thread is interrupted (SyncWorker runs this inside
+     * `runInterruptible`) the InterruptedException propagates; the Go
+     * batch keeps running on [syncExecutor] until [setCancelFlag]
+     * stops it.
+     */
+    @Throws(InterruptedException::class)
+    fun syncBatchDetailed(timeoutSecs: Int = 120, batchSize: Int = 10): SyncBatchOutcome {
+        if (!nativeAvailable.get()) return SyncBatchOutcome.Failed(null, "native engine unavailable")
+        val future = syncExecutor.submit(Callable {
+            Branchdam.bindingSyncBatch(timeoutSecs.toLong(), batchSize.toLong())
+        })
         return try {
-            syncExecutor.submit(Callable {
-                Branchdam.bindingSyncBatch(timeoutSecs.toLong(), batchSize.toLong())
-            }).get()
-            true
+            future.get()
+            SyncBatchOutcome.Success
+        } catch (e: InterruptedException) {
+            throw e
         } catch (t: Throwable) {
-            Log.w(TAG, "syncBatch failed: $t")
-            false
+            val cause = (t as? java.util.concurrent.ExecutionException)?.cause ?: t
+            Log.w(TAG, "syncBatch failed: $cause")
+            SyncBatchOutcome.Failed(coreErrorCode(cause.message), cause.message ?: cause.toString())
         }
     }
 
@@ -374,6 +418,121 @@ object EngineHolder {
         }
     }
 
+    // -----------------------------------------------------------------
+    // Pending imports (the core's pending_import table)
+    //
+    // A camera-roll item waiting for the user's "Import now" / "Skip"
+    // answer is persisted in the core's queue DB, so the intent outlives
+    // the app process. Without the native library (JVM unit tests) the
+    // same contract is served from the in-memory mock below.
+    // -----------------------------------------------------------------
+
+    /** Result of [stagePendingImport]. */
+    enum class StageResult {
+        /** The item is now recorded as awaiting the user's decision. */
+        STAGED,
+
+        /** The user already skipped the item; it was not re-offered. */
+        SUPPRESSED,
+
+        /** Nothing was recorded (engine not open, DB error). */
+        FAILED,
+    }
+
+    fun stagePendingImport(
+        localId: String,
+        localPath: String,
+        filename: String,
+        mimeType: String,
+        sizeBytes: Long,
+        capturedAtUnix: Long,
+    ): StageResult {
+        if (localId.isEmpty()) return StageResult.FAILED
+        if (!nativeAvailable.get()) {
+            return mockPendingImports.stage(
+                PendingImport(localId, localPath, filename, mimeType, sizeBytes, capturedAtUnix, mockPendingImports.clock())
+            )
+        }
+        if (!isInitialized) return StageResult.FAILED
+        return try {
+            val staged = queryExecutor.submit(Callable {
+                Branchdam.bindingStagePendingImport(localId, localPath, filename, mimeType, sizeBytes, capturedAtUnix)
+            }).get()
+            if (staged) StageResult.STAGED else StageResult.SUPPRESSED
+        } catch (t: Throwable) {
+            Log.w(TAG, "stagePendingImport failed: $t")
+            StageResult.FAILED
+        }
+    }
+
+    /**
+     * Items still awaiting an import decision, oldest capture first, or
+     * null when they can't be read (engine not open, DB error). A null
+     * is not "nothing pending": callers must leave their state alone.
+     */
+    fun listPendingImports(limit: Int = 0): List<PendingImport>? {
+        if (!nativeAvailable.get()) return mockPendingImports.list(limit)
+        if (!isInitialized) return null
+        return try {
+            val json = queryExecutor.submit(Callable {
+                Branchdam.bindingListPendingImports(limit.toLong())
+            }).get()
+            parsePendingImports(json)
+        } catch (t: Throwable) {
+            Log.w(TAG, "listPendingImports failed: $t")
+            null
+        }
+    }
+
+    /** Forgets localId (after it was imported). True when a row was removed. */
+    fun deletePendingImport(localId: String): Boolean {
+        if (localId.isEmpty()) return false
+        if (!nativeAvailable.get()) return mockPendingImports.delete(localId)
+        if (!isInitialized) return false
+        return try {
+            queryExecutor.submit(Callable { Branchdam.bindingDeletePendingImport(localId) }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "deletePendingImport failed: $t")
+            false
+        }
+    }
+
+    /** Records that the user skipped localId. True when it was recorded. */
+    fun suppressPendingImport(localId: String): Boolean {
+        if (localId.isEmpty()) return false
+        if (!nativeAvailable.get()) {
+            mockPendingImports.suppress(localId)
+            return true
+        }
+        if (!isInitialized) return false
+        return try {
+            queryExecutor.submit(Callable {
+                Branchdam.bindingSuppressPendingImport(localId)
+                true
+            }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "suppressPendingImport failed: $t")
+            false
+        }
+    }
+
+    /** Whether the user skipped localId. False when it can't be read. */
+    fun isImportSuppressed(localId: String): Boolean {
+        if (localId.isEmpty()) return false
+        if (!nativeAvailable.get()) return mockPendingImports.isSuppressed(localId)
+        if (!isInitialized) return false
+        return try {
+            queryExecutor.submit(Callable { Branchdam.bindingIsImportSuppressed(localId) }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "isImportSuppressed failed: $t")
+            false
+        }
+    }
+
+    /** In-memory stand-in for pending_import when the AAR is absent. */
+    @androidx.annotation.VisibleForTesting
+    internal val mockPendingImports = MockPendingImportStore()
+
     private const val MOCK_NAMING_TEMPLATE =
         "{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}"
 }
@@ -400,4 +559,156 @@ data class ActiveUploadProgress(
         get() = if (speedBytesPerSec > 0) "${com.branchdam.mobile.ui.gallery.formatFileSize(speedBytesPerSec.toLong())}/s" else "0 B/s"
 }
 
+/**
+ * The one-shot gate behind [EngineHolder.awaitInitialized]: [await]
+ * blocks until [release] has been called once (the first initialize
+ * attempt finished, successfully or not) or the timeout passes, then
+ * reports readiness via the caller's `isReady`. Readiness is re-read
+ * after the wait rather than carried by the gate, so a later successful
+ * initialize (or a shutdown) is what callers see.
+ */
+internal class FirstAttemptGate {
+    private val latch = CountDownLatch(1)
+
+    /** Marks the first attempt finished; later calls are no-ops. */
+    fun release() {
+        latch.countDown()
+    }
+
+    /**
+     * Returns [isReady] at once when it is already true; otherwise waits
+     * up to [timeoutMs] for [release] and returns [isReady] then. An
+     * interrupted wait returns early with the thread's interrupt flag
+     * restored.
+     */
+    fun await(timeoutMs: Long, isReady: () -> Boolean): Boolean {
+        if (isReady()) return true
+        try {
+            latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        return isReady()
+    }
+}
+
 fun defaultEngineDbPath(filesDir: File): String = File(filesDir, "branchdam_queue.db").absolutePath
+
+/** How an [EngineHolder.syncBatchDetailed] call ended. */
+sealed class SyncBatchOutcome {
+    object Success : SyncBatchOutcome()
+
+    /**
+     * The batch failed. [code] is the core's error code (see
+     * branchdam.go's Code* constants) or null when the error carried
+     * none.
+     */
+    data class Failed(val code: String?, val message: String) : SyncBatchOutcome()
+}
+
+/** Error codes the core reports that the Android shell acts on. */
+object CoreErrorCodes {
+    /** The server rejected this device's credentials: re-pair it. */
+    const val AUTH_FAILED = "AUTH_FAILED"
+
+    /** The batch was cancelled (SetCancelFlag) or ran out of time. */
+    const val CONTEXT_CANCELED = "CONTEXT_CANCELED"
+}
+
+private val CORE_ERROR_CODE = Regex("""branchdam: ([A-Z][A-Z0-9_]*):""")
+
+/**
+ * Extracts the core's error code from a gomobile exception message. The
+ * core's errors render as `branchdam: <CODE>: <message>` (branchdam.Error);
+ * anything else yields null.
+ */
+fun coreErrorCode(message: String?): String? =
+    message?.let { CORE_ERROR_CODE.find(it)?.groupValues?.get(1) }
+
+/** A camera-roll item awaiting the user's import decision. */
+data class PendingImport(
+    val localId: String,
+    val localPath: String,
+    val filename: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+    val capturedAtUnix: Long,
+    val createdAtUnix: Long,
+)
+
+/**
+ * Parses the JSON array BindingListPendingImports returns (the core's
+ * queue.PendingImport objects). Rows without a localId are dropped.
+ */
+fun parsePendingImports(json: String?): List<PendingImport> {
+    if (json.isNullOrBlank()) return emptyList()
+    val array = org.json.JSONArray(json)
+    val out = ArrayList<PendingImport>(array.length())
+    for (i in 0 until array.length()) {
+        val obj = array.optJSONObject(i) ?: continue
+        val localId = obj.optString("localId", "")
+        if (localId.isEmpty()) continue
+        out.add(
+            PendingImport(
+                localId = localId,
+                localPath = obj.optString("localPath", ""),
+                filename = obj.optString("filename", ""),
+                mimeType = obj.optString("mimeType", ""),
+                sizeBytes = obj.optLong("sizeBytes", 0L),
+                capturedAtUnix = obj.optLong("capturedAtUnix", 0L),
+                createdAtUnix = obj.optLong("createdAtUnix", 0L),
+            )
+        )
+    }
+    return out
+}
+
+/**
+ * Mirrors the core's pending_import semantics for JVM tests: staging a
+ * skipped item is refused, re-staging a pending one refreshes it (keeping
+ * its createdAt), suppressing works whether or not the item was staged.
+ */
+internal class MockPendingImportStore {
+    /** Seconds since the epoch stamped as createdAt; tests may replace it. */
+    @Volatile
+    var clock: () -> Long = { System.currentTimeMillis() / 1000L }
+
+    private val pending = LinkedHashMap<String, PendingImport>()
+    private val suppressed = HashSet<String>()
+
+    @Synchronized
+    fun stage(item: PendingImport): EngineHolder.StageResult {
+        if (item.localId in suppressed) return EngineHolder.StageResult.SUPPRESSED
+        val existing = pending[item.localId]
+        pending[item.localId] = if (existing != null) item.copy(createdAtUnix = existing.createdAtUnix) else item
+        return EngineHolder.StageResult.STAGED
+    }
+
+    @Synchronized
+    fun list(limit: Int): List<PendingImport> {
+        val all = pending.values.sortedWith(compareBy({ it.capturedAtUnix }, { it.localId }))
+        return if (limit > 0) all.take(limit) else all
+    }
+
+    @Synchronized
+    fun delete(localId: String): Boolean {
+        val removedPending = pending.remove(localId) != null
+        val removedSuppressed = suppressed.remove(localId)
+        return removedPending || removedSuppressed
+    }
+
+    @Synchronized
+    fun suppress(localId: String) {
+        pending.remove(localId)
+        suppressed.add(localId)
+    }
+
+    @Synchronized
+    fun isSuppressed(localId: String): Boolean = localId in suppressed
+
+    @Synchronized
+    fun clear() {
+        pending.clear()
+        suppressed.clear()
+    }
+}

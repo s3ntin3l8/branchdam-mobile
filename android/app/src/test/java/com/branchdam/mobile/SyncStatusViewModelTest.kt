@@ -1,15 +1,18 @@
 package com.branchdam.mobile
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.branchdam.mobile.ui.sync.SyncStatusViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -168,5 +171,100 @@ class SyncStatusViewModelTest {
         advanceUntilIdle()
 
         assertEquals(3L, viewModel.uiState.value.pendingUploadsCount)
+    }
+
+    // --- M6: last-sync time, Sync Now constraints, re-pair status ---
+
+    private fun prefs() = ApplicationProvider.getApplicationContext<android.content.Context>()
+        .getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+
+    @Test
+    fun testReplayedSucceededStateKeepsThePersistedLastSyncTime() {
+        val snapshot = SyncStatusViewModel.workerSnapshot(
+            state = androidx.work.WorkInfo.State.SUCCEEDED,
+            runAttemptCount = 0,
+            lastSyncTime = 12_345L,
+            authFailedAt = 0L,
+            engineReady = true,
+        )
+        assertEquals(
+            "opening the screen must show when the sync ran, not \"now\"",
+            12_345L,
+            snapshot.lastSyncTime
+        )
+        assertEquals("Last sync succeeded", snapshot.workerState)
+        assertFalse(snapshot.needsRepair)
+    }
+
+    @Test
+    fun testViewModelReadsButNeverWritesLastSyncTime() = runTest(testDispatcher) {
+        prefs().edit().clear().putLong(BranchDamKeys.LAST_SYNC_TIME, 12_345L).commit()
+        SyncStatusViewModel.testConnectionFn = { true }
+
+        val viewModel = SyncStatusViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(12_345L, viewModel.uiState.value.lastSyncTime)
+        assertEquals(12_345L, prefs().getLong(BranchDamKeys.LAST_SYNC_TIME, 0L))
+    }
+
+    @Test
+    fun testAuthFailureShowsRepairInsteadOfAGenericFailure() {
+        val snapshot = SyncStatusViewModel.workerSnapshot(
+            state = androidx.work.WorkInfo.State.FAILED,
+            runAttemptCount = 1,
+            lastSyncTime = 0L,
+            authFailedAt = 99L,
+            engineReady = true,
+        )
+        assertTrue(snapshot.needsRepair)
+        assertEquals(com.branchdam.mobile.ui.sync.REPAIR_REQUIRED_MESSAGE, snapshot.workerState)
+
+        // A sync running after a re-pair shows as running.
+        val running = SyncStatusViewModel.workerSnapshot(
+            state = androidx.work.WorkInfo.State.RUNNING,
+            runAttemptCount = 0,
+            lastSyncTime = 0L,
+            authFailedAt = 99L,
+            engineReady = true,
+        )
+        assertEquals("Running", running.workerState)
+    }
+
+    @Test
+    fun testSyncNowIsWifiOnlyByDefault() = runTest(testDispatcher) {
+        prefs().edit().clear().putBoolean(BranchDamKeys.SYNC_ON_MOBILE_DATA, false).commit()
+        assertEquals(androidx.work.NetworkType.UNMETERED, triggerSyncAndReadNetworkType())
+    }
+
+    @Test
+    fun testSyncNowUsesMobileDataOnlyWhenAllowed() = runTest(testDispatcher) {
+        prefs().edit().clear().putBoolean(BranchDamKeys.SYNC_ON_MOBILE_DATA, true).commit()
+        assertEquals(androidx.work.NetworkType.CONNECTED, triggerSyncAndReadNetworkType())
+    }
+
+    private fun kotlinx.coroutines.test.TestScope.triggerSyncAndReadNetworkType(): androidx.work.NetworkType {
+        SyncStatusViewModel.testConnectionFn = { true }
+        val app = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val viewModel = SyncStatusViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        viewModel.triggerSync()
+        // runCurrent, not advanceUntilIdle: the enqueued sync stays
+        // ENQUEUED (the test WorkManager never meets its network
+        // constraint), which the screen shows as syncing, so its
+        // upload-progress poll re-arms every 500 ms for as long as the
+        // view model lives and virtual time would never go idle.
+        runCurrent()
+
+        val infos = androidx.work.WorkManager.getInstance(app)
+            .getWorkInfosForUniqueWork(com.branchdam.mobile.service.SyncScheduler.IMMEDIATE_WORK_TAG)
+            .get(5, java.util.concurrent.TimeUnit.SECONDS)
+        // Stop the poll before runTest finishes, as onCleared would.
+        viewModel.viewModelScope.cancel()
+        assertEquals("Sync Now must enqueue exactly one immediate sync", 1, infos.size)
+        return infos.single().constraints.requiredNetworkType
     }
 }

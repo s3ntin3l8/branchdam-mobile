@@ -2,19 +2,37 @@ package com.branchdam.mobile
 
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.service.ImportConfirmationNotifier
+import com.branchdam.mobile.service.toMediaItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * The confirmation flow's pending and skipped items live in the core's
+ * pending_import table. Without the native library EngineHolder serves
+ * the same contract from [MockPendingImportStore], which these tests
+ * drive.
+ */
 class ImportConfirmationNotifierTest {
 
     @Before
     fun setUp() {
-        ImportConfirmationNotifier.clearSuppressed()
-        ImportConfirmationNotifier.clearPendingItems()
+        EngineHolder.mockPendingImports.clear()
+        EngineHolder.mockPendingImports.clock = { 1_700_000_000L }
     }
+
+    private fun item(id: Long, takenAt: Long = 1_700_000_000L + id) = MediaItem(
+        id = id,
+        contentUri = "content://media/external/images/media/$id",
+        filePath = "/storage/emulated/0/DCIM/Camera/IMG_$id.JPG",
+        displayName = "IMG_$id.JPG",
+        mimeType = "image/jpeg",
+        sizeBytes = 1024L * id,
+        dateTakenUnix = takenAt,
+        isRaw = false
+    )
 
     @Test
     fun testConstants() {
@@ -27,82 +45,99 @@ class ImportConfirmationNotifierTest {
     }
 
     @Test
-    fun testItemSuppressionLogic() {
-        val testId = "content://media/external/images/media/42"
-        assertFalse(ImportConfirmationNotifier.isItemSuppressed(testId))
+    fun testStagedItemsAreReadBackWithTheirMetadata() {
+        assertEquals(EngineHolder.StageResult.STAGED, ImportConfirmationNotifier.stagePendingItem(item(2)))
+        assertEquals(EngineHolder.StageResult.STAGED, ImportConfirmationNotifier.stagePendingItem(item(1)))
 
-        ImportConfirmationNotifier.suppressItem(testId)
-        assertTrue(ImportConfirmationNotifier.isItemSuppressed(testId))
-
-        ImportConfirmationNotifier.clearSuppressed()
-        assertFalse(ImportConfirmationNotifier.isItemSuppressed(testId))
+        val pending = ImportConfirmationNotifier.getPendingItems()
+        assertEquals(listOf(item(1).contentUri, item(2).contentUri), pending.map { it.localId })
+        val first = pending.first()
+        assertEquals(item(1).filePath, first.localPath)
+        assertEquals("IMG_1.JPG", first.filename)
+        assertEquals("image/jpeg", first.mimeType)
+        assertEquals(1024L, first.sizeBytes)
+        assertEquals(item(1).dateTakenUnix, first.capturedAtUnix)
     }
 
     @Test
-    fun testBulkSuppression() {
-        val id1 = "content://media/external/images/media/101"
-        val id2 = "content://media/external/images/media/102"
-        val id3 = "content://media/external/images/media/103"
+    fun testImportNowReadsPersistedItemsAndForgetsThemOnceQueued() {
+        // Staged by an earlier process: nothing in the notifier holds them.
+        ImportConfirmationNotifier.stagePendingItem(item(10))
+        ImportConfirmationNotifier.stagePendingItem(item(11))
 
-        ImportConfirmationNotifier.suppressItems(listOf(id1, id2))
-        assertTrue(ImportConfirmationNotifier.isItemSuppressed(id1))
-        assertTrue(ImportConfirmationNotifier.isItemSuppressed(id2))
-        assertFalse(ImportConfirmationNotifier.isItemSuppressed(id3))
+        val handled = ImportConfirmationNotifier.handleAction(
+            context = null,
+            action = ImportConfirmationNotifier.ACTION_IMPORT_NOW,
+        )
+
+        assertTrue(handled)
+        assertTrue(
+            "imported items must leave pending_import",
+            ImportConfirmationNotifier.getPendingItems().isEmpty()
+        )
+        assertFalse(ImportConfirmationNotifier.isItemSuppressed(item(10).contentUri))
     }
 
     @Test
-    fun testStagingPendingItems() {
-        val item1 = MediaItem(
-            id = 1L,
-            contentUri = "content://media/external/images/media/1",
-            filePath = "/storage/emulated/0/DCIM/Camera/IMG_0001.JPG",
-            displayName = "IMG_0001.JPG",
-            mimeType = "image/jpeg",
-            sizeBytes = 1024L,
-            dateTakenUnix = 1700000000L,
-            isRaw = false
-        )
-        val item2 = MediaItem(
-            id = 2L,
-            contentUri = "content://media/external/images/media/2",
-            filePath = "/storage/emulated/0/DCIM/Camera/IMG_0002.DNG",
-            displayName = "IMG_0002.DNG",
-            mimeType = "image/x-adobe-dng",
-            sizeBytes = 2048L,
-            dateTakenUnix = 1700000001L,
-            isRaw = true
-        )
-
-        ImportConfirmationNotifier.stagePendingItems(listOf(item1, item2))
-        val staged = ImportConfirmationNotifier.getPendingItems()
-        assertEquals(2, staged.size)
-
-        ImportConfirmationNotifier.clearPendingItems()
-        assertTrue(ImportConfirmationNotifier.getPendingItems().isEmpty())
-    }
-
-    @Test
-    fun testSkipActionSuppressesAndClearsPendingItems() {
-        val item1 = MediaItem(
-            id = 10L,
-            contentUri = "content://media/external/images/media/10",
-            filePath = "/storage/emulated/0/DCIM/Camera/IMG_0010.JPG",
-            displayName = "IMG_0010.JPG",
-            mimeType = "image/jpeg",
-            sizeBytes = 1024L,
-            dateTakenUnix = 1700000010L,
-            isRaw = false
-        )
-        ImportConfirmationNotifier.stagePendingItems(listOf(item1))
-        assertFalse(ImportConfirmationNotifier.isItemSuppressed("content://media/external/images/media/10"))
+    fun testSkipSuppressesAndScansDoNotReofferTheItem() {
+        ImportConfirmationNotifier.stagePendingItem(item(20))
 
         ImportConfirmationNotifier.handleAction(
             context = null,
             action = ImportConfirmationNotifier.ACTION_SKIP,
-            itemIds = arrayOf("content://media/external/images/media/10")
         )
 
-        assertTrue(ImportConfirmationNotifier.isItemSuppressed("content://media/external/images/media/10"))
+        assertTrue(ImportConfirmationNotifier.isItemSuppressed(item(20).contentUri))
         assertTrue(ImportConfirmationNotifier.getPendingItems().isEmpty())
+        assertEquals(
+            "a skipped item must not be staged again by a later scan",
+            EngineHolder.StageResult.SUPPRESSED,
+            ImportConfirmationNotifier.stagePendingItem(item(20))
+        )
+        assertTrue(ImportConfirmationNotifier.getPendingItems().isEmpty())
+    }
+
+    @Test
+    fun testActionOnlyAppliesToItemsStagedBeforeTheNotification() {
+        EngineHolder.mockPendingImports.clock = { 100L }
+        ImportConfirmationNotifier.stagePendingItem(item(30))
+        EngineHolder.mockPendingImports.clock = { 200L }
+        ImportConfirmationNotifier.stagePendingItem(item(31))
+
+        // The user tapped Skip on a notification posted at t=150.
+        ImportConfirmationNotifier.handleAction(
+            context = null,
+            action = ImportConfirmationNotifier.ACTION_SKIP,
+            stagedBeforeUnix = 150L,
+        )
+
+        assertTrue(ImportConfirmationNotifier.isItemSuppressed(item(30).contentUri))
+        assertFalse(
+            "an item staged after the notification was posted must not be skipped",
+            ImportConfirmationNotifier.isItemSuppressed(item(31).contentUri)
+        )
+        assertEquals(listOf(item(31).contentUri), ImportConfirmationNotifier.getPendingItems().map { it.localId })
+    }
+
+    @Test
+    fun testManualSuppression() {
+        val id = "content://media/external/images/media/42"
+        assertFalse(ImportConfirmationNotifier.isItemSuppressed(id))
+        assertTrue(ImportConfirmationNotifier.suppressItem(id))
+        assertTrue(ImportConfirmationNotifier.isItemSuppressed(id))
+    }
+
+    @Test
+    fun testPendingImportRebuildsTheMediaItemUploadStagingNeeds() {
+        ImportConfirmationNotifier.stagePendingItem(item(77).copy(mimeType = "image/x-adobe-dng", displayName = "PXL_77.DNG"))
+        val rebuilt = ImportConfirmationNotifier.getPendingItems().single().toMediaItem()
+
+        // UploadStaging names the staged copy after the MediaStore row ID.
+        assertEquals(77L, rebuilt.id)
+        assertEquals(item(77).contentUri, rebuilt.contentUri)
+        assertEquals(item(77).filePath, rebuilt.filePath)
+        assertEquals("PXL_77.DNG", rebuilt.displayName)
+        assertEquals(item(77).dateTakenUnix, rebuilt.dateTakenUnix)
+        assertTrue(rebuilt.isRaw)
     }
 }
