@@ -34,7 +34,7 @@ make android         # Assemble Android debug build
 
 1. **Offline Queue Persistence (`queue.db`):** All ingest intent, hashes, and events are recorded in local SQLite before network dispatch.
 2. **Cryptographic Checksum Verification:** Full hashes are computed using BLAKE3-256 (64 hex characters) before upload, sent in `X-Blake3-Hash` with a single streamed body of fixed `Content-Length`, and the server's returned `blake3Hash` must match.
-3. **Safe Storage Reclaim:** Local media files are NEVER deleted for storage reclaim unless `POST /api/v1/agent/node-status` reports the node found, `verified: true` (a server-computed hash), on `TIER3_MASTER_ARCHIVE` (`core/engine` `ReclaimTier`) and live (`ACTIVE`/`HIDDEN`) -- checked in that order, and the first gate that fails is the reason shown. It does not compare the returned `fullHash` yet (#217).
+3. **Safe Storage Reclaim:** Local media files are NEVER deleted for storage reclaim unless `POST /api/v1/agent/node-status` reports the node found, `verified: true` (a server-computed hash), on `TIER3_MASTER_ARCHIVE` (`core/engine` `ReclaimTier`) and live (`ACTIVE`/`HIDDEN`) -- checked in that order, and the first gate that fails is the reason shown. The client has no hash from node-status to compare against yet (#217).
 4. **Lineage Precision:** DNG RAW + Ultra HDR JPEG pairs and Motion Photos emit `EVENT_EDGE_ATTACHED` with `confidence: 1.00`, automatically. Anything below 1.00 (timestamp-proximity pairs, in-phone edits) is never auto-emitted: the core answers `REVIEW_REQUIRED`, the pair waits in the lineage review screen, and the user's confirm or reject is stored in `queue.db` (`lineage_review`). A confirmed edge keeps its original confidence.
 
 ## Rotated API keys: store, then switch, fall back once
