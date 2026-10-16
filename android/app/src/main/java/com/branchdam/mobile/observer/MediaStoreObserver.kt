@@ -6,12 +6,14 @@ import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.provider.MediaStore
+import android.util.Log
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.lineage.EditCorrelator
 import com.branchdam.mobile.lineage.MotionPhotoExtractor
 import com.branchdam.mobile.lineage.PairDetector
 import com.branchdam.mobile.service.ImportConfirmationNotifier
+import com.branchdam.mobile.service.PendingImportAnnouncer
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.triage.ProcessedTrashStore
 import com.branchdam.mobile.triage.TrashSyncObserver
@@ -22,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class MediaStoreObserver(
     private val context: Context,
@@ -93,10 +96,38 @@ class MediaStoreObserver(
         onFire = ::scanAndSyncTrash,
     )
 
+    /**
+     * Posts the import confirmation for the persisted pending_import set,
+     * not just for what one scan pass staged: rows staged by a process
+     * that died sit below the scan cursor and are never staged again.
+     */
+    private val importAnnouncer = PendingImportAnnouncer(
+        post = { count -> ImportConfirmationNotifier.showImportConfirmation(context, count) },
+    )
+
     fun register() {
         val resolver = context.contentResolver
         resolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, this)
         resolver.registerContentObserver(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, this)
+        announcePersistedPendingImports()
+    }
+
+    /**
+     * At startup, re-announces the items an earlier process staged and
+     * nobody answered. The engine opens on its own init thread, so wait
+     * for it (on [Dispatchers.IO], never the caller's thread); if it is
+     * not open in time the read fails, nothing is recorded as announced,
+     * and the next scan's refresh announces instead.
+     */
+    private fun announcePersistedPendingImports() {
+        scope.launch {
+            try {
+                EngineHolder.awaitInitialized(STARTUP_ENGINE_WAIT_MS)
+                importAnnouncer.refresh()
+            } catch (e: Exception) {
+                Log.w(TAG, "announcing persisted pending imports failed", e)
+            }
+        }
     }
 
     fun unregister() {
@@ -168,14 +199,10 @@ class MediaStoreObserver(
         if (result.enqueued.isNotEmpty()) {
             SyncScheduler.triggerImmediateSync(context)
         }
-        if (result.staged.isNotEmpty()) {
-            // Announce everything still awaiting an answer, including
-            // items staged before a process death.
-            ImportConfirmationNotifier.showImportConfirmation(
-                context = context,
-                pendingCount = EngineHolder.listPendingImports()?.size ?: result.staged.size,
-            )
-        }
+        // Announce everything still awaiting an answer -- the persisted
+        // set, including items staged before a process death -- not just
+        // what this pass staged.
+        importAnnouncer.refresh(stagedThisPass = result.staged.size)
 
         // D.3: Lineage pipeline runs for BOTH auto-import and
         // confirmation-based import. Confirmation-accepted items are
@@ -266,5 +293,12 @@ class MediaStoreObserver(
                 }
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "MediaStoreObserver"
+
+        /** How long the startup announcement waits for the engine to open. */
+        const val STARTUP_ENGINE_WAIT_MS = 30_000L
     }
 }

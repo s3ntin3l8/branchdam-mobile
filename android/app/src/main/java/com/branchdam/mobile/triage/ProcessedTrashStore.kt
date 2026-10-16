@@ -36,9 +36,23 @@ class ProcessedTrashStore(
 
     /** Records [uri] as handled and persists the set. */
     fun add(uri: String) {
+        addAll(listOf(uri))
+    }
+
+    /**
+     * Records every one of [uris] as handled, in order, and persists the
+     * set once. A scan pass collects the URIs it handled and calls this
+     * after its loop: adding them one by one rewrote the whole (up to
+     * [maxEntries]) set to SharedPreferences per item, O(n^2) work and n
+     * disk writes inside the debounced scan.
+     */
+    fun addAll(uris: Collection<String>) {
+        if (uris.isEmpty()) return
         val set = entries()
-        set.remove(uri) // re-adding moves it to the newest end
-        set.add(uri)
+        for (uri in uris) {
+            set.remove(uri) // re-adding moves it to the newest end
+            set.add(uri)
+        }
         trimAndSave(set)
     }
 

@@ -32,7 +32,14 @@ object ImportConfirmationNotifier {
     const val ACTION_LATER = "com.branchdam.mobile.action.LATER"
     const val ACTION_SKIP = "com.branchdam.mobile.action.SKIP"
 
-    const val EXTRA_ITEM_COUNT = "extra_item_count"
+    /** The notification actions [handleAction] understands. */
+    val ACTIONS: Set<String> = setOf(ACTION_IMPORT_NOW, ACTION_LATER, ACTION_SKIP)
+
+    /**
+     * The "Importing photos" notification [ImportConfirmationWorker] shows
+     * while it runs as a foreground service (expedited work below API 31).
+     */
+    const val IMPORTING_NOTIFICATION_ID = 4102
 
     /**
      * Seconds since the epoch at which the notification was posted. An
@@ -92,7 +99,10 @@ object ImportConfirmationNotifier {
 
     /**
      * Posts (or replaces) the confirmation notification for the
-     * [pendingCount] items awaiting a decision.
+     * [pendingCount] items awaiting a decision. Callers announce the
+     * whole persisted pending set (see [PendingImportAnnouncer]); a
+     * replacement while the notification is still showing updates it
+     * without alerting again.
      */
     fun showImportConfirmation(
         context: Context,
@@ -104,7 +114,6 @@ object ImportConfirmationNotifier {
 
         fun actionIntent(action: String) = Intent(context, ImportConfirmationReceiver::class.java).apply {
             this.action = action
-            putExtra(EXTRA_ITEM_COUNT, pendingCount)
             putExtra(EXTRA_STAGED_BEFORE_UNIX, stagedBeforeUnix)
         }
 
@@ -120,6 +129,7 @@ object ImportConfirmationNotifier {
             .setContentText("$pendingCount new photo(s) ready to import to branchDAM")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .addAction(android.R.drawable.ic_menu_upload, "Import now", importPending)
             .addAction(android.R.drawable.ic_menu_recent_history, "Later", laterPending)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Skip", skipPending)
@@ -129,9 +139,26 @@ object ImportConfirmationNotifier {
     }
 
     /**
+     * The silent, ongoing notification [ImportConfirmationWorker] runs
+     * under when WorkManager executes it as a foreground service.
+     */
+    fun buildImportingNotification(context: Context): android.app.Notification {
+        createNotificationChannel(context)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_upload)
+            .setContentTitle("Importing photos")
+            .setContentText("Queuing photos for upload to branchDAM")
+            .setProgress(0, 0, true)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+    }
+
+    /**
      * Applies a notification action to the pending items staged at or
-     * before [stagedBeforeUnix]. Blocking engine calls: run it off the
-     * main thread (see [ImportConfirmationReceiver]).
+     * before [stagedBeforeUnix]. Blocking engine calls and, for the
+     * import actions, a copy of each item's original bytes: it runs in
+     * [ImportConfirmationWorker], never in the broadcast receiver.
      *
      * - Import now / Later: queue each item for upload and forget its
      *   pending row once queued (a row whose enqueue failed stays
@@ -170,6 +197,14 @@ object ImportConfirmationNotifier {
                     suppressItem(item.localId)
                 }
             }
+        }
+
+        // A refresh that ran while the action was being applied (the
+        // observer's startup announcement when this tap cold-started the
+        // process, say) may have re-posted the notification for rows the
+        // action has since cleared. Withdraw it when nothing is left.
+        if (notificationManager != null && EngineHolder.listPendingImports()?.isEmpty() == true) {
+            notificationManager.cancel(NOTIFICATION_ID)
         }
         return true
     }

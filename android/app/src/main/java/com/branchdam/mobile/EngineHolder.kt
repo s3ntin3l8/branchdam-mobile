@@ -38,7 +38,7 @@ object EngineHolder {
      * notification action, say) waits on it via [awaitInitialized]
      * instead of reading "not initialized" and dropping its work.
      */
-    private val firstInitAttempt = CountDownLatch(1)
+    private val firstInitAttempt = FirstAttemptGate()
 
     init {
         try {
@@ -69,7 +69,7 @@ object EngineHolder {
             isInitialized = false
             false
         } finally {
-            firstInitAttempt.countDown()
+            firstInitAttempt.release()
         }
     }
 
@@ -81,13 +81,7 @@ object EngineHolder {
      */
     fun awaitInitialized(timeoutMs: Long): Boolean {
         if (!nativeAvailable.get()) return false
-        if (isInitialized) return true
-        try {
-            firstInitAttempt.await(timeoutMs, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
-        return isInitialized
+        return firstInitAttempt.await(timeoutMs) { isInitialized }
     }
 
     fun shutdown() {
@@ -563,6 +557,39 @@ data class ActiveUploadProgress(
 
     val formattedSpeed: String
         get() = if (speedBytesPerSec > 0) "${com.branchdam.mobile.ui.gallery.formatFileSize(speedBytesPerSec.toLong())}/s" else "0 B/s"
+}
+
+/**
+ * The one-shot gate behind [EngineHolder.awaitInitialized]: [await]
+ * blocks until [release] has been called once (the first initialize
+ * attempt finished, successfully or not) or the timeout passes, then
+ * reports readiness via the caller's `isReady`. Readiness is re-read
+ * after the wait rather than carried by the gate, so a later successful
+ * initialize (or a shutdown) is what callers see.
+ */
+internal class FirstAttemptGate {
+    private val latch = CountDownLatch(1)
+
+    /** Marks the first attempt finished; later calls are no-ops. */
+    fun release() {
+        latch.countDown()
+    }
+
+    /**
+     * Returns [isReady] at once when it is already true; otherwise waits
+     * up to [timeoutMs] for [release] and returns [isReady] then. An
+     * interrupted wait returns early with the thread's interrupt flag
+     * restored.
+     */
+    fun await(timeoutMs: Long, isReady: () -> Boolean): Boolean {
+        if (isReady()) return true
+        try {
+            latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        return isReady()
+    }
 }
 
 fun defaultEngineDbPath(filesDir: File): String = File(filesDir, "branchdam_queue.db").absolutePath

@@ -177,6 +177,96 @@ class TrashSyncObserverTest {
         )
     }
 
+    /** Counts the SharedPreferences writes a [ProcessedTrashStore] makes. */
+    private class CountingPrefs(private val delegate: SharedPreferences) : SharedPreferences by delegate {
+        var edits = 0
+
+        override fun edit(): SharedPreferences.Editor {
+            edits++
+            return delegate.edit()
+        }
+    }
+
+    @Test
+    fun testAScanPassPersistsTheHandledSetOnce() {
+        val counting = CountingPrefs(prefs)
+        val store = ProcessedTrashStore(counting)
+        val images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val bin = (1L..50L).map { trashed(images, it) }
+
+        val count = TrashSyncObserver.processNewlyTrashed(
+            items = bin,
+            processed = store,
+            isOffloaded = { it == "$images/7" },
+            enqueueDelete = { true },
+        )
+
+        assertEquals(49, count)
+        assertEquals("one write for the whole pass, not one per item", 1, counting.edits)
+        assertEquals(
+            bin.map { it.contentUri }.toSet(),
+            ProcessedTrashStore(prefs).snapshot()
+        )
+    }
+
+    @Test
+    fun testAPassWithNothingNewDoesNotWrite() {
+        val images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val bin = listOf(trashed(images, 1), trashed(images, 2))
+        ProcessedTrashStore(prefs).addAll(bin.map { it.contentUri })
+
+        val counting = CountingPrefs(prefs)
+        val count = TrashSyncObserver.processNewlyTrashed(
+            items = bin,
+            processed = ProcessedTrashStore(counting),
+            isOffloaded = { false },
+            enqueueDelete = { error("already handled: no delete may be sent") },
+        )
+
+        assertEquals(0, count)
+        assertEquals(0, counting.edits)
+    }
+
+    @Test
+    fun testItemsHandledBeforeAFailureAreStillRecorded() {
+        val images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val bin = listOf(trashed(images, 1), trashed(images, 2), trashed(images, 3))
+
+        try {
+            TrashSyncObserver.processNewlyTrashed(
+                items = bin,
+                processed = ProcessedTrashStore(prefs),
+                isOffloaded = { false },
+                enqueueDelete = { uri ->
+                    if (uri == "$images/3") throw IllegalStateException("engine gone")
+                    true
+                },
+            )
+            org.junit.Assert.fail("the enqueue failure must propagate")
+        } catch (_: IllegalStateException) {
+            // expected
+        }
+
+        assertEquals(
+            "deletes already sent must not be re-sent after a restart",
+            setOf("$images/1", "$images/2"),
+            ProcessedTrashStore(prefs).snapshot()
+        )
+    }
+
+    @Test
+    fun testAddAllKeepsInsertionOrderAndTheBound() {
+        val store = ProcessedTrashStore(prefs, maxEntries = 3)
+        store.add("content://a/1")
+        store.addAll(listOf("content://a/2", "content://a/3", "content://a/1", "content://a/4"))
+
+        // Re-adding 1 moved it to the newest end; the oldest (2) was dropped.
+        assertEquals(
+            listOf("content://a/3", "content://a/1", "content://a/4"),
+            ProcessedTrashStore(prefs, maxEntries = 3).snapshot().toList()
+        )
+    }
+
     private fun trashCursor(vararg ids: Long): MatrixCursor {
         val cursor = MatrixCursor(
             arrayOf(

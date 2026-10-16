@@ -74,6 +74,10 @@ object TrashSyncObserver {
      * The per-item decision of [processTrashedItems], with the engine
      * calls injected for unit tests. Returns the number of delete events
      * enqueued.
+     *
+     * The URIs handled in this pass are recorded in [processed] with one
+     * write after the loop (in a finally, so items handled before an
+     * exception are still recorded), not one write per item.
      */
     internal fun processNewlyTrashed(
         items: List<TrashedMediaItem>,
@@ -82,29 +86,35 @@ object TrashSyncObserver {
         enqueueDelete: (String) -> Boolean,
     ): Int {
         var eventsEnqueued = 0
-        for (item in items) {
-            // Skip items already handled in a previous pass.
-            if (item.contentUri in processed) {
-                continue
-            }
+        val handled = LinkedHashSet<String>()
+        try {
+            for (item in items) {
+                // Skip items already handled in a previous pass (or
+                // earlier in this one).
+                if (item.contentUri in processed || item.contentUri in handled) {
+                    continue
+                }
 
-            // Check if this deletion was an intentional offload.
-            // EngineHolder's isMediaOffloaded is the B.2.3 fail-closed
-            // path: a DB error returns false so the deletion is
-            // suppressed (the audit's "verified required" invariant).
-            if (isOffloaded(item.contentUri)) {
-                // Suppress EVENT_NODE_DELETED - retain remote master and Immich export
-                processed.add(item.contentUri)
-                continue
-            }
+                // Check if this deletion was an intentional offload.
+                // EngineHolder's isMediaOffloaded is the B.2.3 fail-closed
+                // path: a DB error returns false so the deletion is
+                // suppressed (the audit's "verified required" invariant).
+                if (isOffloaded(item.contentUri)) {
+                    // Suppress EVENT_NODE_DELETED - retain remote master and Immich export
+                    handled.add(item.contentUri)
+                    continue
+                }
 
-            if (enqueueDelete(item.contentUri)) {
-                eventsEnqueued++
-            }
+                if (enqueueDelete(item.contentUri)) {
+                    eventsEnqueued++
+                }
 
-            // Mark processed regardless of enqueue success to avoid
-            // silent infinite retry loops.
-            processed.add(item.contentUri)
+                // Mark processed regardless of enqueue success to avoid
+                // silent infinite retry loops.
+                handled.add(item.contentUri)
+            }
+        } finally {
+            processed.addAll(handled)
         }
         return eventsEnqueued
     }
