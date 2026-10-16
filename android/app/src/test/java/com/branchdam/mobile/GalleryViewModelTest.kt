@@ -252,6 +252,32 @@ class GalleryViewModelTest {
     }
 
     @Test
+    fun testFolderNamedAllFoldersIsAnOrdinaryFolder() = runTest(testDispatcher) {
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        fun item(id: Long, folder: String) = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = id, contentUri = "content://images/$id",
+                filePath = "/sdcard/$folder/IMG_$id.jpg", displayName = "IMG_$id.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1_000L,
+                dateTakenUnix = id, isRaw = false, folderName = folder
+            )
+        )
+        viewModel.setItemsForTesting(listOf(item(1L, "All Folders"), item(2L, "Camera")))
+        advanceUntilIdle()
+
+        // A real folder with that name filters to itself, not to everything.
+        viewModel.setFolder("All Folders")
+        advanceUntilIdle()
+        assertEquals(listOf("IMG_1.jpg"), viewModel.displayedItems.value.map { it.mediaItem.displayName })
+
+        viewModel.setFolder(com.branchdam.mobile.ui.gallery.ALL_FOLDERS)
+        advanceUntilIdle()
+        assertEquals(2, viewModel.displayedItems.value.size)
+    }
+
+    @Test
     fun testFilterAndSortAndFolder() = runTest(testDispatcher) {
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
         advanceUntilIdle()
@@ -285,7 +311,7 @@ class GalleryViewModelTest {
         viewModel.setItemsForTesting(listOf(photo1, video1, rawItem))
         advanceUntilIdle()
 
-        // Default: ALL, All Folders, DATE DESC
+        // Default: ALL, ALL_FOLDERS, DATE DESC
         var displayed = viewModel.displayedItems.value
         assertEquals(3, displayed.size)
         assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName) // 2000L
@@ -315,7 +341,7 @@ class GalleryViewModelTest {
         assertEquals("PXL_B.mp4", displayed[0].mediaItem.displayName)
 
         // Sort by SIZE DESC
-        viewModel.setFolder("All Folders")
+        viewModel.setFolder(com.branchdam.mobile.ui.gallery.ALL_FOLDERS)
         viewModel.setSort(com.branchdam.mobile.ui.gallery.GallerySortProperty.SIZE, com.branchdam.mobile.ui.gallery.GallerySortDirection.DESC)
         advanceUntilIdle()
         displayed = viewModel.displayedItems.value
