@@ -56,8 +56,16 @@ public final class AppleKeychain: @unchecked Sendable {
     public let service: String
     public let accessibility: CFString
 
+    #if DEBUG || targetEnvironment(simulator)
+    /// In-memory stand-in for the keychain, compiled only into debug and
+    /// simulator builds: unsigned simulator test runs
+    /// (CODE_SIGNING_ALLOWED=NO) have no keychain entitlement, so
+    /// SecItemAdd fails there. A release build on a device never has it,
+    /// so a failed write is reported as a failure instead of being kept
+    /// in memory and lost at the next launch.
     private static let lock = NSLock()
     nonisolated(unsafe) private static var fallbackStore: [String: [String: String]] = [:]
+    #endif
 
     public init(service: String, accessibility: CFString = AppleKeychain.defaultAccessibility) {
         self.service = service
@@ -92,22 +100,29 @@ public final class AppleKeychain: @unchecked Sendable {
         addAttributes[kSecAttrAccessible as String] = accessibility
         let addStatus = SecItemAdd(addAttributes as CFDictionary, nil)
 
+        #if DEBUG || targetEnvironment(simulator)
         Self.lock.lock()
         defer { Self.lock.unlock() }
 
         if addStatus == errSecSuccess {
             Self.fallbackStore[service]?.removeValue(forKey: account)
             return true
-        } else {
-            // In unsigned simulator test environments (e.g. CODE_SIGNING_ALLOWED=NO),
-            // SecItemAdd fails due to missing entitlements. Fall back to an in-memory
-            // store so test suites can exercise the full stack without crashing.
-            if Self.fallbackStore[service] == nil {
-                Self.fallbackStore[service] = [:]
-            }
-            Self.fallbackStore[service]?[account] = value
-            return true
         }
+        // Unsigned simulator test environments (CODE_SIGNING_ALLOWED=NO)
+        // reject SecItemAdd for lack of entitlements. Keep the value in
+        // memory so test suites can exercise the full stack.
+        NSLog("%@", "AppleKeychain: SecItemAdd failed (\(addStatus)); using the debug in-memory store")
+        if Self.fallbackStore[service] == nil {
+            Self.fallbackStore[service] = [:]
+        }
+        Self.fallbackStore[service]?[account] = value
+        return true
+        #else
+        if addStatus != errSecSuccess {
+            NSLog("%@", "AppleKeychain: SecItemAdd failed (\(addStatus))")
+        }
+        return addStatus == errSecSuccess
+        #endif
     }
 
     public func getString(account: String) -> String? {
@@ -124,9 +139,13 @@ public final class AppleKeychain: @unchecked Sendable {
             return str
         }
 
+        #if DEBUG || targetEnvironment(simulator)
         Self.lock.lock()
         defer { Self.lock.unlock() }
         return Self.fallbackStore[service]?[account]
+        #else
+        return nil
+        #endif
     }
 
     @discardableResult
@@ -138,14 +157,24 @@ public final class AppleKeychain: @unchecked Sendable {
         ]
         let status = SecItemDelete(query as CFDictionary)
 
+        #if DEBUG || targetEnvironment(simulator)
         Self.lock.lock()
         defer { Self.lock.unlock() }
         Self.fallbackStore[service]?.removeValue(forKey: account)
-
+        // Without a keychain entitlement the in-memory store is the
+        // store, and it no longer holds the value.
+        _ = status
+        return true
+        #else
         // errSecItemNotFound means "nothing to delete" — treat that as
         // success so callers don't have to special-case the empty
         // state.
-        return status == errSecSuccess || status == errSecItemNotFound || true
+        if status == errSecSuccess || status == errSecItemNotFound {
+            return true
+        }
+        NSLog("%@", "AppleKeychain: SecItemDelete failed (\(status))")
+        return false
+        #endif
     }
 
     /// Removes every item stored under this instance's service. Used
@@ -157,9 +186,11 @@ public final class AppleKeychain: @unchecked Sendable {
         ]
         _ = SecItemDelete(query as CFDictionary)
 
+        #if DEBUG || targetEnvironment(simulator)
         Self.lock.lock()
         defer { Self.lock.unlock() }
         Self.fallbackStore.removeValue(forKey: service)
+        #endif
     }
 
     // MARK: - Convenience accessors for the only secret we currently store
@@ -173,5 +204,73 @@ public final class AppleKeychain: @unchecked Sendable {
                 _ = deleteString(account: Self.apiKeyAccount)
             }
         }
+    }
+}
+
+// MARK: - Pairing credentials
+
+/// The string-secret surface [PairingCredentialStore] needs. [AppleKeychain]
+/// is the production implementation; tests substitute an in-memory one.
+public protocol SecretStore: AnyObject {
+    @discardableResult
+    func setString(_ value: String, account: String) -> Bool
+    func getString(account: String) -> String?
+    @discardableResult
+    func deleteString(account: String) -> Bool
+}
+
+extension AppleKeychain: SecretStore {}
+
+public enum PairingStoreError: Error, Equatable {
+    case apiKeyNotStored
+    case agentIdNotStored
+
+    public var message: String {
+        switch self {
+        case .apiKeyNotStored:
+            return "Couldn't save the API key to the Keychain. The connection was not changed."
+        case .agentIdNotStored:
+            return "Couldn't save the agent ID to the Keychain. The connection was not changed."
+        }
+    }
+}
+
+/// Persists what pairing produced -- the API key and the agent ID the
+/// server bound it to -- so every launch reopens the engine as the same
+/// agent. Without the agent ID, a relaunch fell back to a default ID the
+/// server does not know, and every request was rejected.
+public struct PairingCredentialStore {
+    public static var apiKeyAccount: String { BranchDamKeys.apiKeyAccount.rawValue }
+    public static var agentIdAccount: String { BranchDamKeys.agentIdAccount.rawValue }
+
+    private let store: SecretStore
+
+    public init(store: SecretStore) {
+        self.store = store
+    }
+
+    /// Stores the API key (an empty key clears it, so a user can rotate it
+    /// without re-pairing) and the agent ID. Fails when the Keychain
+    /// refuses either write, so the caller can tell the user instead of
+    /// connecting with credentials that will be gone at the next launch.
+    public func save(apiKey: String, agentId: String) throws {
+        let keySaved = apiKey.isEmpty
+            ? store.deleteString(account: Self.apiKeyAccount)
+            : store.setString(apiKey, account: Self.apiKeyAccount)
+        guard keySaved else { throw PairingStoreError.apiKeyNotStored }
+        guard store.setString(agentId, account: Self.agentIdAccount) else {
+            throw PairingStoreError.agentIdNotStored
+        }
+    }
+
+    /// The agent ID stored at pairing, if any.
+    public var agentId: String? {
+        guard let stored = store.getString(account: Self.agentIdAccount), !stored.isEmpty else { return nil }
+        return stored
+    }
+
+    /// The agent ID to open the engine with.
+    public func resolvedAgentID() -> String {
+        agentId ?? BranchDamCoreBridge.defaultAgentID
     }
 }

@@ -56,4 +56,29 @@ final class BackgroundSyncManagerTests: XCTestCase {
 
         wait(for: [expectation], timeout: 1.0)
     }
+
+    // MARK: - Measured network path (NWPathMonitor)
+
+    func testMobileDataDecision() {
+        XCTAssertFalse(BackgroundSyncManager.isMobileData(isExpensive: false, usesCellular: false), "Wi-Fi / Ethernet")
+        XCTAssertTrue(BackgroundSyncManager.isMobileData(isExpensive: false, usesCellular: true), "cellular")
+        XCTAssertTrue(BackgroundSyncManager.isMobileData(isExpensive: true, usesCellular: false), "hotspot from a phone")
+        XCTAssertTrue(BackgroundSyncManager.isMobileData(isExpensive: true, usesCellular: true))
+    }
+
+    func testCellularGateCombinesMeasuredPathAndSetting() {
+        let manager = BackgroundSyncManager.shared
+        let onCellular = BackgroundSyncManager.isMobileData(isExpensive: true, usesCellular: true)
+
+        manager.syncOnMobileData = false
+        XCTAssertFalse(manager.shouldAllowImmediateSync(isOnCellular: onCellular))
+        manager.syncOnMobileData = true
+        XCTAssertTrue(manager.shouldAllowImmediateSync(isOnCellular: onCellular))
+    }
+
+    func testMeasuredPathIsReadable() {
+        // The simulator's path depends on the host; the property must
+        // just be readable without blocking.
+        _ = BackgroundSyncManager.shared.isOnCellular
+    }
 }

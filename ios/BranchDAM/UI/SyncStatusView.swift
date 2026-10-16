@@ -31,19 +31,33 @@ final class SyncStatusViewModel: ObservableObject {
         refreshQueueMetrics()
     }
 
+    /// Refreshes the queue counters without blocking the main actor.
     func refreshQueueMetrics() {
-        if isEngineReady {
-            pendingCount = BranchDamCoreBridge.shared.countPendingUploads() ?? 0
-            let statuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
-            failedCount = Int64(statuses.values.filter { $0 == "FAILED" }.count)
-        } else {
+        Task { await reloadQueueMetrics() }
+    }
+
+    /// Reads the queue counters from the engine on a background thread.
+    /// The bridge calls block on the engine, so they are awaited rather
+    /// than called from the main actor.
+    func reloadQueueMetrics() async {
+        guard isEngineReady else {
             pendingCount = 0
             failedCount = 0
+            return
         }
+        let pending = await BranchDamCoreBridge.shared.countPendingUploadsAsync() ?? 0
+        let statuses = await BranchDamCoreBridge.shared.getAllMediaStatusesAsync()
+        pendingCount = pending
+        failedCount = Int64(statuses.values.filter { $0 == "FAILED" }.count)
     }
 
     func triggerSync() {
         guard !isSyncing else { return }
+        let syncManager = BackgroundSyncManager.shared
+        guard syncManager.shouldAllowImmediateSync(isOnCellular: syncManager.isOnCellular) else {
+            syncResultMessage = "On mobile data. Turn on Sync on Mobile Data in Settings to sync now."
+            return
+        }
         isSyncing = true
         isCancelled = false
         syncResultMessage = nil
@@ -60,7 +74,8 @@ final class SyncStatusViewModel: ObservableObject {
                 self.isSyncing = false
                 self.activeProgress = nil
 
-                self.refreshQueueMetrics()
+                await self.reloadQueueMetrics()
+                guard !self.isCancelled, !self.isSyncing else { return }
                 if success {
                     self.syncResultMessage = "Sync completed"
                 } else if self.pendingCount > 0 {
@@ -83,21 +98,28 @@ final class SyncStatusViewModel: ObservableObject {
     }
 
     func retryFailedUploads() {
-        let resetCount = BranchDamCoreBridge.shared.resetFailedUploads() ?? 0
-        syncResultMessage = "Reset \(resetCount) failed uploads to pending"
-        refreshQueueMetrics()
+        Task {
+            let resetCount = await BranchDamCoreBridge.shared.resetFailedUploadsAsync() ?? 0
+            syncResultMessage = "Reset \(resetCount) failed uploads to pending"
+            await reloadQueueMetrics()
+        }
     }
 
     func runConnectionDiagnostic() {
         isTestingConnection = true
         connectionDiagnosticError = nil
-        DispatchQueue.global(qos: .userInitiated).async {
-            let err = BranchDamCoreBridge.shared.testConnectionDetailed()
-            DispatchQueue.main.async {
-                self.connectionDiagnosticError = err
-                self.isTestingConnection = false
-            }
+        Task {
+            let err = await BranchDamCoreBridge.shared.testConnectionDetailedAsync()
+            connectionDiagnosticError = err
+            isTestingConnection = false
         }
+    }
+
+    /// "Item N of M" for the active upload. The engine's itemIndex is
+    /// already 1-based (engine.go passes i+1), so it is shown as is.
+    nonisolated static func progressItemLabel(itemIndex: Int, totalItems: Int) -> String? {
+        guard totalItems > 0 else { return nil }
+        return "Item \(min(max(itemIndex, 1), totalItems)) of \(totalItems)"
     }
 
     private func startProgressPolling() {
@@ -271,8 +293,11 @@ public struct SyncStatusView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 Spacer()
-                                if prog.totalItems > 0 {
-                                    Text("Item \(prog.itemIndex + 1) of \(prog.totalItems)")
+                                if let itemLabel = SyncStatusViewModel.progressItemLabel(
+                                    itemIndex: prog.itemIndex,
+                                    totalItems: prog.totalItems
+                                ) {
+                                    Text(itemLabel)
                                         .font(.caption.bold())
                                         .foregroundColor(.secondary)
                                 }

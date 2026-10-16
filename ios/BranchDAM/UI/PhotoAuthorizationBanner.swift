@@ -1,16 +1,33 @@
 import SwiftUI
 import Photos
+import PhotosUI
 import UIKit
 
 /// E.5: Banner shown when camera-roll access is denied, restricted, or
-/// not yet determined. Extracted from ContentView.swift so the banner
-/// is testable from the iOS unit test target.
+/// not yet determined -- and, for `.limited` ("Select Photos"), a notice
+/// that only the selected items are visible and backed up, with a
+/// "Select More Photos" action. Extracted from ContentView.swift so the
+/// banner is testable from the iOS unit test target.
 @MainActor
 public struct PhotoAuthorizationBanner: View {
     public let status: PHAuthorizationStatus
+    private let onDismiss: (() -> Void)?
 
-    public init(status: PHAuthorizationStatus) {
+    public init(status: PHAuthorizationStatus, onDismiss: (() -> Void)? = nil) {
         self.status = status
+        self.onDismiss = onDismiss
+    }
+
+    /// Whether ContentView shows the banner for [status]. `.limited` is a
+    /// grant, but a partial one: photos outside the selection are never
+    /// backed up, so the user is told and offered the picker.
+    nonisolated public static func isShown(for status: PHAuthorizationStatus) -> Bool {
+        switch status {
+        case .notDetermined, .denied, .restricted, .limited:
+            return true
+        default:
+            return false
+        }
     }
 
     public var body: some View {
@@ -20,7 +37,23 @@ public struct PhotoAuthorizationBanner: View {
             Text(bannerMessage)
                 .font(.caption)
                 .multilineTextAlignment(.center)
-            if status == .notDetermined {
+            if status == .limited {
+                HStack(spacing: 12) {
+                    Button(action: presentLimitedLibraryPicker) {
+                        Text(buttonLabel)
+                            .font(.caption.bold())
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    if let onDismiss {
+                        Button("Not Now", action: onDismiss)
+                            .font(.caption)
+                    }
+                }
+            } else if status == .notDetermined {
                 Button(action: requestAccess) {
                     Text("Grant Camera Roll Access")
                         .font(.caption.bold())
@@ -57,6 +90,7 @@ public struct PhotoAuthorizationBanner: View {
         switch status {
         case .denied: return "Camera Roll Access Denied"
         case .restricted: return "Camera Roll Access Restricted"
+        case .limited: return "Limited Photo Access"
         default: return "Camera Roll Access Needed"
         }
     }
@@ -66,15 +100,18 @@ public struct PhotoAuthorizationBanner: View {
     /// text is shown for each status without relying on UIKit view
     /// hierarchy walking (which is fragile across simulator environments).
     var buttonLabel: String {
-        if status == .notDetermined {
-            return "Grant Camera Roll Access"
-        } else {
-            return "Open Settings"
+        switch status {
+        case .notDetermined: return "Grant Camera Roll Access"
+        case .limited: return "Select More Photos"
+        default: return "Open Settings"
         }
     }
 
-    private var bannerMessage: String {
-        "branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters."
+    var bannerMessage: String {
+        if status == .limited {
+            return "branchDAM can only see the photos you selected. Others are not detected or backed up."
+        }
+        return "branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters."
     }
 
     private func requestAccess() {
@@ -82,11 +119,27 @@ public struct PhotoAuthorizationBanner: View {
             DispatchQueue.main.async {
                 let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
                 if status == .authorized || status == .limited {
-                    BranchDamCoreBridge.shared.startEngineIfNeeded()
-                    PhotoKitObserver.shared.startObserving()
+                    // Opening the engine blocks; do it off the main actor.
+                    Task {
+                        await BranchDamCoreBridge.shared.startEngineIfNeededAsync()
+                        PhotoKitObserver.shared.startObserving()
+                    }
                 }
             }
         }
+    }
+
+    /// Opens the system picker that lets the user add to (or change) a
+    /// "Select Photos" grant. PhotoKitObserver picks up the new items
+    /// through its library change observer.
+    private func presentLimitedLibraryPicker() {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        guard var presenter = scene?.keyWindow?.rootViewController else { return }
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+        PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: presenter)
     }
 
     private func openSettings() {

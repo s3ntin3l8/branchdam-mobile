@@ -1,4 +1,5 @@
 import Foundation
+import Network
 @preconcurrency import BackgroundTasks
 
 public class BackgroundSyncManager: @unchecked Sendable {
@@ -27,8 +28,44 @@ public class BackgroundSyncManager: @unchecked Sendable {
     private static let defaultTimeoutSecs = 120
     private static let defaultIntervalMinutes = 15
 
+    /// Watches the current network path so the "Sync on Mobile Data"
+    /// setting is enforced on what the device is actually using.
+    private let pathMonitor = NWPathMonitor()
+    private let pathMonitorQueue = DispatchQueue(label: "com.branchdam.mobile.path-monitor", qos: .utility)
+    private let pathLock = NSLock()
+    private var pathIsExpensive = false
+    private var pathUsesCellular = false
+
     private init() {
         setupUrlSession()
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let expensive = path.isExpensive
+            let cellular = path.usesInterfaceType(.cellular)
+            self?.updatePath(isExpensive: expensive, usesCellular: cellular)
+        }
+        pathMonitor.start(queue: pathMonitorQueue)
+    }
+
+    private func updatePath(isExpensive: Bool, usesCellular: Bool) {
+        pathLock.lock()
+        pathIsExpensive = isExpensive
+        pathUsesCellular = usesCellular
+        pathLock.unlock()
+    }
+
+    /// Pure decision: whether a network path counts as mobile data. An
+    /// expensive path covers cellular and a Wi-Fi hotspot shared from a
+    /// phone, both of which spend the user's data plan.
+    public static func isMobileData(isExpensive: Bool, usesCellular: Bool) -> Bool {
+        isExpensive || usesCellular
+    }
+
+    /// Whether the device is on mobile data right now, as last reported by
+    /// NWPathMonitor. Before the first report this is false.
+    public var isOnCellular: Bool {
+        pathLock.lock()
+        defer { pathLock.unlock() }
+        return Self.isMobileData(isExpensive: pathIsExpensive, usesCellular: pathUsesCellular)
     }
 
     private func setupUrlSession() {
@@ -65,8 +102,11 @@ public class BackgroundSyncManager: @unchecked Sendable {
         return syncOnMobileData // Cellular only if user opted in
     }
 
-    public func triggerImmediateSync(isOnCellular: Bool = false, completion: (@Sendable (Bool) -> Void)? = nil) {
-        guard shouldAllowImmediateSync(isOnCellular: isOnCellular) else {
+    /// Runs one sync batch now. [isOnCellular] defaults to the measured
+    /// network path; tests pass it explicitly.
+    public func triggerImmediateSync(isOnCellular: Bool? = nil, completion: (@Sendable (Bool) -> Void)? = nil) {
+        guard shouldAllowImmediateSync(isOnCellular: isOnCellular ?? self.isOnCellular) else {
+            AppleSyncLogger.shared.log("Sync skipped: on mobile data and Sync on Mobile Data is off")
             completion?(false)
             return
         }
@@ -112,6 +152,17 @@ public class BackgroundSyncManager: @unchecked Sendable {
             tracker.completeOnce {
                 task.setTaskCompleted(success: false)
             }
+        }
+
+        // BGProcessingTaskRequest can only ask for "any network"; enforce
+        // the mobile-data setting here and try again at the next window.
+        guard shouldAllowImmediateSync(isOnCellular: isOnCellular) else {
+            AppleSyncLogger.shared.log("Background sync skipped: on mobile data and Sync on Mobile Data is off")
+            tracker.completeOnce {
+                task.setTaskCompleted(success: true)
+                self.scheduleBackgroundSync()
+            }
+            return
         }
 
         let timeout = Int32(readTimeoutSecs())

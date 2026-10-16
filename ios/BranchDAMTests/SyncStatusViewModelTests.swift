@@ -28,4 +28,19 @@ final class SyncStatusViewModelTests: XCTestCase {
         XCTAssertNil(vm.activeProgress)
         XCTAssertEqual(vm.syncResultMessage, "Sync cancelled by user")
     }
+
+    func testProgressLabelUsesTheOneBasedIndexAsIs() {
+        // engine.go reports itemIndex as i+1: the first item is 1.
+        XCTAssertEqual(SyncStatusViewModel.progressItemLabel(itemIndex: 1, totalItems: 3), "Item 1 of 3")
+        XCTAssertEqual(SyncStatusViewModel.progressItemLabel(itemIndex: 3, totalItems: 3), "Item 3 of 3")
+    }
+
+    func testProgressLabelIsHiddenWithoutATotal() {
+        XCTAssertNil(SyncStatusViewModel.progressItemLabel(itemIndex: 0, totalItems: 0))
+    }
+
+    func testProgressLabelNeverLeavesTheRange() {
+        XCTAssertEqual(SyncStatusViewModel.progressItemLabel(itemIndex: 0, totalItems: 2), "Item 1 of 2")
+        XCTAssertEqual(SyncStatusViewModel.progressItemLabel(itemIndex: 5, totalItems: 2), "Item 2 of 2")
+    }
 }

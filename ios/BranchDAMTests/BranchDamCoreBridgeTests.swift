@@ -220,4 +220,38 @@ final class BranchDamCoreBridgeTests: XCTestCase {
 
         bridge.shutdown()
     }
+
+    func testClientVersionComesFromTheBundle() {
+        let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        XCTAssertEqual(BranchDamCoreBridge.clientVersion, bundleVersion)
+        XCTAssertNotEqual(BranchDamCoreBridge.clientVersion, "1.0.0", "the stub version must not be sent")
+    }
+
+    func testAsyncVariantsMatchTheBlockingCalls() async {
+        let bridge = BranchDamCoreBridge.shared
+        let initialized = await bridge.initializeAsync(
+            dbPath: dbPath,
+            baseURL: "http://localhost:8080",
+            apiKey: "test_key", // pragma: allowlist secret
+            agentID: "iphone-16-pro",
+            devCleartextHosts: "localhost,127.0.0.1"
+        )
+        XCTAssertTrue(initialized)
+        XCTAssertTrue(bridge.isInitialized)
+
+        let pending = await bridge.countPendingUploadsAsync()
+        XCTAssertEqual(pending, bridge.countPendingUploads())
+        let statuses = await bridge.getAllMediaStatusesAsync()
+        XCTAssertEqual(statuses, bridge.getAllMediaStatuses())
+    }
+
+    func testStartEngineUsesTheStoredAgentId() {
+        // Without a stored server URL there is nothing to open; with one,
+        // the agent ID comes from the Keychain rather than a hard-coded
+        // default.
+        let credentials = PairingCredentialStore(store: AppleKeychain.shared)
+        XCTAssertNoThrow(try credentials.save(apiKey: "", agentId: "stored-agent"))
+        defer { _ = AppleKeychain.shared.deleteString(account: PairingCredentialStore.agentIdAccount) }
+        XCTAssertEqual(credentials.resolvedAgentID(), "stored-agent")
+    }
 }

@@ -53,4 +53,22 @@ final class PhotoAuthorizationBannerTests: XCTestCase {
             _ = PhotoAuthorizationBanner(status: status).body
         }
     }
+
+    // MARK: - Limited library ("Select Photos")
+
+    @MainActor func testLimitedAccessOffersTheLimitedLibraryPicker() {
+        let banner = PhotoAuthorizationBanner(status: .limited)
+        XCTAssertEqual(banner.bannerTitle, "Limited Photo Access")
+        XCTAssertEqual(banner.buttonLabel, "Select More Photos")
+        XCTAssertTrue(banner.bannerMessage.contains("only see the photos you selected"))
+        _ = banner.body
+    }
+
+    func testBannerIsShownForEveryStatusShortOfFullAccess() {
+        XCTAssertTrue(PhotoAuthorizationBanner.isShown(for: .notDetermined))
+        XCTAssertTrue(PhotoAuthorizationBanner.isShown(for: .denied))
+        XCTAssertTrue(PhotoAuthorizationBanner.isShown(for: .restricted))
+        XCTAssertTrue(PhotoAuthorizationBanner.isShown(for: .limited), ".limited must not be treated as full access")
+        XCTAssertFalse(PhotoAuthorizationBanner.isShown(for: .authorized))
+    }
 }

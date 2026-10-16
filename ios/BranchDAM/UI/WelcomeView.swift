@@ -70,8 +70,11 @@ public struct WelcomeView: View {
                     // E.1: On first-launch grant, start the engine and
                     // observer immediately so the user gets a live pipeline
                     // rather than waiting for a full app relaunch.
-                    BranchDamCoreBridge.shared.startEngineIfNeeded()
-                    PhotoKitObserver.shared.startObserving()
+                    // Opening the engine blocks; do it off the main actor.
+                    Task {
+                        await BranchDamCoreBridge.shared.startEngineIfNeededAsync()
+                        PhotoKitObserver.shared.startObserving()
+                    }
                     showMainApp = true
                 }
             }

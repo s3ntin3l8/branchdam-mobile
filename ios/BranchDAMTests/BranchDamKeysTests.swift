@@ -99,4 +99,12 @@ final class BranchDamKeysTests: XCTestCase {
             BranchDamKeys.autoImportCameraRoll.rawValue
         )
     }
+
+    func testAgentIdAccountRawValue() {
+        XCTAssertEqual(
+            BranchDamKeys.agentIdAccount.rawValue,
+            "branchdam_agent_id",
+            "agentIdAccount rawValue must stay stable so a stored agent ID is found after an upgrade"
+        )
+    }
 }

@@ -45,6 +45,11 @@ public enum BranchDamKeys: String {
     /// `keychainService`.
     case apiKeyAccount = "branchdam_api_key" // pragma: allowlist secret
 
+    /// Keychain account identifier under which the agent ID from pairing
+    /// is stored, next to the API key: the server binds the key to that
+    /// agent, so the engine must reopen with the same ID on every launch.
+    case agentIdAccount = "branchdam_agent_id"
+
     /// Background sync interval in minutes. Read by `BackgroundSyncManager`
     /// when scheduling background processing tasks.
     case syncIntervalMinutes = "branchdam_sync_interval_minutes"

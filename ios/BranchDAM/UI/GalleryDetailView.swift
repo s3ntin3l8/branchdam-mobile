@@ -311,27 +311,41 @@ public struct GalleryDetailView: View {
         let filename = primary?.originalFilename ?? "IMG_\(item.id.prefix(8)).JPG"
         let unix = Int64(item.asset.creationDate?.timeIntervalSince1970 ?? 0)
 
-        let uploadId = BranchDamCoreBridge.shared.enqueueMedia(
-            localPath: "ph://\(item.id)",
-            filename: filename,
-            capturedAtUnix: unix,
-            localID: item.id
-        )
+        let localID = item.id
 
-        BackgroundSyncManager.shared.triggerImmediateSync()
+        Task {
+            // Enqueueing hashes the file in the engine; keep it off the
+            // main actor.
+            let uploadId = await BranchDamCoreBridge.shared.enqueueMediaAsync(
+                localPath: "ph://\(localID)",
+                filename: filename,
+                capturedAtUnix: unix,
+                localID: localID
+            )
 
-        withAnimation {
-            actionMessage = uploadId > 0 ? "Enqueued for upload" : "Upload enqueue failed"
-        }
-        isActioning = false
+            BackgroundSyncManager.shared.triggerImmediateSync()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            withAnimation { actionMessage = nil }
+            withAnimation {
+                actionMessage = uploadId > 0 ? "Enqueued for upload" : "Upload enqueue failed"
+            }
+            isActioning = false
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation { actionMessage = nil }
+            }
         }
     }
 
     private func performDelete() {
-        let (eligible, reason) = BranchDamCoreBridge.shared.reclaimSafeSpace(localID: item.id)
+        Task {
+            // The reclaim re-checks the node with the server; keep the
+            // round trip off the main actor.
+            let verdict = await BranchDamCoreBridge.shared.reclaimSafeSpaceAsync(localID: item.id)
+            finishDelete(eligible: verdict.eligible, reason: verdict.reason)
+        }
+    }
+
+    private func finishDelete(eligible: Bool, reason: String) {
         if eligible {
             PHPhotoLibrary.shared().performChanges({
                 PHAssetChangeRequest.deleteAssets([item.asset] as NSArray)

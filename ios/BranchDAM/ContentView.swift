@@ -5,6 +5,7 @@ public struct ContentView: View {
     @ObservedObject private var otgManager = AppleOtgIngestManager.shared
     @State private var authorizationStatus: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     @State private var selectedTab = 0
+    @State private var limitedBannerDismissed = false
 
     public init() {}
 
@@ -48,9 +49,16 @@ public struct ContentView: View {
             // E.5: Photo authorization banner when access is not yet granted.
             // Shows for .notDetermined (Set Up Later path), .denied, and
             // .restricted so users always have an in-app path to enable access.
-            if authorizationStatus == .notDetermined || authorizationStatus == .denied || authorizationStatus == .restricted {
+            // .limited ("Select Photos") is a partial grant: the banner says
+            // only the selection is backed up and offers the picker; it can be
+            // dismissed for this session.
+            if PhotoAuthorizationBanner.isShown(for: authorizationStatus),
+               !(authorizationStatus == .limited && limitedBannerDismissed) {
                 VStack {
-                    PhotoAuthorizationBanner(status: authorizationStatus)
+                    PhotoAuthorizationBanner(
+                        status: authorizationStatus,
+                        onDismiss: authorizationStatus == .limited ? { limitedBannerDismissed = true } : nil
+                    )
                     Spacer()
                 }
             }
@@ -100,8 +108,10 @@ public struct ContentView: View {
             // If the user granted access in Settings while the app was
             // backgrounded, start the engine + observer now.
             if authorizationStatus == .authorized || authorizationStatus == .limited {
-                BranchDamCoreBridge.shared.startEngineIfNeeded()
-                PhotoKitObserver.shared.startObserving()
+                Task {
+                    await BranchDamCoreBridge.shared.startEngineIfNeededAsync()
+                    PhotoKitObserver.shared.startObserving()
+                }
             }
         }
     }
