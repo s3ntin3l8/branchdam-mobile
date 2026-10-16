@@ -4,13 +4,13 @@ import XCTest
 final class AppleCameraRollImportNotifierTests: XCTestCase {
 
     private var engine: FakePendingImportEngine!
-    private var afterImport: [(AppleCameraRollImportNotifier.Action, Int)] = []
-    private let afterImportLock = NSLock()
+    private var recorder: AfterImportRecorder!
+    private var afterImport: [(AppleCameraRollImportNotifier.Action, Int)] { recorder.calls }
 
     override func setUp() {
         super.setUp()
         engine = FakePendingImportEngine()
-        afterImport = []
+        recorder = AfterImportRecorder()
         UserDefaults.standard.removeObject(forKey: AppleCameraRollImportNotifier.keyAutoImportEnabled)
     }
 
@@ -23,11 +23,8 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
         AppleCameraRollImportNotifier(
             engine: engine,
             stager: FakeAssetStager(failing: failing),
-            afterImport: { [weak self] action, queued in
-                guard let self = self else { return }
-                self.afterImportLock.lock()
-                self.afterImport.append((action, queued))
-                self.afterImportLock.unlock()
+            afterImport: { [recorder = self.recorder!] action, queued in
+                recorder.record(action, queued)
             }
         )
     }
@@ -162,6 +159,25 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
         XCTAssertEqual(count.value, 1)
         XCTAssertEqual(engine.enqueued.map { $0.localID }, ["A/L0/001"])
         XCTAssertTrue(notifier.getPendingAssets().isEmpty)
+    }
+}
+
+/// Collects afterImport callbacks. A separate Sendable box, because the
+/// callback is @Sendable and the XCTestCase itself is not.
+private final class AfterImportRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _calls: [(AppleCameraRollImportNotifier.Action, Int)] = []
+
+    func record(_ action: AppleCameraRollImportNotifier.Action, _ queued: Int) {
+        lock.lock()
+        _calls.append((action, queued))
+        lock.unlock()
+    }
+
+    var calls: [(AppleCameraRollImportNotifier.Action, Int)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _calls
     }
 }
 
