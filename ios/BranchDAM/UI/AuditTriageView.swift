@@ -154,7 +154,7 @@ public class LineageViewModel: ObservableObject {
             loadError = nil
             advanceQueue()
         } else {
-            loadError = "Failed to confirm lineage pair (engine unavailable)"
+            loadError = String(localized: "Failed to confirm lineage pair (engine unavailable)")
         }
     }
 
@@ -170,7 +170,7 @@ public class LineageViewModel: ObservableObject {
             loadError = nil
             advanceQueue()
         } else {
-            loadError = "Failed to reject lineage pair (engine unavailable)"
+            loadError = String(localized: "Failed to reject lineage pair (engine unavailable)")
         }
     }
 
@@ -259,7 +259,7 @@ enum LineageReviewError: LocalizedError {
     case decisionsUnavailable
 
     var errorDescription: String? {
-        "Lineage review is unavailable: the engine is not open."
+        String(localized: "Lineage review is unavailable: the engine is not open.")
     }
 }
 

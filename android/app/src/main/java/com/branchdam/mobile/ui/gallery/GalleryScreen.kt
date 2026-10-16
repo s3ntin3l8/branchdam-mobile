@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,7 @@ import coil.compose.AsyncImage
 import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import com.branchdam.mobile.MediaAccessLevel
+import com.branchdam.mobile.R
 import com.branchdam.mobile.ui.components.*
 import com.branchdam.mobile.ui.theme.*
 import kotlinx.coroutines.launch
@@ -118,10 +120,10 @@ fun GalleryScreen(
     if (showDeleteConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { Text("Delete Photo(s) Permanently?") },
+            title = { Text(stringResource(R.string.gallery_delete_title)) },
             text = {
                 Text(
-                    "This will permanently delete the selected ${selectedItemIds.size} item(s) from branchDAM and your local device. This action cannot be undone."
+                    quantityStringResource(R.plurals.gallery_delete_body, selectedItemIds.size, selectedItemIds.size)
                 )
             },
             confirmButton = {
@@ -130,7 +132,7 @@ fun GalleryScreen(
                         showDeleteConfirmDialog = false
                         viewModel.deleteSelectedItems(context) { count ->
                             scope.launch {
-                                snackbarHostState.showSnackbar("Deleted $count item(s) permanently")
+                                snackbarHostState.showSnackbar(context.resources.getQuantityString(R.plurals.gallery_deleted_snackbar, count, count))
                             }
                         }
                     },
@@ -138,12 +140,12 @@ fun GalleryScreen(
                         containerColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.common_delete))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -155,7 +157,7 @@ fun GalleryScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "${selectedItemIds.size} selected",
+                            text = stringResource(R.string.gallery_selected_count, selectedItemIds.size),
                             style = MaterialTheme.typography.titleMedium
                         )
                     },
@@ -163,7 +165,7 @@ fun GalleryScreen(
                         IconButton(onClick = { viewModel.clearSelection() }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Clear selection"
+                                contentDescription = stringResource(R.string.gallery_clear_selection)
                             )
                         }
                     },
@@ -179,13 +181,13 @@ fun GalleryScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
-                                contentDescription = if (isAllSelectableSelected) "Deselect all" else "Select all"
+                                contentDescription = stringResource(if (isAllSelectableSelected) R.string.gallery_deselect_all else R.string.gallery_select_all)
                             )
                         }
                         IconButton(onClick = { showDeleteConfirmDialog = true }) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete selected items",
+                                contentDescription = stringResource(R.string.gallery_delete_selected),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -193,7 +195,7 @@ fun GalleryScreen(
                             onClick = {
                                 viewModel.uploadSelectedItems(context) { count ->
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Enqueued $count item(s) for upload")
+                                        snackbarHostState.showSnackbar(context.resources.getQuantityString(R.plurals.gallery_enqueued_snackbar, count, count))
                                     }
                                 }
                             },
@@ -205,7 +207,7 @@ fun GalleryScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("Upload")
+                            Text(stringResource(R.string.gallery_upload))
                         }
                     }
                 )
@@ -215,7 +217,7 @@ fun GalleryScreen(
                 val isFilterActive = selectedFilter != GalleryFilter.ALL || selectedFolder != "All Folders"
 
                 CenterAlignedTopAppBar(
-                    title = { Text("Gallery") },
+                    title = { Text(stringResource(R.string.gallery_title)) },
                     actions = {
                         Box {
                             IconButton(onClick = { showFilterMenu = true }) {
@@ -225,14 +227,14 @@ fun GalleryScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Tune,
-                                            contentDescription = "Filter media",
+                                            contentDescription = stringResource(R.string.gallery_filter_media),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.Tune,
-                                        contentDescription = "Filter media"
+                                        contentDescription = stringResource(R.string.gallery_filter_media)
                                     )
                                 }
                             }
@@ -242,7 +244,7 @@ fun GalleryScreen(
                                 onDismissRequest = { showFilterMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Folder", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                                    text = { Text(stringResource(R.string.gallery_filter_folder), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
                                     enabled = false,
                                     onClick = {}
                                 )
@@ -271,7 +273,7 @@ fun GalleryScreen(
                                 HorizontalDivider()
 
                                 DropdownMenuItem(
-                                    text = { Text("Media Type", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                                    text = { Text(stringResource(R.string.gallery_filter_media_type), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
                                     enabled = false,
                                     onClick = {}
                                 )
@@ -303,7 +305,7 @@ fun GalleryScreen(
                             IconButton(onClick = { showSortMenu = true }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Sort,
-                                    contentDescription = "Sort media"
+                                    contentDescription = stringResource(R.string.gallery_sort_media)
                                 )
                             }
 
@@ -312,42 +314,42 @@ fun GalleryScreen(
                                 onDismissRequest = { showSortMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Date (Newest First)") },
+                                    text = { Text(stringResource(R.string.gallery_sort_date_newest)) },
                                     onClick = {
                                         viewModel.setSort(GallerySortProperty.DATE, GallerySortDirection.DESC)
                                         showSortMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Date (Oldest First)") },
+                                    text = { Text(stringResource(R.string.gallery_sort_date_oldest)) },
                                     onClick = {
                                         viewModel.setSort(GallerySortProperty.DATE, GallerySortDirection.ASC)
                                         showSortMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Size (Largest First)") },
+                                    text = { Text(stringResource(R.string.gallery_sort_size_largest)) },
                                     onClick = {
                                         viewModel.setSort(GallerySortProperty.SIZE, GallerySortDirection.DESC)
                                         showSortMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Size (Smallest First)") },
+                                    text = { Text(stringResource(R.string.gallery_sort_size_smallest)) },
                                     onClick = {
                                         viewModel.setSort(GallerySortProperty.SIZE, GallerySortDirection.ASC)
                                         showSortMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Name (A to Z)") },
+                                    text = { Text(stringResource(R.string.gallery_sort_name_az)) },
                                     onClick = {
                                         viewModel.setSort(GallerySortProperty.NAME, GallerySortDirection.ASC)
                                         showSortMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Name (Z to A)") },
+                                    text = { Text(stringResource(R.string.gallery_sort_name_za)) },
                                     onClick = {
                                         viewModel.setSort(GallerySortProperty.NAME, GallerySortDirection.DESC)
                                         showSortMenu = false
@@ -359,7 +361,7 @@ fun GalleryScreen(
                         IconButton(onClick = onNavigateToSafeSpace) {
                             Icon(
                                 imageVector = Icons.Default.CleaningServices,
-                                contentDescription = "Free Up Storage (Safe Space)"
+                                contentDescription = stringResource(R.string.gallery_free_up_storage)
                             )
                         }
                     }
@@ -548,7 +550,7 @@ private fun GalleryItemCard(
                 ) {
                     Icon(
                         imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Outlined.CheckCircle,
-                        contentDescription = "Selected",
+                        contentDescription = stringResource(R.string.gallery_badge_selected),
                         tint = Color.White,
                         modifier = Modifier.padding(2.dp).size(18.dp)
                     )
@@ -560,7 +562,7 @@ private fun GalleryItemCard(
                     shape = RoundedCornerShape(4.dp),
                 ) {
                     Text(
-                        text = "RAW",
+                        text = stringResource(R.string.gallery_badge_raw),
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold
@@ -579,12 +581,12 @@ private fun GalleryItemCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Video",
+                            contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
-                            text = "VIDEO",
+                            text = stringResource(R.string.gallery_badge_video),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                             fontWeight = FontWeight.Bold
@@ -601,7 +603,7 @@ private fun GalleryItemCard(
                     shape = RoundedCornerShape(4.dp),
                 ) {
                     Text(
-                        text = "Offloaded",
+                        text = stringResource(R.string.gallery_badge_offloaded),
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
@@ -615,7 +617,7 @@ private fun GalleryItemCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudDone,
-                        contentDescription = "Backed Up",
+                        contentDescription = stringResource(R.string.gallery_badge_backed_up),
                         tint = Color.White,
                         modifier = Modifier.padding(3.dp).size(14.dp)
                     )
@@ -628,7 +630,7 @@ private fun GalleryItemCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudSync,
-                        contentDescription = "Pending Upload",
+                        contentDescription = stringResource(R.string.gallery_badge_pending),
                         tint = Color.White,
                         modifier = Modifier.padding(3.dp).size(14.dp)
                     )
@@ -641,7 +643,7 @@ private fun GalleryItemCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = "Upload Failed",
+                        contentDescription = stringResource(R.string.gallery_badge_failed),
                         tint = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(3.dp).size(14.dp)
                     )
@@ -674,13 +676,13 @@ private fun EmptyGalleryState() {
         )
         Spacer(Modifier.height(24.dp))
         Text(
-            "No media items found",
+            stringResource(R.string.gallery_empty_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Photos and videos from your camera roll will appear here once synced.",
+            stringResource(R.string.gallery_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -715,13 +717,13 @@ private fun LimitedMediaAccessBanner(
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Text(
-                text = "branchDAM can only see the photos you selected. Others are not backed up.",
+                text = stringResource(R.string.gallery_limited_access),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onSelectMorePhotos) {
-                Text("Select more")
+                Text(stringResource(R.string.gallery_select_more))
             }
         }
     }

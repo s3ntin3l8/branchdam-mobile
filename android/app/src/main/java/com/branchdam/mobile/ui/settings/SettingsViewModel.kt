@@ -11,6 +11,7 @@ import com.branchdam.mobile.BuildConfig
 import com.branchdam.mobile.ConnectionSettingsStore
 import com.branchdam.mobile.EncryptedPrefs
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.R
 import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.defaultEngineDbPath
 import com.branchdam.mobile.service.ImportConfirmationNotifier
@@ -135,7 +136,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * next to the API key field.
      */
     private val _keyStorageError = MutableStateFlow(
-        if (securePrefs == null) ConnectionSettingsStore.KEY_STORAGE_UNAVAILABLE_MESSAGE else null,
+        if (securePrefs == null) application.getString(R.string.connection_key_storage_unavailable) else null,
     )
     val keyStorageError: StateFlow<String?> = _keyStorageError.asStateFlow()
 
@@ -295,7 +296,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 // fail later with no explanation.
                 _isConnected.value = false
                 _isConnecting.value = false
-                _connectionError.value = ConnectionSettingsStore.messageFor(saved)
+                _connectionError.value = ConnectionSettingsStore.messageResFor(saved)
+                    ?.let { getApplication<Application>().getString(it) }
                 return@launch
             }
             val context = getApplication<Application>()

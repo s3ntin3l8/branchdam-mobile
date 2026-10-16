@@ -2,7 +2,6 @@ package com.branchdam.mobile
 
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -54,7 +53,7 @@ class ConnectionSettingsStoreTest {
         )
 
         assertEquals(ConnectionSettingsStore.SaveResult.KEY_STORAGE_UNAVAILABLE, result)
-        assertNotNull(ConnectionSettingsStore.messageFor(result))
+        assertEquals(R.string.connection_key_storage_unavailable, ConnectionSettingsStore.messageResFor(result))
         verify(plainEditor, never()).putString(eq(BranchDamApplication.KEY_API_KEY), anyOrNull())
         // A plaintext key left behind by an older release is deleted.
         verify(plainEditor).remove(BranchDamApplication.KEY_API_KEY)
@@ -67,7 +66,7 @@ class ConnectionSettingsStoreTest {
     fun keystoreUnavailable_withoutAKeyIsFine() {
         val result = ConnectionSettingsStore.save(null, plain, "https://dam.example.com", "", "pixel-10")
         assertEquals(ConnectionSettingsStore.SaveResult.SAVED, result)
-        assertNull(ConnectionSettingsStore.messageFor(result))
+        assertNull(ConnectionSettingsStore.messageResFor(result))
         verify(plainEditor, never()).putString(eq(BranchDamApplication.KEY_API_KEY), anyOrNull())
     }
 
@@ -87,7 +86,7 @@ class ConnectionSettingsStoreTest {
         whenever(secureEditor.commit()).thenReturn(false)
         val result = ConnectionSettingsStore.save(secure, plain, "https://dam.example.com", "bdam_secret", "pixel-10")
         assertEquals(ConnectionSettingsStore.SaveResult.WRITE_FAILED, result)
-        assertNotNull(ConnectionSettingsStore.messageFor(result))
+        assertEquals(R.string.connection_write_failed, ConnectionSettingsStore.messageResFor(result))
         verify(plainEditor, never()).putString(eq(BranchDamApplication.KEY_API_KEY), anyOrNull())
     }
 
@@ -118,7 +117,7 @@ class ConnectionSettingsStoreTest {
         whenever(plainEditor.commit()).thenReturn(false)
         val result = ConnectionSettingsStore.save(secure, plain, "https://dam.example.com", "bdam_secret", "pixel-10") // pragma: allowlist secret
         assertEquals(ConnectionSettingsStore.SaveResult.WRITE_FAILED, result)
-        assertNotNull(ConnectionSettingsStore.messageFor(result))
+        assertEquals(R.string.connection_write_failed, ConnectionSettingsStore.messageResFor(result))
         verify(secureEditor).commit()
     }
 

@@ -228,9 +228,9 @@ public enum PairingStoreError: Error, Equatable {
     public var message: String {
         switch self {
         case .apiKeyNotStored:
-            return "Couldn't save the API key to the Keychain. The connection was not changed."
+            return String(localized: "Couldn't save the API key to the Keychain. The connection was not changed.")
         case .agentIdNotStored:
-            return "Couldn't save the agent ID to the Keychain. The connection was not changed."
+            return String(localized: "Couldn't save the agent ID to the Keychain. The connection was not changed.")
         }
     }
 }

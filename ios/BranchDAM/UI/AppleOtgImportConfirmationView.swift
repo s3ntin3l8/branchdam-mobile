@@ -182,7 +182,7 @@ public struct AppleOtgCompletedView: View {
                 .foregroundColor(failures.isEmpty ? .green : .orange)
                 .accessibilityHidden(true)
 
-            Text(failures.isEmpty ? "Import Complete" : "Import Finished With Errors")
+            Text(failures.isEmpty ? LocalizedStringKey("Import Complete") : LocalizedStringKey("Import Finished With Errors"))
                 .font(.title3)
                 .fontWeight(.bold)
 

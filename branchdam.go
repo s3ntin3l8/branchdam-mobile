@@ -40,11 +40,17 @@ import (
 // Version
 // ---------------------------------------------------------------------------
 
-// Version is the package's reported build version. Smoke-test helper for
-// shells verifying artifact loading. The canonical version lives in the
-// release-please manifests; this value is a build-time stub.
+// version is the release this source tree builds. release-please bumps the
+// annotated line together with .release-please-manifest.json (see
+// release-please-config.json extra-files), and TestVersionMatchesReleaseManifest
+// keeps the two in step.
+const version = "0.7.11" // x-release-please-version
+
+// Version is the package's reported build version: the default client
+// version sent to the server when the shell doesn't pass its own, and a
+// smoke-test helper for shells verifying artifact loading.
 func Version() string {
-	return "0.5.0-b"
+	return version
 }
 
 // ---------------------------------------------------------------------------

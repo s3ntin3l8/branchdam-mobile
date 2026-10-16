@@ -8,14 +8,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.branchdam.mobile.R
+import com.branchdam.mobile.ui.components.quantityStringResource
 
 private val BATCH_SIZE_OPTIONS = listOf(5, 10, 20, 50)
 private val TIMEOUT_OPTIONS = listOf(60, 120, 300)
-private val TIMEOUT_LABELS = TIMEOUT_OPTIONS.map { "${it}s" }
 private val DEBOUNCE_OPTIONS = listOf(250L, 500L, 1000L)
-private val DEBOUNCE_LABELS = DEBOUNCE_OPTIONS.map { "${it}ms" }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,10 +36,10 @@ fun AdvancedSettingsScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Advanced") },
+                title = { Text(stringResource(R.string.settings_advanced)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -69,11 +70,11 @@ fun AdvancedSettingsScreen(
                         onExpandedChange = { batchExpanded = it },
                     ) {
                         OutlinedTextField(
-                            value = "$uploadBatchSize items",
+                            value = quantityStringResource(R.plurals.advanced_items, uploadBatchSize, uploadBatchSize),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Upload Batch Size") },
-                            supportingText = { Text("Items processed per sync cycle") },
+                            label = { Text(stringResource(R.string.advanced_batch_size)) },
+                            supportingText = { Text(stringResource(R.string.advanced_batch_size_summary)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = batchExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -85,7 +86,7 @@ fun AdvancedSettingsScreen(
                         ) {
                             BATCH_SIZE_OPTIONS.forEach { size ->
                                 DropdownMenuItem(
-                                    text = { Text("$size items") },
+                                    text = { Text(quantityStringResource(R.plurals.advanced_items, size, size)) },
                                     onClick = {
                                         viewModel.setUploadBatchSize(size)
                                         batchExpanded = false
@@ -100,11 +101,11 @@ fun AdvancedSettingsScreen(
                         onExpandedChange = { timeoutExpanded = it },
                     ) {
                         OutlinedTextField(
-                            value = "${syncTimeoutSecs}s",
+                            value = stringResource(R.string.advanced_seconds, syncTimeoutSecs),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Sync Timeout") },
-                            supportingText = { Text("Max seconds to wait for a sync batch") },
+                            label = { Text(stringResource(R.string.advanced_sync_timeout)) },
+                            supportingText = { Text(stringResource(R.string.advanced_sync_timeout_summary)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = timeoutExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -114,9 +115,9 @@ fun AdvancedSettingsScreen(
                             expanded = timeoutExpanded,
                             onDismissRequest = { timeoutExpanded = false },
                         ) {
-                            TIMEOUT_LABELS.forEachIndexed { index, label ->
+                            TIMEOUT_OPTIONS.forEachIndexed { index, seconds ->
                                 DropdownMenuItem(
-                                    text = { Text(label) },
+                                    text = { Text(stringResource(R.string.advanced_seconds, seconds)) },
                                     onClick = {
                                         viewModel.setSyncTimeoutSecs(TIMEOUT_OPTIONS[index])
                                         timeoutExpanded = false
@@ -131,11 +132,11 @@ fun AdvancedSettingsScreen(
                         onExpandedChange = { debounceExpanded = it },
                     ) {
                         OutlinedTextField(
-                            value = "${observerDebounceMs}ms",
+                            value = stringResource(R.string.advanced_milliseconds, observerDebounceMs),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Observer Debounce") },
-                            supportingText = { Text("Delay before processing camera roll changes") },
+                            label = { Text(stringResource(R.string.advanced_debounce)) },
+                            supportingText = { Text(stringResource(R.string.advanced_debounce_summary)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = debounceExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -145,9 +146,9 @@ fun AdvancedSettingsScreen(
                             expanded = debounceExpanded,
                             onDismissRequest = { debounceExpanded = false },
                         ) {
-                            DEBOUNCE_LABELS.forEachIndexed { index, label ->
+                            DEBOUNCE_OPTIONS.forEachIndexed { index, millis ->
                                 DropdownMenuItem(
-                                    text = { Text(label) },
+                                    text = { Text(stringResource(R.string.advanced_milliseconds, millis)) },
                                     onClick = {
                                         viewModel.setObserverDebounceMs(DEBOUNCE_OPTIONS[index])
                                         debounceExpanded = false

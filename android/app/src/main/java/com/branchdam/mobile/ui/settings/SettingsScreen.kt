@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.branchdam.mobile.R
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 private enum class SettingsPage {
@@ -67,7 +69,7 @@ fun SettingsScreen(
             Scaffold(
                 topBar = {
                     CenterAlignedTopAppBar(
-                        title = { Text("Settings") },
+                        title = { Text(stringResource(R.string.settings_title)) },
                         scrollBehavior = scrollBehavior
                     )
                 },
@@ -96,7 +98,7 @@ fun SettingsScreen(
                         ListItem(
                             headlineContent = {
                                 Text(
-                                    text = if (isConnected) "Connected to server" else "Disconnected",
+                                    text = stringResource(if (isConnected) R.string.settings_connected else R.string.settings_disconnected),
                                     color = if (isConnected) MaterialTheme.colorScheme.primary
                                            else MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.Bold
@@ -112,22 +114,25 @@ fun SettingsScreen(
                                 }
                             },
                             leadingContent = {
-                                Surface(
-                                    modifier = Modifier.size(10.dp),
-                                    shape = CircleShape,
-                                    color = if (isConnected) MaterialTheme.colorScheme.primary
+                                // Icon shape as well as colour: the status
+                                // must not be conveyed by colour alone.
+                                Icon(
+                                    imageVector = if (isConnected) Icons.Default.CheckCircle else Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = if (isConnected) MaterialTheme.colorScheme.primary
                                            else MaterialTheme.colorScheme.error,
-                                ) {}
+                                    modifier = Modifier.size(20.dp),
+                                )
                             },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                         )
                     }
 
-                    SettingsCategoryHeader("General")
+                    SettingsCategoryHeader(stringResource(R.string.settings_category_general))
                     SettingsGroup {
                         SettingsCategoryRow(
-                            title = "Connection",
-                            subtitle = if (serverUrl.isNotBlank()) serverUrl else "Server URL, API key, and pairing",
+                            title = stringResource(R.string.settings_connection),
+                            subtitle = if (serverUrl.isNotBlank()) serverUrl else stringResource(R.string.settings_connection_summary),
                             icon = Icons.Default.Link,
                             iconColor = MaterialTheme.colorScheme.primary,
                             onClick = { currentPage = SettingsPage.Connection },
@@ -138,8 +143,8 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         SettingsCategoryRow(
-                            title = "Sync",
-                            subtitle = "Network, schedule, and battery",
+                            title = stringResource(R.string.settings_sync),
+                            subtitle = stringResource(R.string.settings_sync_summary),
                             icon = Icons.Default.Sync,
                             iconColor = MaterialTheme.colorScheme.secondary,
                             onClick = { currentPage = SettingsPage.Sync },
@@ -150,19 +155,19 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         SettingsCategoryRow(
-                            title = "Import & Folders",
-                            subtitle = "Auto-import & Gallery folders",
+                            title = stringResource(R.string.settings_import),
+                            subtitle = stringResource(R.string.settings_import_summary),
                             icon = Icons.Default.CloudUpload,
                             iconColor = MaterialTheme.colorScheme.tertiary,
                             onClick = { currentPage = SettingsPage.Import },
                         )
                     }
 
-                    SettingsCategoryHeader("System")
+                    SettingsCategoryHeader(stringResource(R.string.settings_category_system))
                     SettingsGroup {
                         SettingsCategoryRow(
-                            title = "Appearance",
-                            subtitle = "Theme and dynamic color",
+                            title = stringResource(R.string.settings_appearance),
+                            subtitle = stringResource(R.string.settings_appearance_summary),
                             icon = Icons.Default.Palette,
                             iconColor = MaterialTheme.colorScheme.secondary,
                             onClick = { currentPage = SettingsPage.Appearance },
@@ -173,8 +178,8 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         SettingsCategoryRow(
-                            title = "Advanced",
-                            subtitle = "Batch size, timeout, debounce",
+                            title = stringResource(R.string.settings_advanced),
+                            subtitle = stringResource(R.string.settings_advanced_summary),
                             icon = Icons.Default.Tune,
                             iconColor = MaterialTheme.colorScheme.primary,
                             onClick = { currentPage = SettingsPage.Advanced },
@@ -195,12 +200,12 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Share Diagnostic Log", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.settings_share_log), fontWeight = FontWeight.Bold)
                         }
                     }
 
                     Text(
-                        text = "branchDAM Mobile ${viewModel.versionName} • Build ${viewModel.versionCode}",
+                        text = stringResource(R.string.settings_version_footer, viewModel.versionName, viewModel.versionCode),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier

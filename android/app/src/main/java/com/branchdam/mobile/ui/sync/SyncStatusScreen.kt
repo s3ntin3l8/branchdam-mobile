@@ -8,6 +8,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -18,12 +20,15 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.branchdam.mobile.R
+import com.branchdam.mobile.ui.components.quantityStringResource
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,7 +40,7 @@ fun SyncStatusScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Sync Status") }) },
+        topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.sync_title)) }) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier,
     ) { padding ->
@@ -65,7 +70,7 @@ fun SyncStatusScreen(
                     ListItem(
                         headlineContent = {
                             Text(
-                                text = if (uiState.isServerReachable) "Connected to server" else "Server unreachable",
+                                text = stringResource(if (uiState.isServerReachable) R.string.settings_connected else R.string.sync_server_unreachable),
                                 fontWeight = FontWeight.Bold,
                                 color = if (uiState.isServerReachable)
                                     MaterialTheme.colorScheme.onPrimaryContainer
@@ -74,7 +79,7 @@ fun SyncStatusScreen(
                         },
                         supportingContent = {
                             if (!uiState.isServerReachable) {
-                                val errorDetail = uiState.connectionError ?: if (uiState.isConnected) "Local engine ready, but server handshake failed." else "Engine not initialized"
+                                val errorDetail = uiState.connectionError ?: stringResource(if (uiState.isConnected) R.string.sync_handshake_failed else R.string.sync_engine_not_initialized)
                                 Text(
                                     text = errorDetail,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -116,7 +121,7 @@ fun SyncStatusScreen(
                                         strokeWidth = 2.5.dp
                                     )
                                     Text(
-                                        text = active?.filename ?: "Uploading asset...",
+                                        text = active?.filename ?: stringResource(R.string.sync_uploading_asset),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -129,7 +134,7 @@ fun SyncStatusScreen(
                                         shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
-                                            text = "Item ${active.itemIndex} of ${active.totalItems}",
+                                            text = stringResource(R.string.sync_item_of, active.itemIndex, active.totalItems),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -150,7 +155,7 @@ fun SyncStatusScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (active != null) "${active.formattedTransferred} / ${active.formattedTotal} (${(active.progressFraction * 100).toInt()}%)" else "Preparing upload...",
+                                    text = if (active != null) stringResource(R.string.sync_transferred, active.formattedTransferred, active.formattedTotal, (active.progressFraction * 100).toInt()) else stringResource(R.string.sync_preparing_upload),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -178,7 +183,7 @@ fun SyncStatusScreen(
                     Column {
                         ListItem(
                             headlineContent = { Text(uiState.workerState, fontWeight = FontWeight.SemiBold) },
-                            overlineContent = { Text("Worker State") },
+                            overlineContent = { Text(stringResource(R.string.sync_worker_state)) },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                         )
                         HorizontalDivider(
@@ -190,14 +195,18 @@ fun SyncStatusScreen(
                             headlineContent = {
                                 Text(
                                     text = if (uiState.pendingUploadsCount == 0L) {
-                                        "0 items (All backed up)"
+                                        stringResource(R.string.sync_all_backed_up)
                                     } else {
-                                        "${uiState.pendingUploadsCount} item(s) pending upload"
+                                        quantityStringResource(
+                                            R.plurals.sync_pending_uploads,
+                                            uiState.pendingUploadsCount.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                                            uiState.pendingUploadsCount,
+                                        )
                                     },
                                     fontWeight = FontWeight.SemiBold
                                 )
                             },
-                            overlineContent = { Text("Pending Uploads") },
+                            overlineContent = { Text(stringResource(R.string.sync_pending_uploads_label)) },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                         )
                         HorizontalDivider(
@@ -215,12 +224,12 @@ fun SyncStatusScreen(
                                             DateUtils.MINUTE_IN_MILLIS,
                                         ).toString()
                                     } else {
-                                        "Never synced"
+                                        stringResource(R.string.sync_never_synced)
                                     },
                                     fontWeight = FontWeight.SemiBold
                                 )
                             },
-                            overlineContent = { Text("Last Sync") },
+                            overlineContent = { Text(stringResource(R.string.sync_last_sync)) },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                         )
                     }
@@ -255,13 +264,13 @@ fun SyncStatusScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(Modifier.width(10.dp))
-                                Text("Syncing...")
+                                Text(stringResource(R.string.sync_syncing))
                             }
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Sync Now", fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.sync_now), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -276,7 +285,7 @@ fun SyncStatusScreen(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Refresh Status")
+                    Text(stringResource(R.string.sync_refresh))
                 }
             }
         }
@@ -316,11 +325,12 @@ private fun PulsingConnectionDot(isReachable: Boolean) {
             shape = CircleShape,
             color = color
         ) {}
-        Surface(
-            modifier = Modifier.size(10.dp),
-            shape = CircleShape,
-            color = color
-        ) {}
+        Icon(
+            imageVector = if (isReachable) Icons.Default.CloudDone else Icons.Default.CloudOff,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 

@@ -1,6 +1,7 @@
 package com.branchdam.mobile.ui.sync
 
 import android.app.Application
+import android.content.res.Resources
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
@@ -9,6 +10,7 @@ import com.branchdam.mobile.ActiveUploadProgress
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.CoreErrorCodes
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.R
 import com.branchdam.mobile.coreErrorCode
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.service.SyncWorker
@@ -38,12 +40,6 @@ data class SyncStatusUiState(
     val needsRepair: Boolean = false,
 )
 
-/** Shown instead of a generic failure when the device must be re-paired. */
-const val REPAIR_REQUIRED_MESSAGE = "Device not authorised — re-pair it in Settings"
-
-/** Status of a sync held back by the "sync on mobile data" setting. */
-const val WAITING_FOR_WIFI_MESSAGE = "Waiting for Wi-Fi"
-
 typealias TestConnectionFn = suspend () -> Boolean
 typealias TestConnectionDetailedFn = suspend () -> String?
 
@@ -52,7 +48,9 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     private val prefs = application.getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
     private val workManager = WorkManager.getInstance(application)
 
-    private val _uiState = MutableStateFlow(SyncStatusUiState())
+    private val _uiState = MutableStateFlow(
+        SyncStatusUiState(workerState = application.getString(R.string.sync_state_idle)),
+    )
     val uiState: StateFlow<SyncStatusUiState> = _uiState.asStateFlow()
 
     private var pollJob: kotlinx.coroutines.Job? = null
@@ -113,6 +111,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                 // SUCCEEDED state, which WorkManager replays every time
                 // the screen opens.)
                 val snapshot = workerSnapshot(
+                    resources = getApplication<Application>().resources,
                     state = latest?.state,
                     runAttemptCount = latest?.runAttemptCount ?: 0,
                     lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
@@ -142,6 +141,7 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun checkConnection() {
+        val app = getApplication<Application>()
         viewModelScope.launch {
             val isReachable = withContext(ioDispatcher) {
                 withTimeoutOrNull(reachabilityTimeoutMs) {
@@ -152,14 +152,14 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                 val rawError = withContext(ioDispatcher) {
                     withTimeoutOrNull(reachabilityTimeoutMs) {
                         testConnectionDetailedFn()
-                    } ?: "Connection timed out"
-                } ?: "Server unreachable"
+                    } ?: app.getString(R.string.sync_error_timed_out)
+                } ?: app.getString(R.string.sync_server_unreachable)
 
                 when {
-                    coreErrorCode(rawError) == CoreErrorCodes.AUTH_FAILED -> REPAIR_REQUIRED_MESSAGE
-                    rawError.contains("401") -> "Authentication Failed (HTTP 401) — Check API Key in Settings"
-                    rawError.contains("403") -> "Access Denied (HTTP 403) — Forbidden by server"
-                    rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
+                    coreErrorCode(rawError) == CoreErrorCodes.AUTH_FAILED -> app.getString(R.string.sync_repair_required)
+                    rawError.contains("401") -> app.getString(R.string.sync_error_http_401)
+                    rawError.contains("403") -> app.getString(R.string.sync_error_http_403)
+                    rawError.contains("404") -> app.getString(R.string.sync_error_http_404)
                     else -> rawError
                 }
             } else {
@@ -220,8 +220,10 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
          * Maps the immediate-sync WorkInfo and the persisted sync
          * records to the status card. Pure: the last sync time is
          * whatever SyncWorker persisted, whatever state is replayed.
+         * [resources] supplies the (localized) status text.
          */
         internal fun workerSnapshot(
+            resources: Resources,
             state: WorkInfo.State?,
             runAttemptCount: Int,
             lastSyncTime: Long,
@@ -236,16 +238,22 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
             val isSyncing = (state == WorkInfo.State.ENQUEUED && !held) || state == WorkInfo.State.RUNNING
             val needsRepair = authFailedAt > 0L
             val workerState = if (needsRepair && !isSyncing) {
-                REPAIR_REQUIRED_MESSAGE
+                resources.getString(R.string.sync_repair_required)
             } else {
                 when (state) {
-                    null -> if (engineReady) "Idle" else "Engine not initialized"
-                    WorkInfo.State.ENQUEUED -> if (held) WAITING_FOR_WIFI_MESSAGE else "Enqueued"
-                    WorkInfo.State.RUNNING -> "Running"
-                    WorkInfo.State.SUCCEEDED -> "Last sync succeeded"
-                    WorkInfo.State.FAILED -> "Failed (attempt $runAttemptCount/${SyncWorker.MAX_ATTEMPTS})"
-                    WorkInfo.State.BLOCKED -> "Blocked"
-                    WorkInfo.State.CANCELLED -> "Cancelled"
+                    null -> resources.getString(if (engineReady) R.string.sync_state_idle else R.string.sync_engine_not_initialized)
+                    WorkInfo.State.ENQUEUED -> resources.getString(
+                        if (held) R.string.sync_state_waiting_for_wifi else R.string.sync_state_enqueued,
+                    )
+                    WorkInfo.State.RUNNING -> resources.getString(R.string.sync_state_running)
+                    WorkInfo.State.SUCCEEDED -> resources.getString(R.string.sync_state_succeeded)
+                    WorkInfo.State.FAILED -> resources.getString(
+                        R.string.sync_state_failed,
+                        runAttemptCount,
+                        SyncWorker.MAX_ATTEMPTS,
+                    )
+                    WorkInfo.State.BLOCKED -> resources.getString(R.string.sync_state_blocked)
+                    WorkInfo.State.CANCELLED -> resources.getString(R.string.sync_state_cancelled)
                 }
             }
             return WorkerSnapshot(isSyncing, workerState, lastSyncTime, needsRepair)

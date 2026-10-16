@@ -1,6 +1,7 @@
 package com.branchdam.mobile
 
 import android.content.SharedPreferences
+import androidx.annotation.StringRes
 
 /**
  * Writes the connection settings (server URL, API key, agent ID).
@@ -30,13 +31,6 @@ object ConnectionSettingsStore {
         /** The encrypted or the plain prefs refused the write. */
         WRITE_FAILED,
     }
-
-    /** Shown when the Keystore is unavailable and an API key would have to be stored. */
-    const val KEY_STORAGE_UNAVAILABLE_MESSAGE =
-        "Secure key storage (Android Keystore) is unavailable on this device, " +
-            "so the API key can't be saved. branchDAM never stores it unencrypted."
-
-    const val WRITE_FAILED_MESSAGE = "Could not save the connection settings. Try again."
 
     /**
      * Saves the settings. [secure] is the encrypted prefs, or null when the
@@ -78,10 +72,16 @@ object ConnectionSettingsStore {
             .remove(BranchDamApplication.KEY_API_KEY)
             .commit()
 
-    /** The user-facing message for a failed [save], or null for [SaveResult.SAVED]. */
-    fun messageFor(result: SaveResult): String? = when (result) {
+    /**
+     * The string resource of the user-facing message for a failed [save],
+     * or null for [SaveResult.SAVED]. [R.string.connection_key_storage_unavailable]
+     * is also what the connection screen shows when the Keystore is
+     * unavailable and an API key would have to be stored.
+     */
+    @StringRes
+    fun messageResFor(result: SaveResult): Int? = when (result) {
         SaveResult.SAVED -> null
-        SaveResult.KEY_STORAGE_UNAVAILABLE -> KEY_STORAGE_UNAVAILABLE_MESSAGE
-        SaveResult.WRITE_FAILED -> WRITE_FAILED_MESSAGE
+        SaveResult.KEY_STORAGE_UNAVAILABLE -> R.string.connection_key_storage_unavailable
+        SaveResult.WRITE_FAILED -> R.string.connection_write_failed
     }
 }

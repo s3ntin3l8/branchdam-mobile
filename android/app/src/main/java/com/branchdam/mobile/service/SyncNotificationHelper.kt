@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.branchdam.mobile.MainActivity
+import com.branchdam.mobile.R
 
 object SyncNotificationHelper {
 
@@ -65,10 +66,7 @@ object SyncNotificationHelper {
     }
 
     const val REPAIR_CHANNEL_ID = "branchdam_repair_channel"
-    const val REPAIR_CHANNEL_NAME = "branchDAM Pairing"
     const val REPAIR_NOTIFICATION_ID = 4202
-    const val REPAIR_TITLE = "Re-pair this device"
-    const val REPAIR_TEXT = "The branchDAM server rejected this device's credentials. Scan a new pairing QR code in Settings to resume syncing."
 
     /**
      * Tells the user the server refused this device's credentials (core
@@ -83,7 +81,11 @@ object SyncNotificationHelper {
             manager.getNotificationChannel(REPAIR_CHANNEL_ID) == null
         ) {
             manager.createNotificationChannel(
-                NotificationChannel(REPAIR_CHANNEL_ID, REPAIR_CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationChannel(
+                    REPAIR_CHANNEL_ID,
+                    context.getString(R.string.repair_channel_name),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                )
             )
         }
         val contentIntent = Intent(context, MainActivity::class.java).apply {
@@ -95,11 +97,12 @@ object SyncNotificationHelper {
             contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val repairText = context.getString(R.string.repair_notification_text)
         val notification = NotificationCompat.Builder(context, REPAIR_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle(REPAIR_TITLE)
-            .setContentText(REPAIR_TEXT)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(REPAIR_TEXT))
+            .setContentTitle(context.getString(R.string.repair_notification_title))
+            .setContentText(repairText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(repairText))
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(pending)

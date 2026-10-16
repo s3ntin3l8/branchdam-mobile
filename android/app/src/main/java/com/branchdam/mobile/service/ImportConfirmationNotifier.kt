@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.PendingImport
+import com.branchdam.mobile.R
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.observer.UploadStaging
 import com.branchdam.mobile.receiver.ImportConfirmationReceiver
@@ -87,8 +88,8 @@ object ImportConfirmationNotifier {
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "branchDAM Import Confirmations"
-            val descriptionText = "Notifications to confirm camera roll photo imports"
+            val name = context.getString(R.string.import_notification_channel_name)
+            val descriptionText = context.getString(R.string.import_notification_channel_description)
             val importance = NotificationManager.IMPORTANCE_DEFAULT
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
@@ -126,14 +127,28 @@ object ImportConfirmationNotifier {
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setContentTitle("New Photos Detected")
-            .setContentText("$pendingCount new photo(s) ready to import to branchDAM")
+            .setContentTitle(context.getString(R.string.import_notification_title))
+            .setContentText(
+                context.resources.getQuantityString(R.plurals.import_notification_text, pendingCount, pendingCount),
+            )
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
-            .addAction(android.R.drawable.ic_menu_upload, "Import now", importPending)
-            .addAction(android.R.drawable.ic_menu_recent_history, "Later", laterPending)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Skip", skipPending)
+            .addAction(
+                android.R.drawable.ic_menu_upload,
+                context.getString(R.string.import_notification_import_now),
+                importPending,
+            )
+            .addAction(
+                android.R.drawable.ic_menu_recent_history,
+                context.getString(R.string.import_notification_later),
+                laterPending,
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                context.getString(R.string.import_notification_skip),
+                skipPending,
+            )
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.notify(NOTIFICATION_ID, builder.build())
@@ -147,8 +162,8 @@ object ImportConfirmationNotifier {
         createNotificationChannel(context)
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
-            .setContentTitle("Importing photos")
-            .setContentText("Queuing photos for upload to branchDAM")
+            .setContentTitle(context.getString(R.string.import_notification_importing_title))
+            .setContentText(context.getString(R.string.import_notification_importing_text))
             .setProgress(0, 0, true)
             .setOngoing(true)
             .setSilent(true)

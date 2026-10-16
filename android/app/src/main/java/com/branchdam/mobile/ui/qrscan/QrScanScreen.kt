@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview as ComposablePreview
@@ -40,6 +41,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.branchdam.mobile.R
 import com.branchdam.mobile.ui.PairingConfig
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -93,10 +95,10 @@ fun QrScanScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Scan QR Code") },
+                title = { Text(stringResource(R.string.qrscan_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -206,7 +208,7 @@ private fun QrScanOverlay() {
         }
 
         Text(
-            "Center the QR code in the frame",
+            stringResource(R.string.qrscan_hint),
             color = Color.White,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
@@ -240,9 +242,9 @@ private fun PermissionDeniedPanel(
         Spacer(Modifier.height(24.dp))
         Text(
             if (permanentlyDenied) {
-                "Camera permission was permanently denied. Open Settings to grant it."
+                stringResource(R.string.qrscan_permission_denied)
             } else {
-                "Camera permission is required to scan QR codes."
+                stringResource(R.string.qrscan_permission_required)
             },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
@@ -259,11 +261,11 @@ private fun PermissionDeniedPanel(
                 },
                 shape = MaterialTheme.shapes.large
             ) {
-                Text("Open Settings")
+                Text(stringResource(R.string.qrscan_open_settings))
             }
         } else {
             Button(onClick = onRequest, shape = MaterialTheme.shapes.large) {
-                Text("Grant Permission")
+                Text(stringResource(R.string.qrscan_grant_permission))
             }
         }
     }
@@ -286,25 +288,25 @@ private fun PairingConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Pair with Server", fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.qrscan_pair_title), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                DetailRow("Server URL", config.serverUrl)
+                DetailRow(stringResource(R.string.qrscan_server_url), config.serverUrl)
                 DetailRow(
-                    "API Key",
-                    config.apiKey.ifBlank { "(none)" }.let { maskApiKey(it) },
+                    stringResource(R.string.qrscan_api_key),
+                    if (config.apiKey.isBlank()) stringResource(R.string.qrscan_api_key_none) else maskApiKey(config.apiKey),
                 )
-                DetailRow("Agent ID", config.agentId)
+                DetailRow(stringResource(R.string.qrscan_agent_id), config.agentId)
             }
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text("Save and Connect")
+                Text(stringResource(R.string.qrscan_save_connect))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.common_cancel))
             }
         },
     )

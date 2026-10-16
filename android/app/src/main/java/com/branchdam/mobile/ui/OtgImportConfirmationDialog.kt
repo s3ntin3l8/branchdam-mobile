@@ -9,11 +9,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.branchdam.mobile.R
 import com.branchdam.mobile.otg.OtgIngestFileError
 import com.branchdam.mobile.otg.OtgIngestProgress
 import com.branchdam.mobile.otg.OtgScanResult
+import com.branchdam.mobile.ui.components.quantityStringResource
 
 @Composable
 fun OtgImportConfirmationDialog(
@@ -29,7 +32,7 @@ fun OtgImportConfirmationDialog(
         title = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "USB-C SD Card Detected",
+                    text = stringResource(R.string.otg_detected_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -43,7 +46,7 @@ fun OtgImportConfirmationDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Found ${scanResult.totalCount} media items (${scanResult.formattedTotalSize}):",
+                    text = quantityStringResource(R.plurals.otg_found_items, scanResult.totalCount, scanResult.totalCount, scanResult.formattedTotalSize),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
@@ -58,20 +61,20 @@ fun OtgImportConfirmationDialog(
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (scanResult.rawCount > 0) {
-                            M3SummaryRow("RAW Photos", scanResult.rawCount.toString())
+                            M3SummaryRow(stringResource(R.string.otg_raw_photos), scanResult.rawCount.toString())
                         }
                         if (scanResult.jpegCount > 0) {
-                            M3SummaryRow("JPEGs / HEICs", scanResult.jpegCount.toString())
+                            M3SummaryRow(stringResource(R.string.otg_jpegs_heics), scanResult.jpegCount.toString())
                         }
                         if (scanResult.videoCount > 0) {
-                            M3SummaryRow("Videos", scanResult.videoCount.toString())
+                            M3SummaryRow(stringResource(R.string.otg_videos), scanResult.videoCount.toString())
                         }
                     }
                 }
 
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Confirm import to copy full-resolution masters into branchDAM local queue for sync.",
+                    text = stringResource(R.string.otg_confirm_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -79,12 +82,12 @@ fun OtgImportConfirmationDialog(
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text("Import to branchDAM")
+                Text(stringResource(R.string.otg_import_button))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )
@@ -112,7 +115,7 @@ fun OtgIngestProgressDialog(
         modifier = modifier,
         title = {
             Text(
-                text = "Importing Media",
+                text = stringResource(R.string.otg_importing_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -129,11 +132,11 @@ fun OtgIngestProgressDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "${(progress.percentage * 100).toInt()}%",
+                            text = stringResource(R.string.otg_percent, (progress.percentage * 100).toInt()),
                             style = MaterialTheme.typography.labelSmall
                         )
                         Text(
-                            text = "${progress.currentFileIndex}/${progress.totalFiles}",
+                            text = stringResource(R.string.otg_file_of, progress.currentFileIndex, progress.totalFiles),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -148,7 +151,7 @@ fun OtgIngestProgressDialog(
         },
         confirmButton = {
             TextButton(onClick = onCancel) {
-                Text("Cancel")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )
@@ -167,7 +170,7 @@ fun OtgIngestCompletedDialog(
         modifier = modifier,
         title = {
             Text(
-                text = if (fileErrors.isEmpty()) "Import Complete" else "Import Finished With Errors",
+                text = stringResource(if (fileErrors.isEmpty()) R.string.otg_complete_title else R.string.otg_complete_with_errors_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = if (fileErrors.isEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
@@ -176,13 +179,13 @@ fun OtgIngestCompletedDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 Text(
-                    text = "Successfully staged $importedCount items (${com.branchdam.mobile.otg.OtgMediaCandidate.formatBytes(totalBytes)}) to branchDAM queue.",
+                    text = quantityStringResource(R.plurals.otg_staged_items, importedCount, importedCount, com.branchdam.mobile.otg.OtgMediaCandidate.formatBytes(totalBytes)),
                     style = MaterialTheme.typography.bodyLarge
                 )
                 if (fileErrors.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        text = "${fileErrors.size} item(s) skipped:",
+                        text = quantityStringResource(R.plurals.otg_skipped_items, fileErrors.size, fileErrors.size),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error
@@ -216,7 +219,7 @@ fun OtgIngestCompletedDialog(
         },
         confirmButton = {
             Button(onClick = onDismiss) {
-                Text("Done")
+                Text(stringResource(R.string.common_done))
             }
         }
     )
@@ -233,7 +236,7 @@ fun OtgIngestErrorDialog(
         modifier = modifier,
         title = {
             Text(
-                text = "Import Failed",
+                text = stringResource(R.string.otg_failed_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
@@ -247,7 +250,7 @@ fun OtgIngestErrorDialog(
         },
         confirmButton = {
             Button(onClick = onDismiss) {
-                Text("OK")
+                Text(stringResource(R.string.common_ok))
             }
         }
     )
