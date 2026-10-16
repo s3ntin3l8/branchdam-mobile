@@ -33,10 +33,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.branchdam.mobile.otg.OtgIngestManager
 import com.branchdam.mobile.otg.OtgState
+import com.branchdam.mobile.ui.OtgCardAccessDialog
 import com.branchdam.mobile.ui.OtgImportConfirmationDialog
 import com.branchdam.mobile.ui.OtgIngestCompletedDialog
 import com.branchdam.mobile.ui.OtgIngestErrorDialog
 import com.branchdam.mobile.ui.OtgIngestProgressDialog
+import com.branchdam.mobile.ui.rememberOtgCardFolderPicker
 import com.branchdam.mobile.ui.navigation.AppNavGraph
 import com.branchdam.mobile.ui.navigation.NavigationSuiteScaffold
 import com.branchdam.mobile.ui.navigation.Screen
@@ -242,23 +244,28 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val otgState by otgManager.state.collectAsState()
+                    val pickCardFolder = rememberOtgCardFolderPicker { uri ->
+                        val label = (otgState as? OtgState.NeedsCardAccess)?.deviceLabel
+                        if (label != null) {
+                            otgManager.onDocumentTreeSelected(uri, label)
+                        } else {
+                            otgManager.onDocumentTreeSelected(uri)
+                        }
+                    }
                     when (val state = otgState) {
+                        is OtgState.NeedsCardAccess -> {
+                            OtgCardAccessDialog(
+                                deviceLabel = state.deviceLabel,
+                                onChooseFolder = pickCardFolder,
+                                onDismiss = { otgManager.reset() },
+                            )
+                        }
                         is OtgState.AwaitingConfirmation -> {
                             OtgImportConfirmationDialog(
                                 scanResult = state.scanResult,
-                                onConfirm = {
-                                    otgManager.confirmImport(
-                                        scanResult = state.scanResult,
-                                        onFileStaged = { file, candidate ->
-                                            EngineHolder.enqueueMedia(
-                                                localPath = file.absolutePath,
-                                                filename = candidate.fileName,
-                                                capturedAtUnix = candidate.lastModifiedUnix,
-                                                localId = candidate.uri
-                                            )
-                                        }
-                                    )
-                                },
+                                // The manager copies, verifies and enqueues
+                                // each file itself (see OtgIngestManager).
+                                onConfirm = { otgManager.confirmImport(scanResult = state.scanResult) },
                                 onDismiss = { otgManager.cancelImport() },
                             )
                         }

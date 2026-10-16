@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Card reader attached, volume not directly readable -->
+    <string name="otg_card_access_title">Choose the SD card</string>
+    <string name="otg_card_access_body">%1$s is connected. Pick the card (or its DCIM folder) in the next screen so branchDAM can read it.</string>
+    <string name="otg_card_access_choose">Choose card</string>
+    <string name="otg_card_access_not_now">Not now</string>
+
+    <!-- Manual entry point in Settings > Import -->
+    <string name="otg_import_from_card_title">Import from SD card</string>
+    <string name="otg_import_from_card_summary">Copy photos and videos from a card reader into the upload queue</string>
+</resources>

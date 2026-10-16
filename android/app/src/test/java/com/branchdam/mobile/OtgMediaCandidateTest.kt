@@ -4,6 +4,7 @@ import com.branchdam.mobile.otg.OtgMediaCandidate
 import com.branchdam.mobile.otg.OtgScanResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,5 +75,15 @@ class OtgMediaCandidateTest {
         assertEquals(1, result.jpegCount)
         assertEquals(1, result.videoCount)
         assertEquals(135_000_000, result.totalSizeBytes)
+    }
+
+    @Test
+    fun localIdDistinguishesAReusedFileNameOnAReformattedCard() {
+        val first = OtgMediaCandidate("content://card/DCIM/IMG_0001.CR3", "DCIM/IMG_0001.CR3", "IMG_0001.CR3", 100L, 1_700_000_000L, true, false)
+        val sameFileAgain = first.copy()
+        val newShotSameName = first.copy(sizeBytes = 120L, lastModifiedUnix = 1_800_000_000L)
+        assertEquals(first.localId, sameFileAgain.localId)
+        assertNotEquals(first.localId, newShotSameName.localId)
+        assertTrue(first.localId.startsWith(first.uri))
     }
 }

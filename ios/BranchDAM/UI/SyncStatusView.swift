@@ -348,6 +348,8 @@ public struct SyncStatusView: View {
                             .foregroundColor(.primary)
                             .cornerRadius(12)
                     }
+
+                    AppleOtgCardImportButton()
                 }
                 .padding()
             }

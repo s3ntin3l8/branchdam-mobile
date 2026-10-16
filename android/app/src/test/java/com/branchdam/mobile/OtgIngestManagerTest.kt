@@ -1,5 +1,6 @@
 package com.branchdam.mobile
 
+import com.branchdam.mobile.otg.OtgEnqueuer
 import com.branchdam.mobile.otg.OtgHashProvider
 import com.branchdam.mobile.otg.OtgIngestFileError
 import com.branchdam.mobile.otg.OtgIngestManager
@@ -26,6 +27,9 @@ class OtgIngestManagerTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    /** Accepts every staged copy, so no test depends on the native engine. */
+    private val acceptAll = OtgEnqueuer { _, _ -> 1L }
+
     @Test
     fun testCardDetectionTransitionsToAwaitingConfirmation() = runTest(testDispatcher) {
         val root = tempFolder.newFolder("SD_CARD")
@@ -34,7 +38,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         assertEquals(OtgState.Idle, manager.state.value)
@@ -56,7 +61,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         manager.onCardDetected("SONY A7IV", root)
@@ -77,7 +83,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         val candidate = OtgMediaCandidate(
@@ -124,7 +131,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         val candidate1 = OtgMediaCandidate(
@@ -167,7 +175,8 @@ class OtgIngestManagerTest {
     fun testCancelImportStopsInFlightExecution() = runTest(testDispatcher) {
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         manager.cancelImport()
@@ -194,7 +203,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         val claimedSize = OtgIngestManager.MAX_OTG_STAGE_BYTES + 1L
@@ -264,7 +274,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         val candidate = OtgMediaCandidate(
@@ -334,6 +345,7 @@ class OtgIngestManagerTest {
             scope = this,
             ioDispatcher = testDispatcher,
             hashObserver = { _, _, _ -> hashEvents++ },
+            enqueuer = acceptAll,
         )
 
         val candidate = OtgMediaCandidate(
@@ -387,7 +399,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         val okCandidate = OtgMediaCandidate(
@@ -464,7 +477,8 @@ class OtgIngestManagerTest {
 
         val manager = OtgIngestManager(
             scope = this,
-            ioDispatcher = testDispatcher
+            ioDispatcher = testDispatcher,
+            enqueuer = acceptAll,
         )
 
         val candidate = OtgMediaCandidate(
@@ -525,6 +539,7 @@ class OtgIngestManagerTest {
             ioDispatcher = testDispatcher,
             hashObserver = { _, _, _ -> hashObserverCalls++ },
             hashProvider = mismatchingProvider,
+            enqueuer = acceptAll,
         )
 
         val candidate = OtgMediaCandidate(
@@ -605,6 +620,7 @@ class OtgIngestManagerTest {
             scope = this,
             ioDispatcher = testDispatcher,
             hashProvider = firstTimeProvider,
+            enqueuer = acceptAll,
         )
 
         val candidate = OtgMediaCandidate(
@@ -625,5 +641,152 @@ class OtgIngestManagerTest {
         assertEquals(1, completed.importedCount)
         assertEquals(0, completed.fileErrors.size)
         assertTrue(File(stageDir, "DCIM/FIRST.JPG").exists())
+    }
+
+    private fun candidateFor(file: File, relativePath: String) = OtgMediaCandidate(
+        uri = file.absolutePath,
+        relativePath = relativePath,
+        fileName = file.name,
+        sizeBytes = file.length(),
+        lastModifiedUnix = 1700000000,
+        isRaw = file.name.endsWith(".CR3"),
+        isVideo = false,
+    )
+
+    @Test
+    fun testUnreadableCardAsksForFolderAccess() = runTest(testDispatcher) {
+        val manager = OtgIngestManager(scope = this, ioDispatcher = testDispatcher, enqueuer = acceptAll)
+        manager.onCardNeedsAccess("SanDisk Card Reader")
+        assertEquals(OtgState.NeedsCardAccess("SanDisk Card Reader"), manager.state.value)
+        manager.reset()
+        assertEquals(OtgState.Idle, manager.state.value)
+    }
+
+    @Test
+    fun testEmptyPickedFolderReportsNoMediaInsteadOfClosingSilently() = runTest(testDispatcher) {
+        // Without a Context the SAF scan yields nothing, like a folder
+        // with no supported media.
+        val manager = OtgIngestManager(scope = this, ioDispatcher = testDispatcher, enqueuer = acceptAll)
+        manager.onDocumentTreeSelected(org.mockito.kotlin.mock())
+        val state = manager.state.value
+        assertTrue("expected Error, got $state", state is OtgState.Error)
+        assertEquals(OtgIngestManager.NO_MEDIA_IN_FOLDER, (state as OtgState.Error).message)
+    }
+
+    @Test
+    fun testEnqueueRefusalDeletesStagedCopyAndContinues() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_ENQ")
+        val dcim = File(root, "DCIM").apply { mkdirs() }
+        val refused = File(dcim, "IMG_0001.CR3").apply { writeBytes(ByteArray(100)) }
+        val accepted = File(dcim, "IMG_0002.CR3").apply { writeBytes(ByteArray(200)) }
+        val stageDir = tempFolder.newFolder("otg_stage_enq")
+
+        val enqueued = mutableListOf<String>()
+        val manager = OtgIngestManager(
+            scope = this,
+            ioDispatcher = testDispatcher,
+            enqueuer = OtgEnqueuer { staged, candidate ->
+                if (candidate.fileName == "IMG_0001.CR3") 0L else { enqueued += staged.absolutePath; 7L }
+            },
+        )
+        val scanResult = OtgScanResult(
+            "CARD",
+            root.absolutePath,
+            listOf(candidateFor(refused, "DCIM/IMG_0001.CR3"), candidateFor(accepted, "DCIM/IMG_0002.CR3")),
+        )
+        manager.confirmImport(scanResult = scanResult, destinationDir = stageDir)
+
+        val completed = manager.state.value as OtgState.Completed
+        assertEquals(1, completed.importedCount)
+        assertEquals(200L, completed.totalBytes)
+        assertEquals(1, completed.fileErrors.size)
+        assertEquals("IMG_0001.CR3", completed.fileErrors.single().candidate.fileName)
+        assertFalse("a copy the queue refused must not linger", File(stageDir, "DCIM/IMG_0001.CR3").exists())
+        assertEquals(listOf(File(stageDir, "DCIM/IMG_0002.CR3").absolutePath), enqueued)
+    }
+
+    @Test
+    fun testThrowingEnqueuerOrObserverDoesNotAbortTheRun() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_THROW")
+        val dcim = File(root, "DCIM").apply { mkdirs() }
+        val files = (1..3).map { File(dcim, "IMG_000$it.JPG").apply { writeBytes(ByteArray(10 * it)) } }
+        val stageDir = tempFolder.newFolder("otg_stage_throw")
+
+        var observed = 0
+        val manager = OtgIngestManager(
+            scope = this,
+            ioDispatcher = testDispatcher,
+            enqueuer = OtgEnqueuer { _, candidate ->
+                if (candidate.fileName == "IMG_0001.JPG") throw IllegalStateException("engine closed") else 1L
+            },
+        )
+        manager.confirmImport(
+            scanResult = OtgScanResult("CARD", root.absolutePath, files.map { candidateFor(it, "DCIM/${it.name}") }),
+            destinationDir = stageDir,
+            onFileStaged = { _, candidate ->
+                observed++
+                if (candidate.fileName == "IMG_0002.JPG") throw RuntimeException("observer bug")
+            },
+        )
+
+        val completed = manager.state.value as OtgState.Completed
+        assertEquals(2, completed.importedCount)
+        assertEquals(1, completed.fileErrors.size)
+        assertEquals(2, observed)
+        assertFalse(File(stageDir, "DCIM/IMG_0001.JPG").exists())
+        assertTrue(File(stageDir, "DCIM/IMG_0003.JPG").exists())
+    }
+
+    @Test
+    fun testSuccessfulStageLeavesNoPartFiles() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_PART")
+        val source = File(root, "DCIM/IMG_0001.CR3").apply { parentFile!!.mkdirs(); writeBytes(ByteArray(4096)) }
+        val stageDir = tempFolder.newFolder("otg_stage_part")
+        val manager = OtgIngestManager(scope = this, ioDispatcher = testDispatcher, enqueuer = acceptAll)
+
+        manager.confirmImport(
+            scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidateFor(source, "DCIM/IMG_0001.CR3"))),
+            destinationDir = stageDir,
+        )
+
+        assertTrue(manager.state.value is OtgState.Completed)
+        val names = stageDir.walk().filter { it.isFile }.map { it.name }.toList()
+        assertEquals(listOf("IMG_0001.CR3"), names)
+    }
+
+    @Test
+    fun testUnsafeRelativePathIsSkipped() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_UNSAFE")
+        val source = File(root, "IMG_0001.JPG").apply { writeBytes(ByteArray(10)) }
+        val stageDir = tempFolder.newFolder("otg_stage_unsafe")
+        val manager = OtgIngestManager(scope = this, ioDispatcher = testDispatcher, enqueuer = acceptAll)
+
+        manager.confirmImport(
+            scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidateFor(source, "../IMG_0001.JPG"))),
+            destinationDir = stageDir,
+        )
+
+        val completed = manager.state.value as OtgState.Completed
+        assertEquals(0, completed.importedCount)
+        assertEquals(1, completed.fileErrors.size)
+        assertFalse(File(stageDir.parentFile, "IMG_0001.JPG").exists())
+    }
+
+    @Test
+    fun testBlake3MismatchMessageNamesTheFile() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_MSG")
+        val source = File(root, "ROT.CR3").apply { writeBytes(ByteArray(10)) }
+        val manager = OtgIngestManager(
+            scope = this,
+            ioDispatcher = testDispatcher,
+            hashProvider = OtgHashProvider { _, _ -> Pair("a".repeat(64), "b".repeat(64)) },
+            enqueuer = acceptAll,
+        )
+        manager.confirmImport(
+            scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidateFor(source, "ROT.CR3"))),
+            destinationDir = tempFolder.newFolder("otg_stage_msg"),
+        )
+        val message = (manager.state.value as OtgState.Completed).fileErrors.single().message
+        assertTrue(message, message.startsWith("BLAKE3 mismatch: ROT.CR3 "))
     }
 }

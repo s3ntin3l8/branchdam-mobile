@@ -84,14 +84,15 @@ public struct ContentView: View {
                     progress: progress,
                     onCancel: { otgManager.cancelImport() }
                 )
-            } else if case .completed(let importedCount, let totalBytes) = otgManager.state {
+            } else if case .completed(let importedCount, let totalBytes, let failures) = otgManager.state {
                 Color.black.opacity(0.4)
                     .edgesIgnoringSafeArea(.all)
 
                 AppleOtgCompletedView(
                     importedCount: importedCount,
                     totalBytes: totalBytes,
-                    onDismiss: { otgManager.reset() }
+                    onDismiss: { otgManager.reset() },
+                    failures: failures
                 )
             } else if case .error(let message) = otgManager.state {
                 Color.black.opacity(0.4)
