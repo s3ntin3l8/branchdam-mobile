@@ -56,9 +56,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     /// during this session can be read from `changeDetails(for:)` when
     /// the persistent change history is unavailable. scanQueue only.
     private var allAssets: PHFetchResult<PHAsset>?
-    /// The engine's upload statuses by local ID, read once per scan;
+    /// The engine's upload statuses by local ID, read once per scan, or
+    /// nil when that read failed (persistIntent then asks per asset);
     /// scanQueue only.
-    private var queuedStatuses: [String: String] = [:]
+    private var queuedStatuses: [String: String]?
 
     public init(
         cursor: CameraRollCursorStore = CameraRollCursorStore(),
@@ -126,8 +127,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             NSLog("PhotoKitObserver: engine bridge uninitialized, skipping asset discovery")
             return
         }
-        // One engine call for the whole scan instead of one per asset.
-        queuedStatuses = BranchDamCoreBridge.shared.getAllMediaStatuses()
+        // One engine call for the whole scan instead of one per asset. A
+        // failed read is nil, not "nothing queued": persistIntent then
+        // asks per asset rather than re-staging the whole library.
+        queuedStatuses = BranchDamCoreBridge.shared.loadAllMediaStatuses()
 
         if let token = loadToken() {
             do {
@@ -192,7 +195,9 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     /// queue was imported before and is not offered again; one the user
     /// skipped stays skipped.
     private func persistIntent(_ asset: DiscoveredAsset) -> CameraRollIntake.Outcome {
-        if let status = queuedStatuses[asset.localIdentifier], status != "NOT_ENQUEUED" {
+        let status = queuedStatuses.map { $0[asset.localIdentifier] ?? "NOT_ENQUEUED" }
+            ?? BranchDamCoreBridge.shared.getMediaStatus(localID: asset.localIdentifier)
+        if status != "NOT_ENQUEUED" {
             return .alreadyDecided
         }
         switch notifier.stagePendingAsset(asset) {

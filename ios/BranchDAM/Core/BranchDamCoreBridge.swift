@@ -411,15 +411,26 @@ public class BranchDamCoreBridge: @unchecked Sendable {
     }
 
     public func getAllMediaStatuses() -> [String: String] {
+        loadAllMediaStatuses() ?? [:]
+    }
+
+    /// Every upload status by local ID, or nil when they could not be read
+    /// (engine not open, query or decode failure) -- unlike
+    /// getAllMediaStatuses, a failure is not an empty map, so a caller can
+    /// tell "nothing queued" from "unknown".
+    public func loadAllMediaStatuses() -> [String: String]? {
         #if canImport(branchdam)
-        guard isInitialized else { return [:] }
-        var map: [String: String] = [:]
+        guard isInitialized else { return nil }
+        var map: [String: String]?
         queryQueue.sync {
             do {
                 let jsonStr = try branchdam.bindingGetAllMediaStatuses()
-                if let data = jsonStr.data(using: .utf8),
-                   let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
-                    map = decoded
+                if let data = jsonStr.data(using: .utf8) {
+                    do {
+                        map = try JSONDecoder().decode([String: String].self, from: data)
+                    } catch {
+                        NSLog("getAllMediaStatuses: decode failed: %@", String(describing: error))
+                    }
                 }
             } catch {
                 NSLog("getAllMediaStatuses failed: %@", String(describing: error))

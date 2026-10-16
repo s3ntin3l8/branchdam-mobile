@@ -97,6 +97,20 @@ public protocol PendingImportEngine: AnyObject, Sendable {
     func mediaStatus(localID: String) -> String
 }
 
+/// Upload statuses as the core reports them (`queue.GetMediaStatus`).
+public enum UploadStatus {
+    /// Whether [status] means the asset is in the upload queue and will
+    /// get (or got) there without being enqueued again. FAILED does not
+    /// count: the core's upload picker skips FAILED rows, and enqueueing
+    /// the asset again is what resets one for a retry.
+    public static func isQueued(_ status: String) -> Bool {
+        switch status {
+        case "PENDING", "IN_PROGRESS", "COMPLETED", "OFFLOADED": return true
+        default: return false
+        }
+    }
+}
+
 // MARK: - BranchDamCoreBridge
 
 /// pending_import wrappers. Like the bridge's other query-class calls

@@ -14,6 +14,10 @@ final class FakePendingImportEngine: PendingImportEngine, @unchecked Sendable {
     var failStaging = false
     var failListing = false
     var enqueueResult: Int64 = 7
+    /// Statuses reported ahead of the queue (e.g. "FAILED"); enqueueing a
+    /// local ID clears its entry, as the core's re-enqueue resets a FAILED
+    /// row.
+    var statusOverrides = [String: String]()
     var clock: Int64 = 1_000
 
     func stagePendingImport(_ item: PendingImportItem) -> PendingImportStageResult {
@@ -67,11 +71,13 @@ final class FakePendingImportEngine: PendingImportEngine, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         log.append("enqueue:\(localID)")
         enqueued.append((localPath, localID))
+        if enqueueResult > 0 { statusOverrides.removeValue(forKey: localID) }
         return enqueueResult
     }
 
     func mediaStatus(localID: String) -> String {
         lock.lock(); defer { lock.unlock() }
+        if let status = statusOverrides[localID] { return status }
         return enqueueResult > 0 && enqueued.contains(where: { $0.localID == localID }) ? "PENDING" : "NOT_ENQUEUED"
     }
 }

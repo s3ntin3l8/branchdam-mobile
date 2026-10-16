@@ -312,7 +312,10 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     /// on launch, for assets a killed process left pending).
     ///
     /// Runs one import at a time: a request made while one is running
-    /// is folded into a single follow-up pass (and reports 0 itself).
+    /// is folded into a single follow-up pass. Its completion then gets 0
+    /// -- "this call queued nothing itself", not "nothing is queued": the
+    /// follow-up pass imports its assets. (The gallery uses importAssets,
+    /// which always reports its own count.)
     public func importAllPending(completion: (@Sendable (Int) -> Void)? = nil) {
         queue.async {
             if self.autoImportRunning {
@@ -387,9 +390,11 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     /// between the two -- leaves the row for a later pass, which skips the
     /// already-queued still and retries just the video. [done] gets
     /// whether the still is in the upload queue afterwards, newly or
-    /// already (a gallery re-tap of a queued asset is not a failure).
+    /// already (a gallery re-tap of a queued asset is not a failure). A
+    /// FAILED upload is staged and enqueued again, which is what resets
+    /// it for a retry.
     private func importItem(_ item: PendingImportItem, done: @escaping @Sendable (Bool) -> Void) {
-        if engine.mediaStatus(localID: item.localId) != "NOT_ENQUEUED" {
+        if UploadStatus.isQueued(engine.mediaStatus(localID: item.localId)) {
             importPairedVideo(of: item, done: done)
             return
         }
@@ -416,8 +421,9 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
 
     /// Imports camera-roll assets picked in the gallery, through the same
     /// stage-then-queue path as the import notification (never a "ph://"
-    /// path the engine can't read). Returns how many had something newly
-    /// queued.
+    /// path the engine can't read). Returns how many are in the upload
+    /// queue afterwards, newly or already (a FAILED upload counts once it
+    /// has been re-queued).
     public func importAssets(_ items: [PendingImportItem]) async -> Int {
         await withCheckedContinuation { continuation in
             queue.async {
@@ -447,7 +453,7 @@ extension AppleCameraRollImportNotifier {
         done: @escaping @Sendable (Bool) -> Void
     ) {
         let videoID = Self.pairedVideoLocalID(stillLocalID: item.localId)
-        if engine.mediaStatus(localID: videoID) != "NOT_ENQUEUED" {
+        if UploadStatus.isQueued(engine.mediaStatus(localID: videoID)) {
             engine.deletePendingImport(localID: item.localId)
             done(true)
             return
