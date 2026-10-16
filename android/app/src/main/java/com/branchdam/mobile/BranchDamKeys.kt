@@ -69,6 +69,15 @@ object BranchDamKeys {
     const val TRASH_PROCESSED_URIS = "branchdam_trash_processed_uris"
 
     /**
+     * The pending-import local IDs the confirmation notification currently
+     * announces (it is replaced, never stacked). Its actions apply to
+     * exactly these rows, so a row staged in the same second the
+     * notification went up is never swept by a Skip the user tapped
+     * without seeing it.
+     */
+    const val IMPORT_ANNOUNCED_IDS = "branchdam_import_announced_ids"
+
+    /**
      * Background sync interval in minutes. Read by [com.branchdam.mobile.service.SyncScheduler]
      * when scheduling periodic WorkManager jobs.
      */

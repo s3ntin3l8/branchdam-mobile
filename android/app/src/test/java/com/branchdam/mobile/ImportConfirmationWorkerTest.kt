@@ -87,6 +87,27 @@ class ImportConfirmationWorkerTest {
     }
 
     @Test
+    fun testActionAppliesOnlyToTheAnnouncedRowsEvenInTheSameSecond() = runBlocking {
+        // Both rows are staged in the same second; only 40 was announced.
+        EngineHolder.mockPendingImports.clock = { 500L }
+        ImportConfirmationNotifier.stagePendingItem(item(40))
+        ImportConfirmationNotifier.recordAnnounced(context, listOf(item(40).contentUri))
+        ImportConfirmationNotifier.stagePendingItem(item(41))
+
+        val result = worker(
+            ImportConfirmationWorker.inputFor(ImportConfirmationNotifier.ACTION_SKIP, stagedBeforeUnix = 500L)
+        ).doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertTrue(ImportConfirmationNotifier.isItemSuppressed(item(40).contentUri))
+        assertFalse(
+            "a row staged after the announcement, even in the same second, must not be skipped",
+            ImportConfirmationNotifier.isItemSuppressed(item(41).contentUri),
+        )
+        assertEquals(listOf(item(41).contentUri), ImportConfirmationNotifier.getPendingItems().map { it.localId })
+    }
+
+    @Test
     fun testWorkWithoutAKnownActionFails() = runBlocking {
         assertEquals(ListenableWorker.Result.failure(), worker(androidx.work.Data.EMPTY).doWork())
         assertEquals(

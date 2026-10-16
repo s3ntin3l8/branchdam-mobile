@@ -109,6 +109,15 @@ func TestConfirmLineageEdge_InvalidInput(t *testing.T) {
 		"reject missing child": func() error {
 			return e.RejectLineageEdge("a", "", "DERIVED_FROM", "r", 0.95)
 		},
+		"reject unknown relationship": func() error {
+			return e.RejectLineageEdge("a", "b", "SIBLING_OF", "r", 0.95)
+		},
+		"reject empty resolver": func() error {
+			return e.RejectLineageEdge("a", "b", "DERIVED_FROM", "", 0.95)
+		},
+		"reject out-of-range confidence": func() error {
+			return e.RejectLineageEdge("a", "b", "DERIVED_FROM", "r", 1.5)
+		},
 	}
 	for name, f := range cases {
 		if got := errorCode(t, f()); got != CodeInvalidInput {

@@ -181,3 +181,57 @@ func TestListLineageReviews(t *testing.T) {
 		t.Errorf("decisions = %v", decisions)
 	}
 }
+
+// TestConfirmedPairWhoseEdgeDiedIsDecidedAgain: a confirmed pair's edge
+// that ended FAILED or SKIPPED never reached the server, so the pair is
+// offered again (left out of ListLineageReviews), a new confirm queues a
+// fresh edge, and a reject is allowed. A live edge keeps the old rules.
+func TestConfirmedPairWhoseEdgeDiedIsDecidedAgain(t *testing.T) {
+	for _, status := range []string{"FAILED", "SKIPPED"} {
+		t.Run(status, func(t *testing.T) {
+			q := newTestQueue(t)
+			p := pair("ph://master", "ph://edit")
+			first, _, err := q.ConfirmLineagePair(p, "EVENT_EDGE_ATTACHED", `{"n":1}`)
+			if err != nil {
+				t.Fatalf("ConfirmLineagePair: %v", err)
+			}
+			if reviews, err := q.ListLineageReviews(); err != nil || len(reviews) != 1 {
+				t.Fatalf("live confirmed pair: reviews = %v, %v; want it listed", reviews, err)
+			}
+			if _, err := q.DB().Exec(`UPDATE event_queue SET status = ? WHERE event_uuid = ?`, status, first); err != nil {
+				t.Fatal(err)
+			}
+
+			reviews, err := q.ListLineageReviews()
+			if err != nil || len(reviews) != 0 {
+				t.Fatalf("reviews = %v, %v; a pair whose edge died must be offered again", reviews, err)
+			}
+
+			second, created, err := q.ConfirmLineagePair(p, "EVENT_EDGE_ATTACHED", `{"n":2}`)
+			if err != nil || !created || second == first {
+				t.Fatalf("re-confirm = %q, %v, %v; want a new event", second, created, err)
+			}
+			if n := countEvents(t, q); n != 2 {
+				t.Errorf("events = %d, want the dead one plus a new one", n)
+			}
+			r, err := q.GetLineageReview("ph://master", "ph://edit")
+			if err != nil || r.Decision != LineageConfirmed || r.EventUUID != second {
+				t.Fatalf("review = %+v, %v; want CONFIRMED pointing at the new event", r, err)
+			}
+
+			// The new edge is live again: no reject, listed as decided.
+			if err := q.RejectLineagePair(p); !errors.Is(err, ErrLineageAlreadyConfirmed) {
+				t.Errorf("reject with a live edge: err = %v, want ErrLineageAlreadyConfirmed", err)
+			}
+			if _, err := q.DB().Exec(`UPDATE event_queue SET status = ? WHERE event_uuid = ?`, status, second); err != nil {
+				t.Fatal(err)
+			}
+			if err := q.RejectLineagePair(p); err != nil {
+				t.Fatalf("reject once the edge died: %v", err)
+			}
+			if r, _ := q.GetLineageReview("ph://master", "ph://edit"); r == nil || r.Decision != LineageRejected {
+				t.Errorf("review = %+v, want REJECTED", r)
+			}
+		})
+	}
+}

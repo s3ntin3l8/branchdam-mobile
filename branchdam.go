@@ -513,15 +513,18 @@ func (e *Engine) ConfirmLineageEdge(
 // (parent first, as proposed). The decision is stored in the queue
 // database, so the pair is not proposed again after a restart; nothing is
 // sent. Rejecting a pair twice is a no-op. A pair the user already
-// confirmed can't be rejected on the device (its edge is queued or sent):
-// that is INVALID_INPUT, and the reviewer on the server has to reject the
-// edge there.
+// confirmed can't be rejected on the device while its edge is queued or
+// sent: that is INVALID_INPUT, and the reviewer on the server has to
+// reject the edge there. One whose edge ended FAILED or SKIPPED (it never
+// reached the server) is offered again and can be rejected.
 func (e *Engine) RejectLineageEdge(parentLocalID, childLocalID, relationshipType, resolver string, confidence Confidence) error {
 	if err := e.requireOpen(); err != nil {
 		return err
 	}
-	if parentLocalID == "" || childLocalID == "" {
-		return newError(CodeInvalidInput, "parent and child LocalID are required")
+	// The same checks as ConfirmLineageEdge: the decision is stored and
+	// echoed back by LineageReviewsJSON, so it must be well formed.
+	if err := validateLineage(parentLocalID, childLocalID, relationshipType, resolver, confidence); err != nil {
+		return err
 	}
 	err := e.queue.RejectLineagePair(queue.LineageReview{
 		ParentLocalID: parentLocalID,

@@ -126,13 +126,14 @@ public class LineageViewModel: ObservableObject {
         let engine = self.engine
         do {
             candidates = try await Task.detached(priority: .userInitiated) {
-                let pairs = try await LineageViewModel.fetchPairs()
+                let found = try await LineageViewModel.fetchCandidates()
                 // Without the stored decisions a rejected pair would be
                 // offered again, so a failed read is an error.
                 guard let decided = engine.decidedPairKeys() else {
                     throw LineageReviewError.decisionsUnavailable
                 }
-                return LineageViewModel.pendingReview(pairs: pairs, decided: decided)
+                return LineageViewModel.pendingReview(
+                    pairs: found.pairs, edits: found.edits, filenames: found.filenames, decided: decided)
             }.value
             currentIndex = 0
         } catch {
@@ -179,13 +180,19 @@ public class LineageViewModel: ObservableObject {
         }
     }
 
-    /// The candidates the user still has to decide: pairs below confidence
-    /// 1.00 (exact pairs are sent automatically) that are not already
-    /// confirmed or rejected.
-    nonisolated static func pendingReview(pairs: [AppleLineagePair], decided: Set<String>) -> [AppleAuditCandidate] {
-        pairs
+    /// The candidates the user still has to decide: ProRAW pairs and
+    /// in-phone edits below confidence 1.00 (exact ones are sent
+    /// automatically) that are not already confirmed or rejected. An edit
+    /// found by filename (0.95) has no other way to reach the server.
+    /// `filenames` maps local IDs to the names shown for an edit.
+    nonisolated static func pendingReview(
+        pairs: [AppleLineagePair],
+        edits: [AppleInPhoneEdit] = [],
+        filenames: [String: String] = [:],
+        decided: Set<String>
+    ) -> [AppleAuditCandidate] {
+        let pairCandidates = pairs
             .filter { !LineageReviewPolicy.isAutomatic($0.confidence) }
-            .filter { !decided.contains(LineageReviewPolicy.pairKey(parent: $0.masterLocalId, child: $0.derivativeLocalId)) }
             .map { pair in
                 AppleAuditCandidate(
                     id: LineageReviewPolicy.pairKey(parent: pair.masterLocalId, child: pair.derivativeLocalId),
@@ -197,9 +204,27 @@ public class LineageViewModel: ObservableObject {
                     resolver: pair.resolver
                 )
             }
+        let editCandidates = edits
+            .filter { !LineageReviewPolicy.isAutomatic($0.confidence) }
+            .map { edit in
+                AppleAuditCandidate(
+                    id: LineageReviewPolicy.pairKey(parent: edit.originalMasterId, child: edit.editedDerivativeId),
+                    masterLocalId: edit.originalMasterId,
+                    derivativeLocalId: edit.editedDerivativeId,
+                    masterFilename: filenames[edit.originalMasterId] ?? edit.originalMasterId,
+                    derivativeFilename: filenames[edit.editedDerivativeId] ?? edit.editedDerivativeId,
+                    confidence: edit.confidence,
+                    resolver: AppleEditCorrelator.resolver(for: edit)
+                )
+            }
+        var seen = Set<String>()
+        return (pairCandidates + editCandidates).filter { candidate in
+            !decided.contains(candidate.id) && seen.insert(candidate.id).inserted
+        }
     }
 
-    nonisolated private static func fetchPairs() async throws -> [AppleLineagePair] {
+    nonisolated private static func fetchCandidates() async throws
+        -> (pairs: [AppleLineagePair], edits: [AppleInPhoneEdit], filenames: [String: String]) {
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         options.fetchLimit = 200
@@ -219,10 +244,14 @@ public class LineageViewModel: ObservableObject {
         let raws = assetMetas.filter { $0.isRaw }.map { (id: $0.id, filename: $0.filename, dateUnix: $0.dateUnix) }
         let jpegs = assetMetas.filter { !$0.isRaw }.map { (id: $0.id, filename: $0.filename, dateUnix: $0.dateUnix) }
 
-        return ApplePairDetector.findProRawPairs(
+        let pairs = ApplePairDetector.findProRawPairs(
             masters: raws,
             derivatives: jpegs
         )
+        let edits = AppleEditCorrelator.findEdits(in: assetMetas.map { (id: $0.id, filename: $0.filename) })
+        var filenames = [String: String]()
+        for meta in assetMetas { filenames[meta.id] = meta.filename }
+        return (pairs: pairs, edits: edits, filenames: filenames)
     }
 }
 

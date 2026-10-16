@@ -346,15 +346,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             }
 
             // Edit correlation (in-phone editor exports -> camera roll master).
-            let editDerivatives: [DiscoveredAsset] = assets.filter({ (item: DiscoveredAsset) -> Bool in
-                item.filename.lowercased().contains("edited") ||
-                    item.filename.lowercased().contains("restored")
-            })
-            if !editDerivatives.isEmpty {
-                let edits = AppleEditCorrelator.findAppEdits(
-                    masters: assets.map { (id: $0.localIdentifier, filename: $0.filename) },
-                    derivatives: editDerivatives.map { (id: $0.localIdentifier, filename: $0.filename, app: "ios_editor") }
-                )
+            let edits = AppleEditCorrelator.findEdits(
+                in: assets.map { (id: $0.localIdentifier, filename: $0.filename) }
+            )
+            if !edits.isEmpty {
                 _ = AppleEditCorrelator.registerEditLineage(edits: edits)
             }
 

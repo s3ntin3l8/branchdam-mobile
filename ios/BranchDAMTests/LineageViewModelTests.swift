@@ -107,6 +107,31 @@ final class LineageViewModelTests: XCTestCase {
         XCTAssertEqual(pending.first?.confidence, 0.95)
     }
 
+    func testInPhoneEditsAreOfferedForReview() {
+        // findAppEdits reports every filename-matched edit at 0.95; with no
+        // automatic path left for it, the review screen is the only way
+        // such an edge can reach the server.
+        let edits = AppleEditCorrelator.findEdits(in: [
+            (id: "m1", filename: "IMG_0001.HEIC"),
+            (id: "e1", filename: "IMG_0001_edited.JPG"),
+            (id: "m2", filename: "IMG_0002.HEIC"),
+            (id: "e2", filename: "IMG_0002_edited.JPG"),
+        ])
+        XCTAssertEqual(edits.count, 2)
+
+        let pending = LineageViewModel.pendingReview(
+            pairs: [],
+            edits: edits,
+            filenames: ["m1": "IMG_0001.HEIC", "e1": "IMG_0001_edited.JPG"],
+            decided: [LineageReviewPolicy.pairKey(parent: "m2", child: "e2")]
+        )
+        XCTAssertEqual(pending.map(\.id), [LineageReviewPolicy.pairKey(parent: "m1", child: "e1")])
+        XCTAssertEqual(pending.first?.masterFilename, "IMG_0001.HEIC")
+        XCTAssertEqual(pending.first?.derivativeFilename, "IMG_0001_edited.JPG")
+        XCTAssertEqual(pending.first?.confidence, 0.95)
+        XCTAssertEqual(pending.first?.resolver, "in_phone_ios_editor")
+    }
+
     func testParseDecidedKeys() {
         let json = """
         [{"parentLocalId":"a","childLocalId":"b","decision":"REJECTED","confidence":0.95,"decidedAtUnix":1},

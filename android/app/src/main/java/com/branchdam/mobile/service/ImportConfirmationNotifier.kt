@@ -170,13 +170,34 @@ object ImportConfirmationNotifier {
      * Returns false, leaving the notification in place, when the pending
      * items can't be read (the engine isn't open yet).
      */
+    /**
+     * Records the local IDs the confirmation notification is about to
+     * announce (see BranchDamKeys.IMPORT_ANNOUNCED_IDS). Call it before
+     * [showImportConfirmation].
+     */
+    fun recordAnnounced(context: Context, localIds: Collection<String>) {
+        context.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet(BranchDamKeys.IMPORT_ANNOUNCED_IDS, localIds.toSet())
+            .apply()
+    }
+
+    internal fun announcedIds(context: Context?): Set<String>? =
+        context?.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+            ?.getStringSet(BranchDamKeys.IMPORT_ANNOUNCED_IDS, null)
+
     fun handleAction(
         context: Context?,
         action: String?,
         stagedBeforeUnix: Long = Long.MAX_VALUE,
     ): Boolean {
         val pending = EngineHolder.listPendingImports() ?: return false
-        val targets = pending.filter { it.createdAtUnix <= stagedBeforeUnix }
+        // The rows the notification announced, when they were recorded;
+        // the stagedBefore cutoff alone is second-resolution.
+        val announced = announcedIds(context)
+        val targets = pending.filter {
+            it.createdAtUnix <= stagedBeforeUnix && (announced == null || it.localId in announced)
+        }
 
         val notificationManager = context?.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.cancel(NOTIFICATION_ID)
