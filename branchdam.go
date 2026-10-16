@@ -96,7 +96,7 @@ func (o EngineOptions) validate() *Error {
 // builds while requiring HTTPS in production (empty list).
 func isHostInCleartextAllowlist(host string, allowlist []string) bool {
 	for _, h := range allowlist {
-		if h == host {
+		if strings.EqualFold(h, host) {
 			return true
 		}
 	}

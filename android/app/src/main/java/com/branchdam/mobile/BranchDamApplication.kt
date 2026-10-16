@@ -129,8 +129,12 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
          * config-reading logic without an Application context. T2-5
          * tests pass a mocked EncryptedSharedPreferences to verify
          * the secure-storage path; pre-T2-5 tests passed a plain
-         * SharedPreferences.
+         * SharedPreferences. Test-only: it reads the API key from
+         * whatever prefs it is given, so production reads through
+         * [readSecureEngineConfig], which takes the key only from the
+         * encrypted prefs.
          */
+        @androidx.annotation.VisibleForTesting
         fun readEngineConfig(prefs: SharedPreferences): EngineConfig {
             val serverUrl = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
             val apiKey = prefs.getString(KEY_API_KEY, "") ?: ""

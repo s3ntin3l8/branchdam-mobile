@@ -176,7 +176,8 @@ func TestIsHostInCleartextAllowlist(t *testing.T) {
 		{"attacker.example.com", []string{"localhost", "10.0.2.2"}, false},
 		{"localhost", nil, false},
 		{"localhost", []string{}, false},
-		{"LOCALHOST", []string{"localhost"}, false},
+		// Host names are case-insensitive, as UrlValidator treats them.
+		{"LOCALHOST", []string{"localhost"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {

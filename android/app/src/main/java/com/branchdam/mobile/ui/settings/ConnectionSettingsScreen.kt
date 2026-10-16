@@ -113,7 +113,9 @@ fun ConnectionSettingsScreen(
                 value = apiKey,
                 onValueChange = { viewModel.updateApiKey(it) },
                 label = { Text("API Key") },
-                isError = keyStorageError != null,
+                // Only a key that can't be stored is an error; with no key
+                // entered the message is just information.
+                isError = keyStorageError != null && apiKey.isNotBlank(),
                 supportingText = keyStorageError?.let { err -> { Text(err) } },
                 modifier = Modifier.fillMaxWidth(),
             )

@@ -45,7 +45,7 @@ func New(cfg Config) *Client {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 			},
-			CheckRedirect: refuseTLSDowngrade,
+			CheckRedirect: refuseUnsafeRedirect,
 		}
 	}
 	uploadClient := cfg.UploadClient
@@ -57,7 +57,7 @@ func New(cfg Config) *Client {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 			},
-			CheckRedirect: refuseTLSDowngrade,
+			CheckRedirect: refuseUnsafeRedirect,
 		}
 	}
 	return &Client{
@@ -73,14 +73,19 @@ func New(cfg Config) *Client {
 // maxRedirects matches net/http's default redirect limit.
 const maxRedirects = 10
 
-// refuseTLSDowngrade is the default clients' CheckRedirect. net/http
-// copies custom headers such as X-API-Key onto a same-host redirect, so a
-// redirect from https to http would send the API key in cleartext; it is
-// refused instead, along with redirect chains longer than net/http's
-// default limit.
-func refuseTLSDowngrade(req *http.Request, via []*http.Request) error {
+// refuseUnsafeRedirect is the default clients' CheckRedirect. net/http
+// copies custom headers such as X-API-Key onto a redirected request (it
+// strips only Authorization and cookies, and only across hosts), so a
+// redirect could hand the API key to another host, or send it in cleartext
+// after an https to http downgrade. Only same-host redirects that keep TLS
+// are followed, up to net/http's default limit.
+func refuseUnsafeRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxRedirects {
 		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+	if len(via) > 0 && !strings.EqualFold(req.URL.Host, via[0].URL.Host) {
+		return fmt.Errorf("refusing redirect from %s to %s: it would send the API key to another host",
+			via[0].URL.Redacted(), req.URL.Redacted())
 	}
 	for _, prev := range via {
 		if prev.URL.Scheme == "https" && req.URL.Scheme != "https" {
