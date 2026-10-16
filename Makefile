@@ -1,4 +1,4 @@
-.PHONY: all check test lint android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios clean
+.PHONY: all check test lint android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots clean
 
 UNAME_S := $(shell uname -s)
 IOS_DEST := $(shell xcodebuild -showdestinations -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp 2>/dev/null | grep 'platform:iOS Simulator' | grep 'iPhone' | grep -v 'Placeholder' | head -1 | sed -n 's/.*id:\([^,]*\).*/id=\1/p')
@@ -43,6 +43,13 @@ mobile-build-android:
 
 mobile-build-ios:
 	./scripts/build-mobile.sh --ios-only
+
+# Android screenshots from a headless emulator paired with a throwaway
+# branchDAM demo (../branchDAM, `make demo`). See scripts/screenshots.sh.
+# A relative OUT is resolved against this repo's root.
+OUT ?= docs/screenshots
+screenshots:
+	./scripts/screenshots.sh --out "$(OUT)"
 
 ios-test:
 ifeq ($(UNAME_S),Darwin)
