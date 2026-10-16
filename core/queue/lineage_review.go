@@ -134,6 +134,7 @@ func (q *Queue) RejectLineagePair(r LineageReview) error {
 	) VALUES (?, ?, 'REJECTED', ?, ?, ?, '', ?, ?)
 	ON CONFLICT(parent_local_id, child_local_id) DO UPDATE SET
 		decision = 'REJECTED',
+		event_uuid = '',
 		updated_at_unix = excluded.updated_at_unix
 	WHERE lineage_review.decision <> 'CONFIRMED'
 	   OR EXISTS (SELECT 1 FROM event_queue e

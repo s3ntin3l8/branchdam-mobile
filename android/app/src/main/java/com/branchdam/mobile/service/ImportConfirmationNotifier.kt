@@ -156,21 +156,6 @@ object ImportConfirmationNotifier {
     }
 
     /**
-     * Applies a notification action to the pending items staged at or
-     * before [stagedBeforeUnix]. Blocking engine calls and, for the
-     * import actions, a copy of each item's original bytes: it runs in
-     * [ImportConfirmationWorker], never in the broadcast receiver.
-     *
-     * - Import now / Later: queue each item for upload and forget its
-     *   pending row once queued (a row whose enqueue failed stays
-     *   pending). Import now syncs at once; Later leaves it to the
-     *   periodic sync.
-     * - Skip: suppress each item so no later scan offers it again.
-     *
-     * Returns false, leaving the notification in place, when the pending
-     * items can't be read (the engine isn't open yet).
-     */
-    /**
      * Records the local IDs the confirmation notification is about to
      * announce (see BranchDamKeys.IMPORT_ANNOUNCED_IDS). Call it before
      * [showImportConfirmation].
@@ -186,6 +171,21 @@ object ImportConfirmationNotifier {
         context?.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
             ?.getStringSet(BranchDamKeys.IMPORT_ANNOUNCED_IDS, null)
 
+    /**
+     * Applies a notification action to the pending items staged at or
+     * before [stagedBeforeUnix]. Blocking engine calls and, for the
+     * import actions, a copy of each item's original bytes: it runs in
+     * [ImportConfirmationWorker], never in the broadcast receiver.
+     *
+     * - Import now / Later: queue each item for upload and forget its
+     *   pending row once queued (a row whose enqueue failed stays
+     *   pending). Import now syncs at once; Later leaves it to the
+     *   periodic sync.
+     * - Skip: suppress each item so no later scan offers it again.
+     *
+     * Returns false, leaving the notification in place, when the pending
+     * items can't be read (the engine isn't open yet).
+     */
     fun handleAction(
         context: Context?,
         action: String?,

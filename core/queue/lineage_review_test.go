@@ -229,8 +229,9 @@ func TestConfirmedPairWhoseEdgeDiedIsDecidedAgain(t *testing.T) {
 			if err := q.RejectLineagePair(p); err != nil {
 				t.Fatalf("reject once the edge died: %v", err)
 			}
-			if r, _ := q.GetLineageReview("ph://master", "ph://edit"); r == nil || r.Decision != LineageRejected {
-				t.Errorf("review = %+v, want REJECTED", r)
+			// EventUUID is CONFIRMED-only: the dead edge's UUID goes.
+			if r, _ := q.GetLineageReview("ph://master", "ph://edit"); r == nil || r.Decision != LineageRejected || r.EventUUID != "" {
+				t.Errorf("review = %+v, want REJECTED without an event", r)
 			}
 		})
 	}

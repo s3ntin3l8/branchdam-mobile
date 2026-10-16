@@ -48,7 +48,7 @@ class ConnectionSettingsStoreTest {
             secure = null,
             plain = plain,
             serverUrl = "https://dam.example.com",
-            apiKey = "bdam_secret",
+            apiKey = "bdam_secret", // pragma: allowlist secret
             agentId = "pixel-10",
         )
 
