@@ -33,6 +33,10 @@ type LineageIntent struct {
 	Relationship  string  `json:"relationship"`
 	Confidence    float64 `json:"confidence"`
 	Resolver      string  `json:"resolver"`
+	// Reviewed is true when a person confirmed the pair on the device.
+	// An edge below AutoEdgeConfidence is only ever sent when it is set;
+	// rows written before it existed read as false.
+	Reviewed bool `json:"reviewed,omitempty"`
 }
 
 // DeleteIntent is the queued, device-local form of an EVENT_NODE_DELETED.
@@ -79,6 +83,13 @@ type nodeDeletedPayload struct {
 // MinEdgeConfidence is the server's needsReviewFloor: an edge below it is
 // refused (fatally, after the event was accepted), so it is never sent.
 const MinEdgeConfidence = 0.50
+
+// AutoEdgeConfidence is the confidence at which the device may send a
+// lineage edge on its own: deterministic capture-time pairs (DNG RAW +
+// Ultra HDR JPEG sharing a stem, Motion Photos, Live Photos) are exact.
+// Anything weaker (a timestamp-proximity pair, an in-phone edit matched by
+// filename) is a guess that waits for a person to confirm it on the device.
+const AutoEdgeConfidence = 1.0
 
 // mobileEdgeTier is the resolver tier mobile lineage edges are reported as:
 // they come from direct capture-time evidence (sensor pairs, embedded
@@ -184,6 +195,12 @@ func (e *Engine) planEdgeAttached(evt *queue.EventItem) dispatchPlan {
 	if math.IsNaN(conf) || conf < MinEdgeConfidence {
 		return planf(actionFail, "lineage event not sent: confidence %v is below the server's minimum %.2f", conf, MinEdgeConfidence)
 	}
+	if conf < AutoEdgeConfidence && !in.Reviewed {
+		// Queued by an earlier release that sent its guesses on its own.
+		// Dropping it is safe: no decision was recorded, so the shell
+		// offers the pair for review again.
+		return planf(actionSkip, "lineage event not sent: confidence %v is below %.2f and nobody confirmed the pair on the device", conf, AutoEdgeConfidence)
+	}
 	conf = math.Min(conf, 1.0)
 
 	parent, err := e.resolveLocalMedia(in.ParentLocalID)
@@ -224,10 +241,20 @@ func (e *Engine) planEdgeAttached(evt *queue.EventItem) dispatchPlan {
 		Tier:             mobileEdgeTier,
 		Resolver:         in.Resolver,
 	}
+	evidence := map[string]any{}
 	if rel != in.Relationship {
 		// Keep the mobile-side name the alias was mapped from, for the
 		// human reviewing the edge.
-		ev, err := json.Marshal(map[string]string{"mobileRelationship": in.Relationship})
+		evidence["mobileRelationship"] = in.Relationship
+	}
+	if in.Reviewed {
+		// Tell the server's reviewer a person already looked at the
+		// pair on the phone. The confidence stays the resolver's own:
+		// a confirmation is not new evidence about the files.
+		evidence["reviewedOnDevice"] = true
+	}
+	if len(evidence) > 0 {
+		ev, err := json.Marshal(evidence)
 		if err == nil {
 			out.EvidenceJSON = ev
 		}

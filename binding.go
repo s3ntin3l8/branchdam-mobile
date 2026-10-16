@@ -107,8 +107,9 @@ func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel
 
 // BindingEnqueueLineageEvent enqueues a lineage relationship event between
 // two local media items, identified by the local IDs they were enqueued for
-// upload under. confidence is a 0.0–1.0 score; see
-// Engine.EnqueueLineageEvent for how it is sent.
+// upload under. Only exact (1.00) pairs are accepted; a lower confidence is
+// REVIEW_REQUIRED and goes through BindingConfirmLineageEdge instead. See
+// Engine.EnqueueLineageEvent.
 func BindingEnqueueLineageEvent(parentLocalID, childLocalID,
 	relationshipType, resolver string, confidence float64) (string, error) {
 
@@ -119,6 +120,41 @@ func BindingEnqueueLineageEvent(parentLocalID, childLocalID,
 	return e.EnqueueLineageEvent(
 		parentLocalID, childLocalID, relationshipType, resolver,
 		Confidence(confidence))
+}
+
+// BindingConfirmLineageEdge records the user's confirmation of a proposed
+// lineage pair and queues its edge at the given confidence (never raised to
+// 1.00); see Engine.ConfirmLineageEdge. Returns the event UUID.
+func BindingConfirmLineageEdge(parentLocalID, childLocalID,
+	relationshipType, resolver string, confidence float64) (string, error) {
+
+	e, err := getBindingEngine()
+	if err != nil {
+		return "", err
+	}
+	return e.ConfirmLineageEdge(parentLocalID, childLocalID, relationshipType, resolver, Confidence(confidence))
+}
+
+// BindingRejectLineageEdge persists the user's rejection of a proposed
+// lineage pair; see Engine.RejectLineageEdge.
+func BindingRejectLineageEdge(parentLocalID, childLocalID,
+	relationshipType, resolver string, confidence float64) error {
+
+	e, err := getBindingEngine()
+	if err != nil {
+		return err
+	}
+	return e.RejectLineageEdge(parentLocalID, childLocalID, relationshipType, resolver, Confidence(confidence))
+}
+
+// BindingListLineageReviews returns the user's lineage review decisions as
+// a JSON array; see Engine.LineageReviewsJSON.
+func BindingListLineageReviews() (string, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return "[]", err
+	}
+	return e.LineageReviewsJSON()
 }
 
 // BindingEnqueueDeleteEvent enqueues a local-delete lifecycle event for the

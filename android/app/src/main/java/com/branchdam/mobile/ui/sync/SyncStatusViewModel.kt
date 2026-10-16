@@ -41,6 +41,9 @@ data class SyncStatusUiState(
 /** Shown instead of a generic failure when the device must be re-paired. */
 const val REPAIR_REQUIRED_MESSAGE = "Device not authorised — re-pair it in Settings"
 
+/** Status of a sync held back by the "sync on mobile data" setting. */
+const val WAITING_FOR_WIFI_MESSAGE = "Waiting for Wi-Fi"
+
 typealias TestConnectionFn = suspend () -> Boolean
 typealias TestConnectionDetailedFn = suspend () -> String?
 
@@ -88,6 +91,17 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /**
+     * True when the active network is metered or there is none: Wi-Fi-only
+     * work can't start. ConnectivityManager unavailable reads as "not
+     * metered" so the status falls back to plain "Enqueued".
+     */
+    private fun isOnMeteredNetwork(): Boolean {
+        val cm = getApplication<Application>().getSystemService(android.net.ConnectivityManager::class.java)
+            ?: return false
+        return cm.isActiveNetworkMetered
+    }
+
     private fun observeWorker() {
         viewModelScope.launch {
             workManager.getWorkInfosForUniqueWorkFlow(SyncScheduler.IMMEDIATE_WORK_TAG).collect { infos ->
@@ -104,6 +118,9 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
                     lastSyncTime = prefs.getLong(BranchDamKeys.LAST_SYNC_TIME, 0L),
                     authFailedAt = prefs.getLong(BranchDamKeys.SYNC_AUTH_FAILED_AT, 0L),
                     engineReady = engineReady,
+                    waitingForWifi = latest != null && latest.state == WorkInfo.State.ENQUEUED &&
+                        latest.constraints.requiredNetworkType == androidx.work.NetworkType.UNMETERED &&
+                        isOnMeteredNetwork(),
                 )
                 val isSyncing = snapshot.isSyncing
                 val pendingUploads = withContext(ioDispatcher) { EngineHolder.countPendingUploads() }
@@ -210,15 +227,20 @@ class SyncStatusViewModel(application: Application) : AndroidViewModel(applicati
             lastSyncTime: Long,
             authFailedAt: Long,
             engineReady: Boolean,
+            waitingForWifi: Boolean = false,
         ): WorkerSnapshot {
-            val isSyncing = state == WorkInfo.State.ENQUEUED || state == WorkInfo.State.RUNNING
+            // ENQUEUED work held back by its Wi-Fi-only constraint isn't
+            // syncing: nothing can run until Wi-Fi returns, and showing it
+            // as syncing kept the upload-progress poll looping meanwhile.
+            val held = state == WorkInfo.State.ENQUEUED && waitingForWifi
+            val isSyncing = (state == WorkInfo.State.ENQUEUED && !held) || state == WorkInfo.State.RUNNING
             val needsRepair = authFailedAt > 0L
             val workerState = if (needsRepair && !isSyncing) {
                 REPAIR_REQUIRED_MESSAGE
             } else {
                 when (state) {
                     null -> if (engineReady) "Idle" else "Engine not initialized"
-                    WorkInfo.State.ENQUEUED -> "Enqueued"
+                    WorkInfo.State.ENQUEUED -> if (held) WAITING_FOR_WIFI_MESSAGE else "Enqueued"
                     WorkInfo.State.RUNNING -> "Running"
                     WorkInfo.State.SUCCEEDED -> "Last sync succeeded"
                     WorkInfo.State.FAILED -> "Failed (attempt $runAttemptCount/${SyncWorker.MAX_ATTEMPTS})"

@@ -142,6 +142,11 @@ const (
 	// re-pair. NETWORK_ERROR stays reserved for transport failures and
 	// other HTTP errors (5xx and the like).
 	CodeAuthFailed = "AUTH_FAILED"
+	// CodeReviewRequired: EnqueueLineageEvent was given a lineage pair
+	// below confidence 1.00. Such a guess is never sent on the device's
+	// own say-so; the user decides it in the review screen
+	// (ConfirmLineageEdge / RejectLineageEdge).
+	CodeReviewRequired = "REVIEW_REQUIRED"
 )
 
 // newError is a small constructor for branchdam-typed errors.
@@ -343,19 +348,59 @@ func (e *Engine) ComputeHashes(localPath string, progress ProgressFunc) (Hashes,
 // ---------------------------------------------------------------------------
 
 // Confidence is a normalized 0.0-1.0 confidence score. EnqueueLineageEvent
-// rejects NaN, Inf, and out-of-range values with INVALID_INPUT.
+// and ConfirmLineageEdge reject NaN, Inf, and out-of-range values with
+// INVALID_INPUT.
 type Confidence float64
 
-// Standard confidence bands. Use ConfidenceExact for stem-match pairs and
-// Motion Photos; ConfidenceProximity or ConfidenceEdit for looser matches.
+// Standard confidence bands. ConfidenceExact is for deterministic
+// capture-time pairs (DNG RAW + Ultra HDR JPEG sharing a stem, Motion
+// Photos, Live Photos): only those are sent on the device's own say-so,
+// through EnqueueLineageEvent. ConfidenceProximity and ConfidenceEdit are
+// guesses: they go through the review screen and ConfirmLineageEdge.
 const (
 	ConfidenceExact     Confidence = 1.00
 	ConfidenceProximity Confidence = 0.95
 	ConfidenceEdit      Confidence = 0.95
 )
 
-// EnqueueLineageEvent enqueues an EVENT_EDGE_ATTACHED with the given
-// relationship. Returns the assigned event UUID.
+// validateLineage checks the arguments EnqueueLineageEvent and
+// ConfirmLineageEdge share.
+func validateLineage(parentLocalID, childLocalID, relationshipType, resolver string, confidence Confidence) *Error {
+	if confidence != confidence {
+		// NaN check; Float comparison with itself is the only reliable
+		// way to detect NaN.
+		return newError(CodeInvalidInput, "confidence is NaN")
+	}
+	if math.IsInf(float64(confidence), 0) {
+		return newError(CodeInvalidInput, "confidence is Inf")
+	}
+	if confidence < 0.0 || confidence > 1.0 {
+		return newError(CodeInvalidInput, "confidence %v is out of [0,1]", float64(confidence))
+	}
+	if parentLocalID == "" || childLocalID == "" {
+		return newError(CodeInvalidInput, "parent and child LocalID are required")
+	}
+	if parentLocalID == childLocalID {
+		return newError(CodeInvalidInput, "parent and child LocalID are the same")
+	}
+	if relationshipType == "" {
+		return newError(CodeInvalidInput, "relationshipType is required")
+	}
+	if _, err := engine.ServerRelationshipType(relationshipType); err != nil {
+		return newError(CodeInvalidInput, "%v", err)
+	}
+	if resolver == "" {
+		return newError(CodeInvalidInput, "resolver is required")
+	}
+	return nil
+}
+
+// EnqueueLineageEvent enqueues an EVENT_EDGE_ATTACHED the device found on
+// its own, with no person involved. Returns the assigned event UUID.
+//
+// Only exact pairs (confidence 1.00, ConfidenceExact) are accepted; a lower
+// confidence is REVIEW_REQUIRED: show the pair in the review screen and
+// call ConfirmLineageEdge or RejectLineageEdge with the user's answer.
 //
 // parentLocalID and childLocalID are the same local IDs the media was
 // enqueued for upload under (EnqueueMedia's LocalID). The event is queued
@@ -365,8 +410,7 @@ const (
 // be one of the server's relationship types (DERIVED_FROM, FINAL_EXPORT,
 // PROXY_OF, PROJECT_SIDECAR, DUPLICATE_OF) or a known mobile alias
 // (MOTION_PHOTO_CONTAINS, sent as DERIVED_FROM); anything else is
-// INVALID_INPUT. A confidence below 0.50 is accepted here but never sent:
-// the server refuses such edges.
+// INVALID_INPUT.
 //
 // The serialised payload is capped at queue.MaxEventPayloadBytes
 // (64 KiB); oversized input is rejected with INVALID_INPUT rather
@@ -379,28 +423,13 @@ func (e *Engine) EnqueueLineageEvent(
 	if err := e.requireOpen(); err != nil {
 		return "", err
 	}
-	if confidence != confidence {
-		// NaN check; Float comparison with itself is the only reliable
-		// way to detect NaN.
-		return "", newError(CodeInvalidInput, "confidence is NaN")
+	if err := validateLineage(parentLocalID, childLocalID, relationshipType, resolver, confidence); err != nil {
+		return "", err
 	}
-	if math.IsInf(float64(confidence), 0) {
-		return "", newError(CodeInvalidInput, "confidence is Inf")
-	}
-	if confidence < 0.0 || confidence > 1.0 {
-		return "", newError(CodeInvalidInput, "confidence %v is out of [0,1]", float64(confidence))
-	}
-	if parentLocalID == "" || childLocalID == "" {
-		return "", newError(CodeInvalidInput, "parent and child LocalID are required")
-	}
-	if relationshipType == "" {
-		return "", newError(CodeInvalidInput, "relationshipType is required")
-	}
-	if _, err := engine.ServerRelationshipType(relationshipType); err != nil {
-		return "", newError(CodeInvalidInput, "%v", err)
-	}
-	if resolver == "" {
-		return "", newError(CodeInvalidInput, "resolver is required")
+	if confidence < ConfidenceExact {
+		return "", newError(CodeReviewRequired,
+			"confidence %v is below %.2f: the user must confirm the pair (ConfirmLineageEdge)",
+			float64(confidence), float64(ConfidenceExact))
 	}
 
 	payload, err := engine.EncodeLineageIntent(engine.LineageIntent{
@@ -422,6 +451,115 @@ func (e *Engine) EnqueueLineageEvent(
 		return "", newError(CodeDBError, "enqueue lineage event: %v", err)
 	}
 	return eventUUID, nil
+}
+
+// ConfirmLineageEdge records that the user confirmed a proposed lineage
+// pair in the review screen and queues its EVENT_EDGE_ATTACHED. Returns the
+// event UUID.
+//
+// The edge keeps the confidence the resolver gave it: a confirmation is
+// not new evidence about the files, so it is never raised to 1.00. The
+// event tells the server's reviewer the pair was confirmed on the device
+// (evidenceJson.reviewedOnDevice). Confirming a pair twice returns the
+// first event's UUID without queueing another; confirming a pair the user
+// rejected earlier overrides the rejection. The decision and the event are
+// written in one transaction.
+//
+// A confidence below the server's 0.50 floor is INVALID_INPUT: the server
+// would refuse the edge. Arguments are otherwise as for
+// EnqueueLineageEvent.
+func (e *Engine) ConfirmLineageEdge(
+	parentLocalID, childLocalID, relationshipType, resolver string, confidence Confidence,
+) (string, error) {
+	if err := e.requireOpen(); err != nil {
+		return "", err
+	}
+	if err := validateLineage(parentLocalID, childLocalID, relationshipType, resolver, confidence); err != nil {
+		return "", err
+	}
+	if float64(confidence) < engine.MinEdgeConfidence {
+		return "", newError(CodeInvalidInput, "confidence %v is below the server's minimum %.2f",
+			float64(confidence), engine.MinEdgeConfidence)
+	}
+
+	payload, err := engine.EncodeLineageIntent(engine.LineageIntent{
+		ParentLocalID: parentLocalID,
+		ChildLocalID:  childLocalID,
+		Relationship:  relationshipType,
+		Confidence:    float64(confidence),
+		Resolver:      resolver,
+		Reviewed:      true,
+	})
+	if err != nil {
+		return "", newError(CodeInvalidInput, "build lineage payload: %v", err)
+	}
+	eventUUID, _, err := e.queue.ConfirmLineagePair(queue.LineageReview{
+		ParentLocalID: parentLocalID,
+		ChildLocalID:  childLocalID,
+		Relationship:  relationshipType,
+		Resolver:      resolver,
+		Confidence:    float64(confidence),
+	}, engine.EventEdgeAttached, payload)
+	if err != nil {
+		if errors.Is(err, queue.ErrPayloadTooLarge) {
+			return "", newError(CodeInvalidInput, "confirm lineage edge: %v", err)
+		}
+		return "", newError(CodeDBError, "confirm lineage edge: %v", err)
+	}
+	return eventUUID, nil
+}
+
+// RejectLineageEdge records that the user rejected a proposed lineage pair
+// (parent first, as proposed). The decision is stored in the queue
+// database, so the pair is not proposed again after a restart; nothing is
+// sent. Rejecting a pair twice is a no-op. A pair the user already
+// confirmed can't be rejected on the device while its edge is queued or
+// sent: that is INVALID_INPUT, and the reviewer on the server has to
+// reject the edge there. One whose edge ended FAILED or SKIPPED (it never
+// reached the server) is offered again and can be rejected.
+func (e *Engine) RejectLineageEdge(parentLocalID, childLocalID, relationshipType, resolver string, confidence Confidence) error {
+	if err := e.requireOpen(); err != nil {
+		return err
+	}
+	// The same checks as ConfirmLineageEdge: the decision is stored and
+	// echoed back by LineageReviewsJSON, so it must be well formed.
+	if err := validateLineage(parentLocalID, childLocalID, relationshipType, resolver, confidence); err != nil {
+		return err
+	}
+	err := e.queue.RejectLineagePair(queue.LineageReview{
+		ParentLocalID: parentLocalID,
+		ChildLocalID:  childLocalID,
+		Relationship:  relationshipType,
+		Resolver:      resolver,
+		Confidence:    float64(confidence),
+	})
+	if err != nil {
+		if errors.Is(err, queue.ErrLineageAlreadyConfirmed) {
+			return newError(CodeInvalidInput, "reject lineage edge: %v", err)
+		}
+		return newError(CodeDBError, "reject lineage edge: %v", err)
+	}
+	return nil
+}
+
+// LineageReviewsJSON returns every review decision the user has made, most
+// recent first, as a JSON array of queue.LineageReview objects
+// (parentLocalId, childLocalId, decision CONFIRMED or REJECTED,
+// relationship, resolver, confidence, eventUuid, decidedAtUnix). The review
+// screen leaves out every pair listed here.
+func (e *Engine) LineageReviewsJSON() (string, error) {
+	if err := e.requireOpen(); err != nil {
+		return "[]", err
+	}
+	reviews, err := e.queue.ListLineageReviews()
+	if err != nil {
+		return "[]", newError(CodeDBError, "list lineage reviews: %v", err)
+	}
+	b, err := json.Marshal(reviews)
+	if err != nil {
+		return "[]", newError("INTERNAL", "encode lineage reviews: %v", err)
+	}
+	return string(b), nil
 }
 
 // EnqueueDeleteEvent enqueues an EVENT_NODE_DELETED for the given LocalID,

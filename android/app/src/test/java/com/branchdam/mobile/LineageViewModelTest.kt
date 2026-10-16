@@ -2,6 +2,7 @@ package com.branchdam.mobile
 
 import com.branchdam.mobile.lineage.InPhoneEdit
 import com.branchdam.mobile.lineage.LineagePair
+import com.branchdam.mobile.lineage.LineageReview
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.ui.lineage.LineageViewModel
 import org.junit.Assert.assertEquals
@@ -85,5 +86,46 @@ class LineageViewModelTest {
     fun testInPhoneEditResolverFormat() {
         assertEquals("in_phone_google_photos_editor", com.branchdam.mobile.ui.lineage.InPhoneEditResolver.format("Google Photos Editor"))
         assertEquals("in_phone_luminar_neo_mobile", com.branchdam.mobile.ui.lineage.InPhoneEditResolver.format("Luminar Neo Mobile"))
+    }
+    private fun media(id: Long, name: String, raw: Boolean = false, path: String = "/sdcard/DCIM/Camera/$name") = MediaItem(
+        id = id,
+        contentUri = "content://images/$id",
+        filePath = path,
+        displayName = name,
+        mimeType = if (raw) "image/x-adobe-dng" else "image/jpeg",
+        sizeBytes = 1L,
+        dateTakenUnix = 1724000000L,
+        isRaw = raw,
+    )
+
+    @Test
+    fun pendingReview_offersOnlyUndecidedGuesses() {
+        val exact = LineagePair(media(1, "PXL_1.dng", raw = true), media(2, "PXL_1.jpg"), 1.00, "android_camera_pair")
+        val proximity = LineagePair(media(3, "RAW_9.dng", raw = true), media(4, "IMG_9.jpg"), 0.95, "android_camera_pair")
+        val rejected = LineagePair(media(5, "RAW_8.dng", raw = true), media(6, "IMG_8.jpg"), 0.95, "android_camera_pair")
+        val edit = InPhoneEdit(media(7, "IMG_7.jpg"), media(8, "IMG_7_edited.jpg", path = "/sdcard/Pictures/Edited/IMG_7_edited.jpg"), "Google Photos Editor", 0.95)
+        val confirmedEdit = InPhoneEdit(media(9, "IMG_6.jpg"), media(10, "IMG_6_edited.jpg"), "Google Photos Editor", 0.95)
+
+        val decided = setOf(
+            LineageReview.pairKey("content://images/5", "content://images/6"),
+            LineageReview.pairKey("content://images/9", "content://images/10"),
+        )
+        val pending = LineageViewModel.pendingReview(listOf(exact, proximity, rejected), listOf(edit, confirmedEdit), decided)
+
+        assertEquals(
+            "exact pairs are automatic, decided pairs are never offered again",
+            listOf("content://images/3|content://images/4", "content://images/7|content://images/8"),
+            pending.map { it.edgeId },
+        )
+        // The candidate carries the resolver's confidence, which is what a
+        // confirmation sends: never bumped to 1.00.
+        assertTrue(pending.all { it.confidence == 0.95 })
+    }
+
+    @Test
+    fun pendingReview_dedupesAPairFoundTwice() {
+        val pair = LineagePair(media(1, "IMG_1.jpg"), media(2, "IMG_1_edited.jpg"), 0.95, "android_camera_pair")
+        val edit = InPhoneEdit(media(1, "IMG_1.jpg"), media(2, "IMG_1_edited.jpg"), "Google Photos Editor", 0.95)
+        assertEquals(1, LineageViewModel.pendingReview(listOf(pair), listOf(edit), emptySet()).size)
     }
 }

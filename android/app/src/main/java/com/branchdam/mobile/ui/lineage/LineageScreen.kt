@@ -34,6 +34,7 @@ fun LineageScreen(
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
@@ -102,6 +103,7 @@ fun LineageScreen(
                     LineageContent(
                         isLoading = isLoading,
                         loadError = loadError,
+                        actionError = actionError,
                         candidates = candidates,
                         onConfirm = viewModel::confirm,
                         onReject = viewModel::reject,
@@ -113,6 +115,7 @@ fun LineageScreen(
             LineageContent(
                 isLoading = isLoading,
                 loadError = loadError,
+                actionError = actionError,
                 candidates = candidates,
                 onConfirm = viewModel::confirm,
                 onReject = viewModel::reject,
@@ -126,6 +129,7 @@ fun LineageScreen(
 private fun LineageContent(
     isLoading: Boolean,
     loadError: String?,
+    actionError: String?,
     candidates: List<com.branchdam.mobile.ui.AuditCandidate>,
     onConfirm: (com.branchdam.mobile.ui.AuditCandidate) -> Unit,
     onReject: (com.branchdam.mobile.ui.AuditCandidate) -> Unit,
@@ -165,12 +169,22 @@ private fun LineageContent(
             }
         }
         else -> {
-            AuditQueueScreen(
-                candidates = candidates,
-                onConfirm = onConfirm,
-                onReject = onReject,
-                modifier = modifier,
-            )
+            Column(modifier = modifier) {
+                if (actionError != null) {
+                    Text(
+                        actionError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                AuditQueueScreen(
+                    candidates = candidates,
+                    onConfirm = onConfirm,
+                    onReject = onReject,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

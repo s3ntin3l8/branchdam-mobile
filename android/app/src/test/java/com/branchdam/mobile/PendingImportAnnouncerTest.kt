@@ -57,7 +57,7 @@ class PendingImportAnnouncerTest {
 
         // New process: nothing was staged by this process's scans.
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(post = { posted += it })
+        val announcer = PendingImportAnnouncer(post = { rows -> posted += rows.size })
 
         assertTrue(announcer.refresh())
         assertEquals("the persisted set is announced", listOf(2), posted)
@@ -67,7 +67,7 @@ class PendingImportAnnouncerTest {
     fun testUnchangedSetIsNotRepostedOnEveryScan() {
         var pending = listOf(row(1), row(2))
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { rows -> posted += rows.size })
 
         assertTrue(announcer.refresh())
         assertFalse("an unrelated MediaStore change must not re-post", announcer.refresh())
@@ -85,7 +85,7 @@ class PendingImportAnnouncerTest {
     @Test
     fun testNothingPendingPostsNothing() {
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { emptyList() }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { emptyList() }, post = { rows -> posted += rows.size })
 
         assertFalse(announcer.refresh())
         assertFalse(announcer.refresh(stagedThisPass = 3))
@@ -97,7 +97,7 @@ class PendingImportAnnouncerTest {
         // The engine is not open yet on the first (startup) refresh.
         var pending: List<PendingImport>? = null
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { rows -> posted += rows.size })
 
         assertFalse(announcer.refresh())
         assertTrue(posted.isEmpty())
@@ -109,10 +109,22 @@ class PendingImportAnnouncerTest {
     }
 
     @Test
+    fun testPostsExactlyTheRowsItRead() {
+        // The caller records these IDs, so the notification's actions apply
+        // to the announced rows and nothing staged after this read.
+        val pending = listOf(row(1), row(2))
+        val announced = mutableListOf<List<String>>()
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { rows -> announced += rows.map { it.localId } })
+
+        assertTrue(announcer.refresh())
+        assertEquals(listOf(pending.map { it.localId }), announced)
+    }
+
+    @Test
     fun testAnsweredSetIsAnnouncedAgainWhenRowsReappear() {
         var pending = listOf(row(1))
         val posted = mutableListOf<Int>()
-        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { posted += it })
+        val announcer = PendingImportAnnouncer(readPending = { pending }, post = { rows -> posted += rows.size })
 
         assertTrue(announcer.refresh())
         pending = emptyList() // the user answered

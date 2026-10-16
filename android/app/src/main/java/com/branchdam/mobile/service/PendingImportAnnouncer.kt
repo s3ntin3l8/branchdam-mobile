@@ -31,7 +31,7 @@ import com.branchdam.mobile.PendingImport
  */
 internal class PendingImportAnnouncer(
     private val readPending: () -> List<PendingImport>? = { EngineHolder.listPendingImports() },
-    private val post: (pendingCount: Int) -> Unit,
+    private val post: (announced: List<PendingImport>) -> Unit,
 ) {
     private var lastAnnounced = NOT_ANNOUNCED
 
@@ -48,7 +48,11 @@ internal class PendingImportAnnouncer(
         val count = pending.size
         val announce = count > 0 && (stagedThisPass > 0 || count != lastAnnounced)
         if (announce) {
-            post(count)
+            // The notification's actions apply to exactly these rows; the
+            // caller records their IDs (ImportConfirmationNotifier
+            // .recordAnnounced) so a row staged after this read is never
+            // swept by an action on it.
+            post(pending)
         }
         lastAnnounced = count
         return announce

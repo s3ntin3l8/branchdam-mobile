@@ -47,7 +47,9 @@ class EditCorrelatorTest {
         assertEquals("Luminar Neo Mobile", edits[0].editorApp)
         assertEquals("Google Photos Editor", edits[1].editorApp)
 
+        // Filename-matched edits (0.95) are guesses: the user confirms them
+        // in the lineage review screen, they are never sent on their own.
         val registered = EditCorrelator.registerEditLineage(edits)
-        assertEquals(2, registered)
+        assertEquals(0, registered)
     }
 }

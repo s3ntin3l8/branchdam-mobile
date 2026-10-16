@@ -21,6 +21,21 @@ final class ApplePairDetectorTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    func testProximityGuessIsNotRegistered() {
+        let masters = [
+            (id: "ph://master-3", filename: "IMG_2001.DNG", dateUnix: Int64(1724000000))
+        ]
+        let derivatives = [
+            (id: "ph://child-3", filename: "IMG_2002.HEIC", dateUnix: Int64(1724000001))
+        ]
+
+        let pairs = ApplePairDetector.findProRawPairs(masters: masters, derivatives: derivatives)
+        XCTAssertEqual(pairs.count, 1)
+        XCTAssertEqual(pairs[0].confidence, 0.95)
+        // A capture-time guess waits for the user in the review screen.
+        XCTAssertEqual(ApplePairDetector.registerPairs(pairs: pairs), 0)
+    }
+
     func testPixelTopShotPairDetection() {
         let masters = [
             (id: "ph://master-2", filename: "PXL_20260912_185504997.TS-001-02.ORIGINAL.dng", dateUnix: Int64(1724000000))

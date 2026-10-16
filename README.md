@@ -9,7 +9,7 @@ Native mobile companion application for [branchDAM](https://github.com/s3ntin3l8
 - **Automated Capture Ingest:** Background camera roll sync over Wi-Fi when charging via Android WorkManager and iOS BackgroundTasks.
 - **Server-Governed Direct Streaming:** Uploads directly to `POST /api/v1/agent/upload` with streaming chunked HTTP bodies, `X-Camera-Model` headers, and server-owned archive path resolution.
 - **Dynamic Naming Template Sync:** Handshakes with the server to fetch and respect centralized naming templates (`{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}`).
-- **Lineage Pairing (Confidence 1.00):** Automatic pairing of computational RAW (DNG) + Ultra HDR JPEG assets and Motion Photos.
+- **Lineage Pairing (Confidence 1.00):** Automatic pairing of computational RAW (DNG) + Ultra HDR JPEG assets and Motion Photos (legacy MicroVideo and the current Motion Photo container format). Weaker matches (capture-time proximity, in-phone edits) wait for the user's confirm or reject in the lineage review screen, and the decision is kept on the device.
 - **Safe Space Reclaim:** Reclaims local device storage only after masters are durably archived and BLAKE3-verified on Tier 3 storage.
 - **Bi-Directional Trash Sync:** System photo deletions propagate cleanly to Immich external libraries.
 - **Foldable Dual-Pane UI:** Optimized for the Google Pixel 10 Pro Fold with swipe audit queue on cover screen and 8" lineage canvas.

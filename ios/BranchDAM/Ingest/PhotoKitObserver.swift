@@ -240,9 +240,11 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             AppleTrashSyncObserver.processRemovedAsset(localId: id)
             // The asset is gone, so whether it was a Live Photo is only
             // known from the queue: its paired video was enqueued under
-            // this child ID.
+            // this child ID. An unreadable status (nil) emits the delete
+            // too: processRemovedAsset decides per asset, and reading it as
+            // "not enqueued" would drop a real removal.
             let pairedVideoId = AppleCameraRollImportNotifier.pairedVideoLocalID(stillLocalID: id)
-            if BranchDamCoreBridge.shared.getMediaStatus(localID: pairedVideoId) != "NOT_ENQUEUED" {
+            if notifier.uploadStatus(localID: pairedVideoId) != "NOT_ENQUEUED" {
                 AppleTrashSyncObserver.processRemovedAsset(localId: pairedVideoId)
             }
         }
@@ -344,15 +346,10 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             }
 
             // Edit correlation (in-phone editor exports -> camera roll master).
-            let editDerivatives: [DiscoveredAsset] = assets.filter({ (item: DiscoveredAsset) -> Bool in
-                item.filename.lowercased().contains("edited") ||
-                    item.filename.lowercased().contains("restored")
-            })
-            if !editDerivatives.isEmpty {
-                let edits = AppleEditCorrelator.findAppEdits(
-                    masters: assets.map { (id: $0.localIdentifier, filename: $0.filename) },
-                    derivatives: editDerivatives.map { (id: $0.localIdentifier, filename: $0.filename, app: "ios_editor") }
-                )
+            let edits = AppleEditCorrelator.findEdits(
+                in: assets.map { (id: $0.localIdentifier, filename: $0.filename) }
+            )
+            if !edits.isEmpty {
                 _ = AppleEditCorrelator.registerEditLineage(edits: edits)
             }
 

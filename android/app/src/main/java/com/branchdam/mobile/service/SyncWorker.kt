@@ -121,15 +121,19 @@ class SyncWorker(
 
         /**
          * Maps a batch outcome to the worker's result. AUTH_FAILED is
-         * terminal (the credentials won't fix themselves); a cancelled
-         * batch (the cancel flag outlived the run that set it) and
-         * other failures retry until [maxAttempts].
+         * terminal (the credentials won't fix themselves). A cancelled
+         * batch (CONTEXT_CANCELED: the run was stopped, or the cancel
+         * flag outlived the run that set it) didn't fail on its own, so it
+         * gets one attempt beyond the transient-failure budget; other
+         * failures retry until [maxAttempts].
          */
         internal fun decide(outcome: SyncBatchOutcome, runAttemptCount: Int, maxAttempts: Int): Decision =
             when (outcome) {
                 is SyncBatchOutcome.Success -> Decision.SUCCESS
                 is SyncBatchOutcome.Failed -> when {
                     outcome.code == CoreErrorCodes.AUTH_FAILED -> Decision.AUTH_FAILED
+                    outcome.code == CoreErrorCodes.CONTEXT_CANCELED ->
+                        if (runAttemptCount <= maxAttempts) Decision.RETRY else Decision.FAILURE
                     runAttemptCount < maxAttempts -> Decision.RETRY
                     else -> Decision.FAILURE
                 }

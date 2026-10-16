@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -30,6 +31,17 @@ func (q *Queue) EnqueueEvent(eventType, payloadJSON string) (string, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	return insertEvent(q.db, eventType, payloadJSON)
+}
+
+// execer is the part of *sql.DB and *sql.Tx that insertEvent needs.
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+// insertEvent writes one PENDING event row and returns its new UUIDv7. The
+// caller holds q.mu and has checked the payload size.
+func insertEvent(db execer, eventType, payloadJSON string) (string, error) {
 	u, err := uuid.NewV7()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate event uuid: %w", err)
@@ -43,7 +55,7 @@ func (q *Queue) EnqueueEvent(eventType, payloadJSON string) (string, error) {
 		last_attempt_unix, error_msg, created_at_unix, updated_at_unix
 	) VALUES (?, ?, ?, 'PENDING', 0, 0, '', ?, ?)
 	`
-	_, err = q.db.Exec(query, eventUUID, eventType, payloadJSON, now, now)
+	_, err = db.Exec(query, eventUUID, eventType, payloadJSON, now, now)
 	if err != nil {
 		return "", fmt.Errorf("failed to enqueue event: %w", err)
 	}
