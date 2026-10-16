@@ -7,7 +7,9 @@ import com.branchdam.mobile.otg.OtgIngestManager
 import com.branchdam.mobile.otg.OtgMediaCandidate
 import com.branchdam.mobile.otg.OtgScanResult
 import com.branchdam.mobile.otg.OtgState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,6 +20,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OtgIngestManagerTest {
@@ -788,5 +791,72 @@ class OtgIngestManagerTest {
         )
         val message = (manager.state.value as OtgState.Completed).fileErrors.single().message
         assertTrue(message, message.startsWith("BLAKE3 mismatch: ROT.CR3 "))
+    }
+
+    /**
+     * An IO dispatcher whose blocks run only when the test says so, so a
+     * run can be held inside its copy step while another one starts.
+     */
+    private class ManualDispatcher : CoroutineDispatcher() {
+        val queue = ArrayDeque<Runnable>()
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            queue.addLast(block)
+        }
+        fun runNext() = queue.removeFirst().run()
+    }
+
+    @Test
+    fun testLateCancellationOfAnOlderImportKeepsTheNewerImportsState() {
+        // Hermes on #210: the cancelled run's handler used to clear any
+        // Ingesting state, so a second confirmImport that had already
+        // published its own Ingesting was dismissed when the first run's
+        // cancellation landed late. It must check the run, not the state.
+        val main = StandardTestDispatcher()
+        val io = ManualDispatcher()
+        runTest(main) {
+            val root = tempFolder.newFolder("SD_CARD_RACE")
+            val first = File(root, "FIRST.JPG").apply { writeBytes(ByteArray(10)) }
+            val second = File(root, "SECOND.JPG").apply { writeBytes(ByteArray(20)) }
+            val manager = OtgIngestManager(
+                scope = this,
+                ioDispatcher = io,
+                hashProvider = OtgHashProvider { _, _ -> Pair(null, "") },
+                enqueuer = acceptAll,
+            )
+
+            // Run 1 publishes its progress and waits in its copy step.
+            manager.confirmImport(
+                scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidateFor(first, "FIRST.JPG"))),
+                destinationDir = tempFolder.newFolder("otg_stage_race_1"),
+            )
+            testScheduler.runCurrent()
+            assertEquals("FIRST.JPG", (manager.state.value as OtgState.Ingesting).progress.currentFileName)
+            assertEquals(1, io.queue.size)
+
+            // Run 2 cancels run 1, publishes its own progress and waits too.
+            manager.confirmImport(
+                scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidateFor(second, "SECOND.JPG"))),
+                destinationDir = tempFolder.newFolder("otg_stage_race_2"),
+            )
+            testScheduler.runCurrent()
+            assertEquals("SECOND.JPG", (manager.state.value as OtgState.Ingesting).progress.currentFileName)
+            assertEquals(2, io.queue.size)
+
+            // Run 1's cancellation lands now, after run 2's publish.
+            io.runNext()
+            testScheduler.runCurrent()
+            val afterLateCancel = manager.state.value
+            assertTrue("run 2's progress was dismissed: $afterLateCancel", afterLateCancel is OtgState.Ingesting)
+            assertEquals("SECOND.JPG", (afterLateCancel as OtgState.Ingesting).progress.currentFileName)
+
+            // Run 2 still finishes normally.
+            while (io.queue.isNotEmpty()) {
+                io.runNext()
+                testScheduler.runCurrent()
+            }
+            val completed = manager.state.value as OtgState.Completed
+            assertEquals(1, completed.importedCount)
+            assertEquals(20L, completed.totalBytes)
+        }
     }
 }

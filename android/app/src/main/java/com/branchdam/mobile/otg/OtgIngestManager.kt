@@ -8,12 +8,12 @@ import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.R
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -144,6 +144,12 @@ class OtgIngestManager(
     private val _state = MutableStateFlow<OtgState>(OtgState.Idle)
     val state: StateFlow<OtgState> = _state.asStateFlow()
 
+    /**
+     * The current scan or import run. A cancelled import clears its state
+     * only while it is still this job (see [confirmImport]). Volatile:
+     * the UI thread replaces it while the run reads it on [scope].
+     */
+    @Volatile
     private var inFlightJob: Job? = null
 
     /**
@@ -216,7 +222,10 @@ class OtgIngestManager(
         onFileStaged: (file: File, candidate: OtgMediaCandidate) -> Unit = { _, _ -> }
     ) {
         inFlightJob?.cancel()
-        inFlightJob = scope.launch {
+        // Started lazily so inFlightJob already holds this run when its
+        // body (and its cancellation handler) first runs.
+        val run = scope.launch(start = CoroutineStart.LAZY) {
+            val thisRun = coroutineContext[Job]
             val candidates = scanResult.candidates
             val totalBytes = scanResult.totalSizeBytes
             // bytesProcessed drives the progress bar and also counts
@@ -282,16 +291,24 @@ class OtgIngestManager(
                     )
                 }
             } catch (ce: CancellationException) {
-                // Cancelled: by the user (cancelImport already set Idle) or
-                // by a newer card event that has already published its own
-                // state, such as NeedsCardAccess. Only clear a state this run
-                // still owns, so a late cancellation can't dismiss the
-                // newer one.
-                _state.update { if (it is OtgState.Ingesting) OtgState.Idle else it }
+                // Cancelled by the user (cancelImport or reset already set
+                // Idle and cleared inFlightJob) or by a newer run, such as
+                // a card event publishing NeedsCardAccess or a second
+                // confirmImport publishing its own Ingesting. Either way
+                // the state belongs to someone else now. Only a run that is
+                // still the current one (cancelled with its scope) clears
+                // its own progress: checking the run, not the state type,
+                // keeps a late cancellation from dismissing a newer
+                // Ingesting.
+                if (inFlightJob === thisRun) {
+                    _state.value = OtgState.Idle
+                }
             } catch (e: Exception) {
                 _state.value = OtgState.Error("Failed to import SD card media: ${e.message ?: "Unknown error"}")
             }
         }
+        inFlightJob = run
+        run.start()
     }
 
     /**

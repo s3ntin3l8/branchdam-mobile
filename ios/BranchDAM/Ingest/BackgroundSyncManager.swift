@@ -21,6 +21,22 @@ public class BackgroundSyncManager: @unchecked Sendable {
         }
     }
 
+    /// Runs one sync batch through the engine. A seam (internal, so only
+    /// `@testable` tests can swap it) so a test can run a batch without
+    /// the native engine. Read once per sync, on the calling thread.
+    var runSyncBatch: @Sendable (_ timeoutSecs: Int32, _ batchSize: Int32) -> (uploaded: Int32, eventsSent: Int32) = {
+        timeoutSecs, batchSize in
+        BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeoutSecs, batchSize: batchSize)
+    }
+
+    /// Runs after every sync batch, immediate or background: reaps the
+    /// staged card copies whose uploads have completed, as Android does
+    /// after each batch. Injectable so a test can assert the call site,
+    /// not just the helper. Read once per sync, on the calling thread.
+    var afterBatchSweep: @Sendable () -> Void = {
+        _ = AppleOtgStaging.sweepAfterSync()
+    }
+
     private static let defaultBatchSize = 10
     private static let defaultTimeoutSecs = 120
     private static let defaultIntervalMinutes = 15
@@ -104,10 +120,12 @@ public class BackgroundSyncManager: @unchecked Sendable {
 
         let timeout = Int32(readTimeoutSecs())
         let batch = Int32(readBatchSize())
+        let runBatch = runSyncBatch
+        let sweep = afterBatchSweep
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
+            let result = runBatch(timeout, batch)
             AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
-            AppleOtgStaging.sweepAfterSync()
+            sweep()
             completion?(result.uploaded > 0 || result.eventsSent > 0)
         }
     }
@@ -159,10 +177,12 @@ public class BackgroundSyncManager: @unchecked Sendable {
 
         let timeout = Int32(readTimeoutSecs())
         let batch = Int32(readBatchSize())
+        let runBatch = runSyncBatch
+        let sweep = afterBatchSweep
         DispatchQueue.global(qos: .background).async {
-            let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
+            let result = runBatch(timeout, batch)
             AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
-            AppleOtgStaging.sweepAfterSync()
+            sweep()
             tracker.completeOnce {
                 task.setTaskCompleted(success: true)
                 self.scheduleBackgroundSync()
