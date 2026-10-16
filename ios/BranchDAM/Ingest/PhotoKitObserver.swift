@@ -10,6 +10,9 @@ public struct DiscoveredAsset: Equatable, Sendable {
     public let isLivePhoto: Bool?
     public let pixelWidth: Int
     public let pixelHeight: Int
+    /// The exact PhotoKit creation date, when known (the scan cursor
+    /// compares against it; `creationDateUnix` drops sub-second precision).
+    public let creationDate: Date?
 
     public init(
         localIdentifier: String,
@@ -19,7 +22,8 @@ public struct DiscoveredAsset: Equatable, Sendable {
         isVideo: Bool = false,
         isLivePhoto: Bool = false,
         pixelWidth: Int = 0,
-        pixelHeight: Int = 0
+        pixelHeight: Int = 0,
+        creationDate: Date? = nil
     ) {
         self.localIdentifier = localIdentifier
         self.filename = filename
@@ -29,20 +33,50 @@ public struct DiscoveredAsset: Equatable, Sendable {
         self.isLivePhoto = isLivePhoto
         self.pixelWidth = pixelWidth
         self.pixelHeight = pixelHeight
+        self.creationDate = creationDate
     }
 }
 
 public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecked Sendable {
     public static let shared = PhotoKitObserver()
 
-    private var lastScannedDate: Date = Date().addingTimeInterval(-3600)
+    /// The persisted scan position (change token, else a creation-date
+    /// cursor). It used to be an in-memory date reset to "one hour ago"
+    /// on every launch.
+    private let cursor: CameraRollCursorStore
+    private let notifier: AppleCameraRollImportNotifier
     @objc private dynamic var isObserving = false
     private let lineageQueue = DispatchQueue(label: "com.branchdam.mobile.lineage", qos: .utility)
+
+    /// Serialises scans: PhotoKit delivers change callbacks on arbitrary
+    /// queues, and two overlapping scans would race on the cursor.
+    private let scanQueue = DispatchQueue(label: "com.branchdam.mobile.photokit-scan", qos: .utility)
+
+    /// Every asset, kept current from each PHChange so assets removed
+    /// during this session can be read from `changeDetails(for:)` when
+    /// the persistent change history is unavailable. scanQueue only.
+    private var allAssets: PHFetchResult<PHAsset>?
+
+    public init(
+        cursor: CameraRollCursorStore = CameraRollCursorStore(),
+        notifier: AppleCameraRollImportNotifier = .shared
+    ) {
+        self.cursor = cursor
+        self.notifier = notifier
+        super.init()
+    }
 
     public func startObserving() {
         guard !isObserving else { return }
         PHPhotoLibrary.shared().register(self)
         isObserving = true
+        scanQueue.async {
+            guard Self.libraryReadable else { return }
+            self.allAssets = PHAsset.fetchAssets(with: nil)
+            // Catch up on everything since the last scan, including what
+            // was captured or deleted while the app was not running.
+            self.scan(sessionRemovals: [])
+        }
         lineageQueue.async {
             Self.pruneStagedMediaDirectory()
         }
@@ -55,106 +89,188 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     }
 
     public func photoLibraryDidChange(_ changeInstance: PHChange) {
-        // Trigger incremental fetch for newly added photos/videos
-        _ = fetchAndEnqueueRecentAssets()
+        scanQueue.async {
+            var removed = [String]()
+            if let fetch = self.allAssets, let details = changeInstance.changeDetails(for: fetch) {
+                self.allAssets = details.fetchResultAfterChanges
+                removed = details.removedObjects.map { $0.localIdentifier }
+            }
+            self.scan(sessionRemovals: removed)
+        }
     }
 
-    public func fetchAndEnqueueRecentAssets(minDate: Date? = nil) -> [DiscoveredAsset] {
+    /// Runs a scan now (asynchronously, serialised with change callbacks).
+    public func scanForChanges() {
+        scanQueue.async {
+            self.scan(sessionRemovals: [])
+        }
+    }
+
+    // MARK: - Scanning (scanQueue only)
+
+    /// Finds what changed since the persisted position, records the
+    /// intent for every new asset (a pending_import row) before moving
+    /// the position past it, and turns removals into delete events.
+    ///
+    /// Prefers the persistent change history (iOS 16+), which also
+    /// reports assets that arrive late from iCloud and deletions made
+    /// while the app was closed. Falls back to the creation-date cursor
+    /// (and to this session's PHChange removals) when there is no usable
+    /// token.
+    private func scan(sessionRemovals: [String]) {
+        guard Self.libraryReadable else { return }
         guard BranchDamCoreBridge.shared.isInitialized else {
             NSLog("PhotoKitObserver: engine bridge uninitialized, skipping asset discovery")
-            return []
+            return
         }
 
-        let since = minDate ?? lastScannedDate
+        if let token = loadToken() {
+            do {
+                let persisted = try scanPersistentChanges(since: token)
+                finishScan(persisted: persisted)
+                return
+            } catch {
+                // Expired or unavailable history: start over from the
+                // date cursor.
+                NSLog("PhotoKitObserver: persistent change history unavailable (%@); using the date cursor", String(describing: error))
+                cursor.clearChangeToken()
+            }
+        }
+
+        // Captured before the fetch, so changes made during this scan
+        // are seen again by the next token-based scan.
+        let tokenBefore = PHPhotoLibrary.shared().currentChangeToken
+        processRemovals(sessionRemovals)
+
+        let since = cursor.lastScannedDate
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "creationDate > %@", since as NSDate)
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+        let assets = Self.discoveredAssets(in: PHAsset.fetchAssets(with: options))
 
-        let assets = PHAsset.fetchAssets(with: options)
-        var discovered = [DiscoveredAsset]()
+        let result = CameraRollIntake.commit(assets: assets, startCursor: since, persist: persistIntent)
+        if let advanced = result.advancedTo {
+            cursor.advanceDate(to: advanced)
+        }
+        if result.complete {
+            saveToken(tokenBefore)
+        }
+        finishScan(persisted: result.persisted)
+    }
 
-        assets.enumerateObjects { asset, _, _ in
-            if AppleCameraRollImportNotifier.shared.isAssetSuppressed(identifier: asset.localIdentifier) {
-                return
+    /// Walks the persistent change history one change at a time. A
+    /// change's token is saved only after all of its inserted assets
+    /// were recorded and its deletions handled; the walk stops at the
+    /// first change that could not be recorded, so it is retried.
+    private func scanPersistentChanges(since token: PHPersistentChangeToken) throws -> [DiscoveredAsset] {
+        let changes = try PHPhotoLibrary.shared().fetchPersistentChanges(since: token)
+        var persisted = [DiscoveredAsset]()
+        for change in changes {
+            let details = try change.changeDetails(for: .asset)
+            let inserted = Array(details.insertedLocalIdentifiers)
+            let assets = inserted.isEmpty
+                ? []
+                : Self.discoveredAssets(in: PHAsset.fetchAssets(withLocalIdentifiers: inserted, options: nil))
+            let result = CameraRollIntake.commit(assets: assets, startCursor: .distantPast, persist: persistIntent)
+            persisted += result.persisted
+            guard result.complete else { break }
+            processRemovals(Array(details.deletedLocalIdentifiers))
+            if let newest = assets.map({ $0.effectiveCreationDate }).max() {
+                cursor.advanceDate(to: newest)
             }
+            saveToken(change.changeToken)
+        }
+        return persisted
+    }
 
-            let resources = PHAssetResource.assetResources(for: asset)
-            let primaryResource = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
+    /// Records one asset's import intent. An asset already in the upload
+    /// queue was imported before and is not offered again; one the user
+    /// skipped stays skipped.
+    private func persistIntent(_ asset: DiscoveredAsset) -> CameraRollIntake.Outcome {
+        if BranchDamCoreBridge.shared.getMediaStatus(localID: asset.localIdentifier) != "NOT_ENQUEUED" {
+            return .alreadyDecided
+        }
+        switch notifier.stagePendingAsset(asset) {
+        case .staged: return .persisted
+        case .suppressed: return .alreadyDecided
+        case .failed: return .failed
+        }
+    }
 
-            let filename = primaryResource?.originalFilename ?? "IMG_\(asset.localIdentifier.prefix(8)).JPG"
-            let creationUnix = Int64(asset.creationDate?.timeIntervalSince1970 ?? 0)
-            let isRaw = filename.uppercased().hasSuffix(".DNG") || resources.contains(where: { $0.originalFilename.uppercased().hasSuffix(".DNG") })
-            let isVideo = asset.mediaType == .video
-            let isLivePhoto = asset.mediaSubtypes.contains(.photoLive)
-
-            let item = DiscoveredAsset(
-                localIdentifier: asset.localIdentifier,
-                filename: filename,
-                creationDateUnix: creationUnix,
-                isRaw: isRaw,
-                isVideo: isVideo,
-                isLivePhoto: isLivePhoto,
-                pixelWidth: asset.pixelWidth,
-                pixelHeight: asset.pixelHeight
-            )
-            discovered.append(item)
+    private func finishScan(persisted: [DiscoveredAsset]) {
+        if notifier.autoImportEnabled {
+            // Also picks up assets a killed process left pending.
+            notifier.importAllPending()
+        } else if !persisted.isEmpty {
+            let pendingCount = max(notifier.getPendingAssets().count, persisted.count)
+            notifier.postImportNotification(count: pendingCount)
         }
 
-        if let latest = assets.lastObject?.creationDate {
-            self.lastScannedDate = latest
+        // E.6: Lineage pipeline runs for BOTH auto-import and
+        // confirmation-based import. Recording edges before
+        // confirmation is safe — the engine deduplicates by local ID.
+        if !persisted.isEmpty {
+            runLineageDetection(persisted)
         }
+    }
 
-        if !discovered.isEmpty {
-            if AppleCameraRollImportNotifier.shared.autoImportEnabled {
-                let stagingGroup = DispatchGroup()
-
-                for item in discovered {
-                    let cleanId = item.localIdentifier.hasPrefix("ph://") ? String(item.localIdentifier.dropFirst(5)) : item.localIdentifier
-                    let phAssets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
-                    if let phAsset = phAssets.firstObject {
-                        let resources = PHAssetResource.assetResources(for: phAsset)
-                        let primaryRes = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
-                        if let res = primaryRes {
-                            let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_\(item.filename)"
-                            stagingGroup.enter()
-                            Self.stageResourceAtomically(resource: res, filename: safeFilename) { stagedPath in
-                                defer { stagingGroup.leave() }
-                                guard let targetPath = stagedPath else {
-                                    NSLog("PhotoKitObserver: staging failed for primary asset %@, skipping enqueue", item.localIdentifier)
-                                    return
-                                }
-                                _ = BranchDamCoreBridge.shared.enqueueMedia(
-                                    localPath: targetPath,
-                                    filename: item.filename,
-                                    capturedAtUnix: item.creationDateUnix,
-                                    localID: item.localIdentifier
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // E.6: Lineage pipeline runs for BOTH auto-import and
-                // confirmation-based import. Recording edges before
-                // confirmation is safe — the engine deduplicates by local ID.
-                runLineageDetection(discovered)
-
-                stagingGroup.notify(queue: .main) {
-                    BackgroundSyncManager.shared.triggerImmediateSync()
-                }
-            } else {
-                AppleCameraRollImportNotifier.shared.stagePendingAssets(discovered)
-                AppleCameraRollImportNotifier.shared.postImportNotification(
-                    count: discovered.count,
-                    assetIdentifiers: discovered.map { $0.localIdentifier }
-                )
-
-                // E.6: Lineage detection even for confirmation-based import.
-                runLineageDetection(discovered)
+    /// Enqueues delete events for assets removed from the library, keyed
+    /// by the local ID they were uploaded under (and the Live Photo's
+    /// paired-video child ID). The core drops events for media that was
+    /// never uploaded or was reclaimed.
+    private func processRemovals(_ localIdentifiers: [String]) {
+        for id in localIdentifiers {
+            AppleTrashSyncObserver.processRemovedAsset(localId: id)
+            // The asset is gone, so whether it was a Live Photo is only
+            // known from the queue: its paired video was enqueued under
+            // this child ID.
+            let pairedVideoId = "\(id)/pairedVideo"
+            if BranchDamCoreBridge.shared.getMediaStatus(localID: pairedVideoId) != "NOT_ENQUEUED" {
+                AppleTrashSyncObserver.processRemovedAsset(localId: pairedVideoId)
             }
         }
+    }
 
-        return discovered
+    private static var libraryReadable: Bool {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        return status == .authorized || status == .limited
+    }
+
+    private func loadToken() -> PHPersistentChangeToken? {
+        guard let data = cursor.changeTokenData else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: PHPersistentChangeToken.self, from: data)
+    }
+
+    private func saveToken(_ token: PHPersistentChangeToken) {
+        guard let data = try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true) else { return }
+        cursor.saveChangeTokenData(data)
+    }
+
+    private static func discoveredAssets(in fetchResult: PHFetchResult<PHAsset>) -> [DiscoveredAsset] {
+        var out = [DiscoveredAsset]()
+        fetchResult.enumerateObjects { asset, _, _ in
+            out.append(Self.discoveredAsset(from: asset))
+        }
+        return out
+    }
+
+    private static func discoveredAsset(from asset: PHAsset) -> DiscoveredAsset {
+        let resources = PHAssetResource.assetResources(for: asset)
+        let primaryResource = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
+        let filename = primaryResource?.originalFilename ?? "IMG_\(asset.localIdentifier.prefix(8)).JPG"
+        let creationUnix = Int64(asset.creationDate?.timeIntervalSince1970 ?? 0)
+        let isRaw = filename.uppercased().hasSuffix(".DNG") || resources.contains(where: { $0.originalFilename.uppercased().hasSuffix(".DNG") })
+        return DiscoveredAsset(
+            localIdentifier: asset.localIdentifier,
+            filename: filename,
+            creationDateUnix: creationUnix,
+            isRaw: isRaw,
+            isVideo: asset.mediaType == .video,
+            isLivePhoto: asset.mediaSubtypes.contains(.photoLive),
+            pixelWidth: asset.pixelWidth,
+            pixelHeight: asset.pixelHeight,
+            creationDate: asset.creationDate
+        )
     }
 
     private func fetchRecentContextAssets() -> [DiscoveredAsset] {

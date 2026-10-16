@@ -17,6 +17,10 @@ struct BranchDAMApp: App {
         }
 
         BackgroundSyncManager.shared.registerBackgroundTasks()
+        // Notification actions are only delivered to the center's
+        // delegate; install it before launch finishes so an action that
+        // relaunched the app is delivered too.
+        UNUserNotificationCenter.current().delegate = ImportNotificationDelegate.shared
         AppleCameraRollImportNotifier.shared.registerNotificationCategories()
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             if settings.authorizationStatus == .notDetermined {
@@ -26,11 +30,21 @@ struct BranchDAMApp: App {
     }
 
     @AppStorage(BranchDamKeys.themeMode.rawValue) private var themeMode = "system"
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             WelcomeView()
                 .preferredColorScheme(resolvedColorScheme)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // The background sync task only runs if one is scheduled;
+            // the task handler reschedules itself, but something has to
+            // submit the first request. Leaving the app is the moment
+            // pending uploads most need it.
+            if phase == .background {
+                BackgroundSyncManager.shared.scheduleBackgroundSync()
+            }
         }
     }
 

@@ -18,11 +18,8 @@ public class BackgroundSyncManager: @unchecked Sendable {
         }
         set {
             UserDefaults.standard.set(newValue, forKey: BranchDamKeys.syncOnMobileData.rawValue)
-            setupUrlSession()
         }
     }
-
-    private var urlSession: URLSession?
 
     private static let defaultBatchSize = 10
     private static let defaultTimeoutSecs = 120
@@ -36,8 +33,10 @@ public class BackgroundSyncManager: @unchecked Sendable {
     private var pathIsExpensive = false
     private var pathUsesCellular = false
 
+    // Uploads run inside the Go engine (its own net/http client, driven
+    // by syncBatch); there is no background URLSession. The one this
+    // class used to create was never used for any transfer.
     private init() {
-        setupUrlSession()
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let expensive = path.isExpensive
             let cellular = path.usesInterfaceType(.cellular)
@@ -66,14 +65,6 @@ public class BackgroundSyncManager: @unchecked Sendable {
         pathLock.lock()
         defer { pathLock.unlock() }
         return Self.isMobileData(isExpensive: pathIsExpensive, usesCellular: pathUsesCellular)
-    }
-
-    private func setupUrlSession() {
-        let config = URLSessionConfiguration.background(withIdentifier: "com.branchdam.mobile.bg-uploader")
-        config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = true
-        config.allowsCellularAccess = syncOnMobileData
-        self.urlSession = URLSession(configuration: config)
     }
 
     private func readBatchSize() -> Int {

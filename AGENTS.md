@@ -28,7 +28,7 @@ make android         # Assemble Android debug build
 |---|---|
 | `core/` | Shared Go engine (BLAKE3/FastHash, offline SQLite `queue.db`, HTTP chunked uploader, REST client) |
 | `android/` | Native Android application (Kotlin, Jetpack Compose, MediaStore observers, WorkManager, Pixel Fold dual-pane UI) |
-| `ios/` | Native iOS application (Swift, SwiftUI, PhotoKit, NSURLSession background uploader) |
+| `ios/` | Native iOS application (Swift, SwiftUI, PhotoKit, `BGProcessingTask` background sync; uploads run in the Go core) |
 
 ## Key Invariants
 

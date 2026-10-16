@@ -97,6 +97,14 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         stateLock.unlock()
     }
 
+    /// Runs a query-class engine call on `queryQueue`, so it never
+    /// overlaps opening or closing the engine. For the bridge extensions
+    /// in other files (see PendingImportEngine.swift); must not be called
+    /// from a block already on `queryQueue`.
+    func onQueryQueue<T>(_ body: () -> T) -> T {
+        queryQueue.sync(execute: body)
+    }
+
     /// The app's marketing version (CFBundleShortVersionString), sent to
     /// the server as the client version. Empty when the bundle has none,
     /// in which case the engine substitutes its own version.

@@ -228,6 +228,8 @@ private struct ConnectionSettingsView: View {
             )
             isConnected = connected
             if connected {
+                // First background sync for the newly paired device.
+                BackgroundSyncManager.shared.scheduleBackgroundSync()
                 namingTemplate = await BranchDamCoreBridge.shared.fetchNamingTemplateAsync() ?? ""
             } else {
                 namingTemplate = ""
