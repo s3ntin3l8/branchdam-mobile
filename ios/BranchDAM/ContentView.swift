@@ -111,6 +111,9 @@ public struct ContentView: View {
                 Task {
                     await BranchDamCoreBridge.shared.startEngineIfNeededAsync()
                     PhotoKitObserver.shared.startObserving()
+                    // startObserving() is a no-op once observing, and a
+                    // scan skipped while the engine was closed must run.
+                    PhotoKitObserver.shared.scanForChanges()
                 }
             }
         }

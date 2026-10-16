@@ -24,4 +24,15 @@ final class AppleTrashSyncObserverTests: XCTestCase {
         // Offloaded items should suppress delete event dispatch
         XCTAssertNil(event)
     }
+
+    /// PhotoKit removals don't know the server node UUID; the core
+    /// resolves the local ID at sync time and drops never-uploaded media,
+    /// so a non-offloaded removal always enqueues the event.
+    func testRemovalWithoutNodeUuidEnqueuesDeleteEvent() {
+        let event = AppleTrashSyncObserver.processRemovedAsset(
+            localId: "ED3B7488-86C7-4186-9A16-86F0DC1D0A3D/L0/001",
+            isOffloadedHandler: { _ in false }
+        )
+        XCTAssertNotNil(event)
+    }
 }

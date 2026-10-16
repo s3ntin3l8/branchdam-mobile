@@ -76,30 +76,21 @@ public class GalleryViewModel: ObservableObject {
 
     public func batchUpload() {
         let targets = items.filter { selectedIds.contains($0.id) && !$0.isBackedUp }
-        let requests: [(localID: String, filename: String, unix: Int64)] = targets.map { item in
+        let requests: [PendingImportItem] = targets.map { item in
             let resources = PHAssetResource.assetResources(for: item.asset)
             let primary = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
             let filename = primary?.originalFilename ?? "IMG_\(item.id.prefix(8)).JPG"
             let unix = Int64(item.asset.creationDate?.timeIntervalSince1970 ?? 0)
-            return (localID: item.id, filename: filename, unix: unix)
+            return PendingImportItem(localId: item.id, filename: filename, capturedAtUnix: unix, createdAtUnix: 0)
         }
 
         clearSelection()
         isSelectionMode = false
 
-        // Enqueueing hashes each file in the engine; keep it off the main
-        // actor.
+        // Each asset is staged to a real file before it is queued (the
+        // engine can't read a "ph://" path), off the main actor.
         Task {
-            var enqueuedCount = 0
-            for request in requests {
-                let uploadId = await BranchDamCoreBridge.shared.enqueueMediaAsync(
-                    localPath: "ph://\(request.localID)",
-                    filename: request.filename,
-                    capturedAtUnix: request.unix,
-                    localID: request.localID
-                )
-                if uploadId > 0 { enqueuedCount += 1 }
-            }
+            let enqueuedCount = await AppleCameraRollImportNotifier.shared.importAssets(requests)
 
             if enqueuedCount > 0 {
                 BackgroundSyncManager.shared.triggerImmediateSync()

@@ -97,6 +97,14 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         stateLock.unlock()
     }
 
+    /// Runs a query-class engine call on `queryQueue`, so it never
+    /// overlaps opening or closing the engine. For the bridge extensions
+    /// in other files (see PendingImportEngine.swift); must not be called
+    /// from a block already on `queryQueue`.
+    func onQueryQueue<T>(_ body: () -> T) -> T {
+        queryQueue.sync(execute: body)
+    }
+
     /// The app's marketing version (CFBundleShortVersionString), sent to
     /// the server as the client version. Empty when the bundle has none,
     /// in which case the engine substitutes its own version.
@@ -386,9 +394,16 @@ public class BranchDamCoreBridge: @unchecked Sendable {
     }
 
     public func getMediaStatus(localID: String) -> String {
+        loadMediaStatus(localID: localID) ?? "NOT_ENQUEUED"
+    }
+
+    /// The upload status of [localID], or nil when it could not be read
+    /// (engine not open, query failure) -- unlike getMediaStatus, a
+    /// failure is not "NOT_ENQUEUED".
+    public func loadMediaStatus(localID: String) -> String? {
         #if canImport(branchdam)
-        guard isInitialized else { return "NOT_ENQUEUED" }
-        var status = "NOT_ENQUEUED"
+        guard isInitialized else { return nil }
+        var status: String?
         queryQueue.sync {
             do {
                 status = try branchdam.bindingGetMediaStatus(localID)
@@ -398,20 +413,31 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return status
         #else
-        return "NOT_ENQUEUED"
+        return nil
         #endif
     }
 
     public func getAllMediaStatuses() -> [String: String] {
+        loadAllMediaStatuses() ?? [:]
+    }
+
+    /// Every upload status by local ID, or nil when they could not be read
+    /// (engine not open, query or decode failure) -- unlike
+    /// getAllMediaStatuses, a failure is not an empty map, so a caller can
+    /// tell "nothing queued" from "unknown".
+    public func loadAllMediaStatuses() -> [String: String]? {
         #if canImport(branchdam)
-        guard isInitialized else { return [:] }
-        var map: [String: String] = [:]
+        guard isInitialized else { return nil }
+        var map: [String: String]?
         queryQueue.sync {
             do {
                 let jsonStr = try branchdam.bindingGetAllMediaStatuses()
-                if let data = jsonStr.data(using: .utf8),
-                   let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
-                    map = decoded
+                if let data = jsonStr.data(using: .utf8) {
+                    do {
+                        map = try JSONDecoder().decode([String: String].self, from: data)
+                    } catch {
+                        NSLog("getAllMediaStatuses: decode failed: %@", String(describing: error))
+                    }
                 }
             } catch {
                 NSLog("getAllMediaStatuses failed: %@", String(describing: error))
@@ -419,7 +445,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return map
         #else
-        return [:]
+        return nil
         #endif
     }
 
@@ -618,26 +644,6 @@ public class BranchDamCoreBridge: @unchecked Sendable {
 
     public func testConnectionDetailedAsync() async -> String? {
         await offMainActor { self.testConnectionDetailed() }
-    }
-
-    public func enqueueMediaAsync(
-        localPath: String,
-        filename: String,
-        capturedAtUnix: Int64,
-        localID: String,
-        cameraModel: String = "",
-        sizeBytes: Int64 = 0
-    ) async -> Int64 {
-        await offMainActor {
-            self.enqueueMedia(
-                localPath: localPath,
-                filename: filename,
-                capturedAtUnix: capturedAtUnix,
-                localID: localID,
-                cameraModel: cameraModel,
-                sizeBytes: sizeBytes
-            )
-        }
     }
 
     public func reclaimSafeSpaceAsync(localID: String) async -> (eligible: Bool, reason: String) {

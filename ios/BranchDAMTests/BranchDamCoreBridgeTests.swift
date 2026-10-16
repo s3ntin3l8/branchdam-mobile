@@ -245,10 +245,9 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         XCTAssertEqual(statuses, bridge.getAllMediaStatuses())
     }
 
-    func testStartEngineUsesTheStoredAgentId() {
-        // Without a stored server URL there is nothing to open; with one,
-        // the agent ID comes from the Keychain rather than a hard-coded
-        // default.
+    func testResolvedAgentIDComesFromTheStore() {
+        // The agent ID startEngineIfNeeded opens with comes from the
+        // Keychain rather than a hard-coded default.
         let credentials = PairingCredentialStore(store: AppleKeychain.shared)
         XCTAssertNoThrow(try credentials.save(apiKey: "", agentId: "stored-agent"))
         defer { _ = AppleKeychain.shared.deleteString(account: PairingCredentialStore.agentIdAccount) }

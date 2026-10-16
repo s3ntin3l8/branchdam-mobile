@@ -27,7 +27,7 @@ import Foundation
 public enum BranchDamKeys: String {
     /// Sync scheduler: whether to use mobile (cellular) data for
     /// one-off sync requests. Read by `BackgroundSyncManager` when
-    /// configuring the background URL session's `allowsCellularAccess`.
+    /// deciding whether a sync may run on a cellular connection.
     case syncOnMobileData = "branchdam_sync_on_mobile_data"
 
     /// Camera roll import: whether to auto-enqueue newly-detected
@@ -71,6 +71,17 @@ public enum BranchDamKeys: String {
     /// Read by `PhotoKitObserver` when coalescing rapid library changes.
     case observerDebounceMs = "branchdam_observer_debounce_ms"
 
+    /// Camera-roll scan date cursor (seconds since epoch, a Double):
+    /// assets created after it are new. Read and written by
+    /// `CameraRollCursorStore`. Same key and unit as the Android
+    /// observer's `OBSERVER_LAST_SCANNED_TIMESTAMP`.
+    case cameraRollLastScannedTimestamp = "branchdam_observer_last_scanned_timestamp"
+
+    /// Archived PhotoKit `PHPersistentChangeToken` marking how far the
+    /// camera-roll scan has read the library's change history. iOS only.
+    /// Read and written by `CameraRollCursorStore`.
+    case cameraRollChangeToken = "branchdam_photokit_change_token"
+
     /// User-selected color-scheme mode. Stored as "system", "light", or
     /// "dark" to match the Android `ThemeMode` enum name convention so a
     /// cross-platform inspection tool can target one key string.
@@ -93,6 +104,7 @@ extension BranchDamKeys {
         public static let UPLOAD_BATCH_SIZE = "branchdam_upload_batch_size"
         public static let SYNC_TIMEOUT_SECS = "branchdam_sync_timeout_secs"
         public static let OBSERVER_DEBOUNCE_MS = "branchdam_observer_debounce_ms"
+        public static let OBSERVER_LAST_SCANNED_TIMESTAMP = "branchdam_observer_last_scanned_timestamp"
         public static let THEME_MODE = "branchdam_theme_mode"
         public static let LAST_SYNC_TIME = "branchdam_last_sync_time"
     }
