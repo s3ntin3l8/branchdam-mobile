@@ -76,81 +76,90 @@ public class GalleryViewModel: ObservableObject {
 
     public func batchUpload() {
         let targets = items.filter { selectedIds.contains($0.id) && !$0.isBackedUp }
-        var enqueuedCount = 0
-        for item in targets {
+        let requests: [(localID: String, filename: String, unix: Int64)] = targets.map { item in
             let resources = PHAssetResource.assetResources(for: item.asset)
             let primary = resources.first(where: { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }) ?? resources.first
             let filename = primary?.originalFilename ?? "IMG_\(item.id.prefix(8)).JPG"
             let unix = Int64(item.asset.creationDate?.timeIntervalSince1970 ?? 0)
-
-            let uploadId = BranchDamCoreBridge.shared.enqueueMedia(
-                localPath: "ph://\(item.id)",
-                filename: filename,
-                capturedAtUnix: unix,
-                localID: item.id
-            )
-            if uploadId > 0 { enqueuedCount += 1 }
-        }
-
-        if enqueuedCount > 0 {
-            BackgroundSyncManager.shared.triggerImmediateSync()
-            batchStatusMessage = "Enqueued \(enqueuedCount) items for upload"
-        } else {
-            batchStatusMessage = "Selected items already backed up"
+            return (localID: item.id, filename: filename, unix: unix)
         }
 
         clearSelection()
         isSelectionMode = false
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        // Enqueueing hashes each file in the engine; keep it off the main
+        // actor.
+        Task {
+            var enqueuedCount = 0
+            for request in requests {
+                let uploadId = await BranchDamCoreBridge.shared.enqueueMediaAsync(
+                    localPath: "ph://\(request.localID)",
+                    filename: request.filename,
+                    capturedAtUnix: request.unix,
+                    localID: request.localID
+                )
+                if uploadId > 0 { enqueuedCount += 1 }
+            }
+
+            if enqueuedCount > 0 {
+                BackgroundSyncManager.shared.triggerImmediateSync()
+                self.batchStatusMessage = "Enqueued \(enqueuedCount) items for upload"
+            } else {
+                self.batchStatusMessage = "Selected items already backed up"
+            }
+
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             self.batchStatusMessage = nil
         }
     }
 
     public func batchReclaim() {
         let targets = items.filter { selectedIds.contains($0.id) }
-        var eligibleAssets = [PHAsset]()
-        var eligibleIds = [String]()
-        for item in targets {
-            let (eligible, _) = BranchDamCoreBridge.shared.reclaimSafeSpace(localID: item.id)
-            if eligible {
-                eligibleAssets.append(item.asset)
-                eligibleIds.append(item.id)
-            }
-        }
-
-        if !eligibleAssets.isEmpty {
-            let assetsToDelete = eligibleAssets
-            let idsToRollback = eligibleIds
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.deleteAssets(assetsToDelete as NSArray)
-            }) { success, error in
-                Task { @MainActor in
-                    if success {
-                        // No delete event here: a Safe-Space reclaim frees the
-                        // phone copy only because the Tier-3 master is kept.
-                        // EVENT_NODE_DELETED would trash that master on the
-                        // server. The offloaded flag set by reclaimSafeSpace
-                        // keeps trash sync from reporting this deletion.
-                        self.batchStatusMessage = "Reclaimed \(assetsToDelete.count) items"
-                        await self.load()
-                    } else {
-                        // Rollback offloaded flag for all eligible assets that failed local deletion
-                        for id in idsToRollback {
-                            _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: id, isOffloaded: false)
-                        }
-                        self.batchStatusMessage = "Reclaim cancelled or failed"
-                    }
-                }
-            }
-        } else {
-            batchStatusMessage = "No selected items eligible for reclaim"
-        }
 
         clearSelection()
         isSelectionMode = false
 
+        // Each reclaim re-checks the node with the server; keep those
+        // round trips off the main actor.
         Task {
+            var eligibleAssets = [PHAsset]()
+            var eligibleIds = [String]()
+            for item in targets {
+                let verdict = await BranchDamCoreBridge.shared.reclaimSafeSpaceAsync(localID: item.id)
+                if verdict.eligible {
+                    eligibleAssets.append(item.asset)
+                    eligibleIds.append(item.id)
+                }
+            }
+
+            if !eligibleAssets.isEmpty {
+                let assetsToDelete = eligibleAssets
+                let idsToRollback = eligibleIds
+                PHPhotoLibrary.shared().performChanges({
+                    PHAssetChangeRequest.deleteAssets(assetsToDelete as NSArray)
+                }) { success, error in
+                    Task { @MainActor in
+                        if success {
+                            // No delete event here: a Safe-Space reclaim frees the
+                            // phone copy only because the Tier-3 master is kept.
+                            // EVENT_NODE_DELETED would trash that master on the
+                            // server. The offloaded flag set by reclaimSafeSpace
+                            // keeps trash sync from reporting this deletion.
+                            self.batchStatusMessage = "Reclaimed \(assetsToDelete.count) items"
+                            await self.load()
+                        } else {
+                            // Rollback offloaded flag for all eligible assets that failed local deletion
+                            for id in idsToRollback {
+                                _ = BranchDamCoreBridge.shared.setMediaOffloaded(localID: id, isOffloaded: false)
+                            }
+                            self.batchStatusMessage = "Reclaim cancelled or failed"
+                        }
+                    }
+                }
+            } else {
+                self.batchStatusMessage = "No selected items eligible for reclaim"
+            }
+
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             self.batchStatusMessage = nil
         }

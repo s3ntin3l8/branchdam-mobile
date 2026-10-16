@@ -50,20 +50,65 @@ public struct ActiveUploadProgress: Codable, Equatable, Sendable {
 /// Bridge between the Swift shells (camera-roll observer, BGTask manager,
 /// audit UI) and the gomobile-bound `branchdam` Go engine.
 ///
-/// All public methods are synchronous from the caller's perspective. The
-/// underlying gomobile calls block (they marshal arguments and call
-/// into Go over a sequence number channel), so the bridge internally
-/// dispatches calls to a private serial background queue.
+/// The gomobile calls block (they marshal arguments and call into Go over
+/// a sequence number channel), so the synchronous methods below dispatch
+/// onto private queues and wait:
+///
+/// - `syncQueue` (serial) runs `syncBatch`, which can hold it for the whole
+///   batch timeout.
+/// - `queryQueue` (concurrent) runs every other engine call, so queue
+///   counts, statuses and enqueues never wait behind an upload batch.
+///   The Go engine already serialises its own SQLite access (Android
+///   issues these calls from a thread pool too).
+/// - Opening and closing the engine take both: they run on `syncQueue`
+///   (never under an in-flight batch) as a barrier on `queryQueue` (never
+///   under an in-flight query).
+///
+/// `@MainActor` code must not call the synchronous methods: use the
+/// `...Async` variants, which wait on a background thread instead of
+/// blocking the main actor.
 public class BranchDamCoreBridge: @unchecked Sendable {
     public static let shared = BranchDamCoreBridge()
 
-    private let workQueue = DispatchQueue(label: "com.branchdam.mobile.bridge", qos: .userInitiated)
-    public private(set) var isInitialized: Bool = false
+    /// Agent ID used when none was stored at pairing (installs paired
+    /// before the agent ID was persisted, or never paired).
+    public static let defaultAgentID = "iphone-companion"
+
+    private let syncQueue = DispatchQueue(label: "com.branchdam.mobile.bridge.sync", qos: .utility)
+    private let queryQueue = DispatchQueue(
+        label: "com.branchdam.mobile.bridge.query",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
+    private let stateLock = NSLock()
+    private var initializedFlag = false
     private var mockOffloadedSet = Set<String>()
 
+    public var isInitialized: Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return initializedFlag
+    }
+
+    private func setInitialized(_ value: Bool) {
+        stateLock.lock()
+        initializedFlag = value
+        stateLock.unlock()
+    }
+
+    /// The app's marketing version (CFBundleShortVersionString), sent to
+    /// the server as the client version. Empty when the bundle has none,
+    /// in which case the engine substitutes its own version.
+    public static var clientVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    }
+
+    /// The version of the engine bundled with this build. The Go engine
+    /// ships inside the app, so this is the app's version.
     public static var engineVersion: String {
         #if canImport(branchdam)
-        return "1.0.0"
+        return clientVersion.isEmpty ? "unknown" : clientVersion
         #else
         return "unavailable"
         #endif
@@ -75,45 +120,63 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         dbPath: String,
         baseURL: String,
         apiKey: String = "",
-        agentID: String = "iphone-companion",
-        clientVersion: String = BranchDamCoreBridge.engineVersion,
+        agentID: String = BranchDamCoreBridge.defaultAgentID,
+        clientVersion: String = BranchDamCoreBridge.clientVersion,
         devCleartextHosts: String = ""
     ) -> Bool {
         #if canImport(branchdam)
+        // Re-pairing while a batch is uploading: ask it to stop at its next
+        // checkpoint rather than wait out the whole batch timeout.
+        if isInitialized {
+            setCancelFlag()
+        }
         var success = false
-        workQueue.sync {
+        withEngineExclusive {
             if self.isInitialized {
                 _ = try? branchdam.bindingClose()
-                self.isInitialized = false
+                self.setInitialized(false)
             }
             let keyToUse = apiKey.isEmpty ? AppleKeychain.shared.apiKey ?? "" : apiKey
             do {
                 try branchdam.bindingOpen(dbPath, baseURL, keyToUse, agentID, clientVersion, devCleartextHosts)
-                self.isInitialized = true
+                self.setInitialized(true)
                 success = true
             } catch {
-                self.isInitialized = false
+                self.setInitialized(false)
                 NSLog("BranchDamCoreBridge initialize failed: %@", String(describing: error))
             }
         }
         return success
         #else
-        isInitialized = true
+        setInitialized(true)
         return true
         #endif
     }
 
     public func shutdown() {
         #if canImport(branchdam)
-        workQueue.sync {
+        withEngineExclusive {
             _ = try? branchdam.bindingClose()
-            self.isInitialized = false
+            self.setInitialized(false)
         }
         #else
-        self.isInitialized = false
+        setInitialized(false)
         #endif
     }
 
+    /// Runs [work] with no batch and no query in flight: open/close must
+    /// not race either.
+    private func withEngineExclusive(_ work: () -> Void) {
+        syncQueue.sync {
+            queryQueue.sync(flags: .barrier) {
+                work()
+            }
+        }
+    }
+
+    /// Opens the engine from the stored pairing (server URL in
+    /// UserDefaults, API key and agent ID in the Keychain) if it is not
+    /// open yet.
     @discardableResult
     public func startEngineIfNeeded() -> Bool {
         if isInitialized { return true }
@@ -121,7 +184,8 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         let dbPath = docsDir.appendingPathComponent("branchdam_queue.db").path
         let storedServer = UserDefaults.standard.string(forKey: "branchdam_server_url") ?? ""
         if !storedServer.isEmpty {
-            return initialize(dbPath: dbPath, baseURL: storedServer)
+            let agentID = PairingCredentialStore(store: AppleKeychain.shared).resolvedAgentID()
+            return initialize(dbPath: dbPath, baseURL: storedServer, agentID: agentID)
         }
         return false
     }
@@ -130,7 +194,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return nil }
         var tpl: String? = nil
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 let res = try branchdam.bindingFetchNamingTemplate()
                 if !res.isEmpty {
@@ -157,7 +221,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return 0 }
         var uploadId: Int64 = 0
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 uploadId = try branchdam.bindingEnqueueMedia(
                     localPath,
@@ -192,7 +256,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return "" }
         var eventUuid: String = ""
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 eventUuid = try branchdam.bindingEnqueueLineageEvent(
                     parentUUID,
@@ -219,7 +283,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return "" }
         var eventUuid: String = ""
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 eventUuid = try branchdam.bindingEnqueueDeleteEvent(localID)
             } catch {
@@ -237,7 +301,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         guard isInitialized else { return (0, 0) }
         var uploaded: Int32 = 0
         var eventsSent: Int32 = 0
-        workQueue.sync {
+        syncQueue.sync {
             do {
                 let resStr = try branchdam.bindingSyncBatch(Int64(timeoutSecs), Int64(batchSize))
                 let parts = resStr.split(separator: ",")
@@ -261,7 +325,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return false }
         var out: Bool = false
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 out = try branchdam.bindingIsMediaOffloaded(localID)
             } catch {
@@ -270,11 +334,9 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return out
         #else
-        var out = false
-        workQueue.sync {
-            out = mockOffloadedSet.contains(localID)
-        }
-        return out
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return mockOffloadedSet.contains(localID)
         #endif
     }
 
@@ -282,7 +344,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return false }
         var success = false
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 try branchdam.bindingSetMediaOffloaded(localID, isOffloaded)
                 success = true
@@ -292,12 +354,12 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return success
         #else
-        workQueue.sync {
-            if isOffloaded {
-                mockOffloadedSet.insert(localID)
-            } else {
-                mockOffloadedSet.remove(localID)
-            }
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        if isOffloaded {
+            mockOffloadedSet.insert(localID)
+        } else {
+            mockOffloadedSet.remove(localID)
         }
         return true
         #endif
@@ -308,7 +370,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         guard isInitialized else { return (false, "Engine not initialized") }
         var eligible = false
         var reason = ""
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 try branchdam.bindingReclaimSafeSpace(localID)
                 eligible = true
@@ -327,7 +389,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return "NOT_ENQUEUED" }
         var status = "NOT_ENQUEUED"
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 status = try branchdam.bindingGetMediaStatus(localID)
             } catch {
@@ -344,7 +406,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return [:] }
         var map: [String: String] = [:]
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 let jsonStr = try branchdam.bindingGetAllMediaStatuses()
                 if let data = jsonStr.data(using: .utf8),
@@ -365,7 +427,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return nil }
         var count: Int64? = nil
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 count = try branchdam.bindingCountPendingUploads()
             } catch {
@@ -382,7 +444,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return nil }
         var count: Int64? = nil
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 count = try branchdam.bindingResetFailedUploads()
             } catch {
@@ -418,7 +480,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
     public func testConnectionDetailed() -> String? {
         #if canImport(branchdam)
         var errorMsg: String? = nil
-        workQueue.sync {
+        queryQueue.sync {
             guard self.isInitialized else {
                 errorMsg = "Engine not initialized"
                 return
@@ -439,7 +501,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return nil }
         var resultJson: String? = nil
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 let res = try branchdam.bindingCheckContent(fastHash, fullHash)
                 if !res.isEmpty {
@@ -459,7 +521,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return "" }
         var hash = ""
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 hash = try branchdam.bindingLookupBlake3ForLocalID(localID)
             } catch {
@@ -476,7 +538,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #if canImport(branchdam)
         guard isInitialized else { return "" }
         var hash = ""
-        workQueue.sync {
+        queryQueue.sync {
             do {
                 hash = try branchdam.bindingComputeHashes(localPath)
             } catch {
@@ -498,5 +560,87 @@ public class BranchDamCoreBridge: @unchecked Sendable {
             NSLog("setCancelFlag failed: %@", String(describing: error))
         }
         #endif
+    }
+
+    // MARK: - Async variants for @MainActor callers
+
+    /// Runs a blocking bridge call on a background thread and resumes the
+    /// caller when it finishes, so SwiftUI views and view models never
+    /// block the main actor on the engine.
+    private func offMainActor<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: work())
+            }
+        }
+    }
+
+    public func initializeAsync(
+        dbPath: String,
+        baseURL: String,
+        apiKey: String = "",
+        agentID: String = BranchDamCoreBridge.defaultAgentID,
+        clientVersion: String = BranchDamCoreBridge.clientVersion,
+        devCleartextHosts: String = ""
+    ) async -> Bool {
+        await offMainActor {
+            self.initialize(
+                dbPath: dbPath,
+                baseURL: baseURL,
+                apiKey: apiKey,
+                agentID: agentID,
+                clientVersion: clientVersion,
+                devCleartextHosts: devCleartextHosts
+            )
+        }
+    }
+
+    @discardableResult
+    public func startEngineIfNeededAsync() async -> Bool {
+        await offMainActor { self.startEngineIfNeeded() }
+    }
+
+    public func fetchNamingTemplateAsync() async -> String? {
+        await offMainActor { self.fetchNamingTemplate() }
+    }
+
+    public func countPendingUploadsAsync() async -> Int64? {
+        await offMainActor { self.countPendingUploads() }
+    }
+
+    public func getAllMediaStatusesAsync() async -> [String: String] {
+        await offMainActor { self.getAllMediaStatuses() }
+    }
+
+    public func resetFailedUploadsAsync() async -> Int64? {
+        await offMainActor { self.resetFailedUploads() }
+    }
+
+    public func testConnectionDetailedAsync() async -> String? {
+        await offMainActor { self.testConnectionDetailed() }
+    }
+
+    public func enqueueMediaAsync(
+        localPath: String,
+        filename: String,
+        capturedAtUnix: Int64,
+        localID: String,
+        cameraModel: String = "",
+        sizeBytes: Int64 = 0
+    ) async -> Int64 {
+        await offMainActor {
+            self.enqueueMedia(
+                localPath: localPath,
+                filename: filename,
+                capturedAtUnix: capturedAtUnix,
+                localID: localID,
+                cameraModel: cameraModel,
+                sizeBytes: sizeBytes
+            )
+        }
+    }
+
+    public func reclaimSafeSpaceAsync(localID: String) async -> (eligible: Bool, reason: String) {
+        await offMainActor { self.reclaimSafeSpace(localID: localID) }
     }
 }

@@ -143,4 +143,87 @@ final class AppleKeychainTests: XCTestCase {
             "default accessibility must be the spec-mandated ThisDeviceOnly class"
         )
     }
+
+    // MARK: - Pairing credentials (agent ID persistence)
+
+    func testPairingRoundTripsApiKeyAndAgentId() {
+        let store = InMemorySecretStore()
+        let credentials = PairingCredentialStore(store: store)
+
+        XCTAssertNoThrow(try credentials.save(apiKey: "paired-key", agentId: "iphone-15-pro")) // pragma: allowlist secret
+
+        // A fresh instance over the same store -- i.e. the next launch --
+        // reopens the engine as the paired agent, not the default.
+        let nextLaunch = PairingCredentialStore(store: store)
+        XCTAssertEqual(nextLaunch.agentId, "iphone-15-pro")
+        XCTAssertEqual(nextLaunch.resolvedAgentID(), "iphone-15-pro")
+        XCTAssertEqual(store.getString(account: AppleKeychain.apiKeyAccount), "paired-key") // pragma: allowlist secret
+    }
+
+    func testUnpairedInstallFallsBackToDefaultAgentId() {
+        let credentials = PairingCredentialStore(store: InMemorySecretStore())
+        XCTAssertNil(credentials.agentId)
+        XCTAssertEqual(credentials.resolvedAgentID(), BranchDamCoreBridge.defaultAgentID)
+    }
+
+    func testEmptyApiKeyClearsTheStoredKeyButKeepsTheAgent() {
+        let store = InMemorySecretStore()
+        let credentials = PairingCredentialStore(store: store)
+        XCTAssertNoThrow(try credentials.save(apiKey: "old-key", agentId: "agent-a")) // pragma: allowlist secret
+        XCTAssertNoThrow(try credentials.save(apiKey: "", agentId: "agent-b"))
+
+        XCTAssertNil(store.getString(account: AppleKeychain.apiKeyAccount))
+        XCTAssertEqual(credentials.agentId, "agent-b")
+    }
+
+    func testFailedKeychainWriteIsReportedNotSwallowed() {
+        let store = InMemorySecretStore()
+        store.failWrites = true
+        let credentials = PairingCredentialStore(store: store)
+
+        XCTAssertThrowsError(try credentials.save(apiKey: "k", agentId: "a")) { XCTAssertEqual($0 as? PairingStoreError, .apiKeyNotStored) } // pragma: allowlist secret
+        XCTAssertNil(credentials.agentId)
+    }
+
+    func testFailedAgentIdWriteIsReported() {
+        let store = InMemorySecretStore()
+        store.failingAccounts = [PairingCredentialStore.agentIdAccount]
+        let credentials = PairingCredentialStore(store: store)
+
+        XCTAssertThrowsError(try credentials.save(apiKey: "k", agentId: "a")) { XCTAssertEqual($0 as? PairingStoreError, .agentIdNotStored) } // pragma: allowlist secret
+    }
+
+    func testAgentIdAccountSitsNextToTheApiKey() {
+        XCTAssertEqual(PairingCredentialStore.agentIdAccount, "branchdam_agent_id")
+        XCTAssertEqual(PairingCredentialStore.apiKeyAccount, AppleKeychain.apiKeyAccount)
+    }
+
+    func testAppleKeychainRoundTripsTheAgentId() {
+        let credentials = PairingCredentialStore(store: keychain)
+        XCTAssertNoThrow(try credentials.save(apiKey: "kc-key", agentId: "kc-agent")) // pragma: allowlist secret
+        XCTAssertEqual(PairingCredentialStore(store: keychain).resolvedAgentID(), "kc-agent")
+    }
+}
+
+/// In-memory [SecretStore] test double; can be told to refuse writes.
+private final class InMemorySecretStore: SecretStore {
+    private var values: [String: String] = [:]
+    var failWrites = false
+    var failingAccounts: Set<String> = []
+
+    func setString(_ value: String, account: String) -> Bool {
+        guard !failWrites, !failingAccounts.contains(account) else { return false }
+        values[account] = value
+        return true
+    }
+
+    func getString(account: String) -> String? {
+        values[account]
+    }
+
+    func deleteString(account: String) -> Bool {
+        guard !failWrites, !failingAccounts.contains(account) else { return false }
+        values[account] = nil
+        return true
+    }
 }
