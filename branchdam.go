@@ -645,6 +645,7 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 	if err := e.requireOpen(); err != nil {
 		return SyncResult{}, err
 	}
+	e.checkKeyRotation()
 	if !opts.IncludeEvents && !opts.IncludeUploads {
 		return SyncResult{}, newError(CodeInvalidInput, "SyncBatch requires IncludeEvents or IncludeUploads")
 	}
@@ -1065,6 +1066,9 @@ func NewEngine(opts EngineOptions) (*Engine, error) {
 		HTTPClient:    nil,
 		UploadClient:  nil,
 	})
+
+	// Rotated API keys go to the shell's secure storage (keyrotation.go).
+	httpClient.SetKeyStore(storeRotatedKey)
 
 	eng := engine.New(q, httpClient)
 

@@ -25,8 +25,18 @@ func (c *Client) Handshake(ctx context.Context, lastProcessedEventUUID string) (
 	}
 
 	var resp HandshakeResponse
-	if err := c.postJSON(ctx, "/api/v1/agent/handshake", reqBody, &resp); err != nil {
+	usedKey, err := c.postJSONWithKey(ctx, handshakePath, reqBody, &resp)
+	if err != nil {
 		return nil, wrapCallError("handshake failed", err)
+	}
+	c.markHandshake()
+	// A rotated key (branchDAM S13) is stored through the KeyStore,
+	// switched to and adopted right here; the confirming handshake's
+	// response replaces this one. See keyrotation.go.
+	if resp.PendingRotation != nil {
+		if confirmed := c.adoptRotation(ctx, reqBody, usedKey, resp.PendingRotation); confirmed != nil {
+			return confirmed, nil
+		}
 	}
 	return &resp, nil
 }
@@ -181,26 +191,56 @@ func readResponseBody(r io.Reader) ([]byte, error) {
 // the request, attaches signing headers, executes, reads the response,
 // and unmarshals into out. bodyReader is nil for GET requests.
 func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader io.Reader, bodyBytes []byte, out any) error {
+	_, err := c.doRequestWithKey(ctx, method, path, bodyReader != nil, bodyBytes, out)
+	return err
+}
+
+// doRequestWithKey runs doRequest's lifecycle and returns the API key the
+// final attempt used. After each response observeAuth may ask for one
+// retry with a different key: when a freshly rotated key is refused, or
+// when the key changed while the request was in flight. The body is
+// rebuilt from bodyBytes for the retry.
+func (c *Client) doRequestWithKey(ctx context.Context, method, path string, hasBody bool, bodyBytes []byte, out any) (string, error) {
+	key := c.currentKey()
+	for attempt := 0; ; attempt++ {
+		var bodyReader io.Reader
+		if hasBody {
+			bodyReader = bytes.NewReader(bodyBytes)
+		}
+		status, err := c.sendOnce(ctx, method, path, key, bodyReader, bodyBytes, out)
+		if status != 0 {
+			if retry := c.observeAuth(ctx, key, status); retry != "" && retry != key && attempt == 0 {
+				key = retry
+				continue
+			}
+		}
+		return key, err
+	}
+}
+
+// sendOnce performs one round trip with apiKey. It returns the HTTP status
+// (0 when no response arrived) and the same errors doRequest documents.
+func (c *Client) sendOnce(ctx context.Context, method, path, apiKey string, bodyReader io.Reader, bodyBytes []byte, out any) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
 	if err != nil {
-		return fmt.Errorf("create request failed: %w", err)
+		return 0, fmt.Errorf("create request failed: %w", err)
 	}
-	c.setHeaders(req)
+	c.setHeaders(req, apiKey)
 	if method == http.MethodGet {
 		req.Header.Del("Content-Type")
 	}
 
 	timestamp, nonce, rerr := newReplayProtectionFields()
 	if rerr != nil {
-		return fmt.Errorf("build replay protection fields: %w", rerr)
+		return 0, fmt.Errorf("build replay protection fields: %w", rerr)
 	}
 	req.Header.Set("X-Timestamp", timestamp)
 	req.Header.Set("X-Nonce", nonce)
-	req.Header.Set("X-Signature", c.signRequest(req.Method, path, nonce, timestamp, bodyBytes))
+	req.Header.Set("X-Signature", signRequest(apiKey, req.Method, path, nonce, timestamp, bodyBytes))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return &ClientError{
+		return 0, &ClientError{
 			Code:    CodeNetworkError,
 			Message: "http execute failed",
 			Cause:   err,
@@ -213,9 +253,9 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader 
 		// Surface ClientError directly (preserves the Code) rather than
 		// wrapping it; the branchdam FFI layer maps Code to its own.
 		if ce, ok := err.(*ClientError); ok {
-			return ce
+			return resp.StatusCode, ce
 		}
-		return fmt.Errorf("read response failed: %w", err)
+		return resp.StatusCode, fmt.Errorf("read response failed: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -223,7 +263,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader 
 		if len(body) > MaxErrorBodyBytes {
 			body = body[:MaxErrorBodyBytes]
 		}
-		return &ClientError{
+		return resp.StatusCode, &ClientError{
 			Code:       CodeForStatus(resp.StatusCode),
 			Message:    fmt.Sprintf("http error %d", resp.StatusCode),
 			StatusCode: resp.StatusCode,
@@ -233,19 +273,26 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader 
 
 	if out != nil && len(respBody) > 0 {
 		if err := json.Unmarshal(respBody, out); err != nil {
-			return fmt.Errorf("unmarshal response failed: %w", err)
+			return resp.StatusCode, fmt.Errorf("unmarshal response failed: %w", err)
 		}
 	}
 
-	return nil
+	return resp.StatusCode, nil
 }
 
 func (c *Client) postJSON(ctx context.Context, path string, reqData any, respData any) error {
+	_, err := c.postJSONWithKey(ctx, path, reqData, respData)
+	return err
+}
+
+// postJSONWithKey is postJSON that also returns the API key the request
+// was finally sent with (Handshake opens a sealed rotated key with it).
+func (c *Client) postJSONWithKey(ctx context.Context, path string, reqData any, respData any) (string, error) {
 	jsonData, err := json.Marshal(reqData)
 	if err != nil {
-		return fmt.Errorf("marshal request failed: %w", err)
+		return "", fmt.Errorf("marshal request failed: %w", err)
 	}
-	return c.doRequest(ctx, http.MethodPost, path, bytes.NewReader(jsonData), jsonData, respData)
+	return c.doRequestWithKey(ctx, http.MethodPost, path, true, jsonData, respData)
 }
 
 // CheckContent calls GET /api/v1/agent/check-content.

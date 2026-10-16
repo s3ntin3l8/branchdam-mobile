@@ -47,6 +47,27 @@ public struct ActiveUploadProgress: Codable, Equatable, Sendable {
     }
 }
 
+#if canImport(branchdam)
+/// The engine's key store (`BindingSetKeyStore` in the Go binding): stores
+/// a rotated API key the server delivered on a handshake (branchDAM S13)
+/// in the Keychain through [PairingCredentialStore] before the engine
+/// starts using it, and the previous key again if the server refuses the
+/// new one. Throwing keeps the engine on its current key. The engine calls
+/// it on a Go thread while one of the bridge's own calls is waiting on Go,
+/// so it touches only the Keychain, never the bridge's queues.
+final class KeychainRotatedKeyStore: NSObject, branchdam.KeyStoreProtocol {
+    private let credentials: PairingCredentialStore
+
+    init(credentials: PairingCredentialStore = PairingCredentialStore(store: AppleKeychain.shared)) {
+        self.credentials = credentials
+    }
+
+    func storeAPIKey(_ apiKey: String?) throws {
+        try credentials.saveRotatedAPIKey(apiKey ?? "")
+    }
+}
+#endif
+
 /// Bridge between the Swift shells (camera-roll observer, BGTask manager,
 /// audit UI) and the gomobile-bound `branchdam` Go engine.
 ///
@@ -145,6 +166,8 @@ public class BranchDamCoreBridge: @unchecked Sendable {
                 self.setInitialized(false)
             }
             let keyToUse = apiKey.isEmpty ? AppleKeychain.shared.apiKey ?? "" : apiKey
+            // Before the engine opens, so it can store a rotated API key.
+            branchdam.bindingSetKeyStore(KeychainRotatedKeyStore())
             do {
                 try branchdam.bindingOpen(dbPath, baseURL, keyToUse, agentID, clientVersion, devCleartextHosts)
                 self.setInitialized(true)

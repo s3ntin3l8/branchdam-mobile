@@ -794,7 +794,7 @@ func TestSignRequest_CanonicalString(t *testing.T) {
 	body := []byte(`{"agentId":"test"}`)
 
 	c := New(Config{BaseURL: "http://localhost", APIKey: apiKey, AgentID: "agent"})
-	sig := c.signRequest(method, path, nonce, timestamp, body)
+	sig := signRequest(c.currentKey(), method, path, nonce, timestamp, body)
 
 	// Compute expected HMAC independently
 	mac := hmac.New(sha256.New, []byte(apiKey))

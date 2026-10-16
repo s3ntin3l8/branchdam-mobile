@@ -189,6 +189,8 @@ behind.
 ### 2. Ingest Architecture & Protocol
 - **Handshake (`POST /api/v1/agent/handshake`)**:
   Exchanges device capabilities, checks protocol version, and receives the server's canonical naming template (e.g. `{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}`).
+- **Key rotation (branchDAM S13)**:
+  When the server rotates this device's API key, the next handshake carries the new key sealed for the current one (`pendingRotation.sealedApiKey`: AES-256-GCM keyed by HMAC-SHA256 of the current key). The core opens it, has the shell store it (Android: the Keystore-backed `EncryptedSharedPreferences` `api_key` entry, written with `commit()`; iOS: the Keychain through `PairingCredentialStore.saveRotatedAPIKey`), and only then switches to it and adopts it with a second handshake, which revokes the old key on the server. If the shell cannot store it, the app stays on the old key. If the server refuses the new key on its first use, the core goes back to the old key, retries that request, and stores the old key again. `SyncBatch` handshakes when none succeeded in the last 6 hours, so a phone that only syncs in the background still picks a rotation up within the server's 24-hour grace window. A rotation the server cannot deliver (no `BRANCHDAM_SECRET_KEY` on the server) means pairing the device again by QR.
 - **Direct Upload (`POST /api/v1/agent/upload`)**:
   Streams chunked binary asset data directly with headers:
   - `User-Agent`: Companion identifier (`branchdam-mobile/<agent_id>`).

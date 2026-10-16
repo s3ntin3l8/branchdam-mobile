@@ -37,6 +37,10 @@ make android         # Assemble Android debug build
 3. **Safe Storage Reclaim:** Local media files are NEVER deleted for storage reclaim unless `POST /api/v1/agent/node-status` reports `verified: true`.
 4. **Lineage Precision:** DNG RAW + Ultra HDR JPEG pairs and Motion Photos emit `EVENT_EDGE_ATTACHED` with `confidence: 1.00`, automatically. Anything below 1.00 (timestamp-proximity pairs, in-phone edits) is never auto-emitted: the core answers `REVIEW_REQUIRED`, the pair waits in the lineage review screen, and the user's confirm or reject is stored in `queue.db` (`lineage_review`). A confirmed edge keeps its original confidence.
 
+## Rotated API keys: store, then switch, fall back once
+
+`core/client/keyrotation.go` opens `pendingRotation.sealedApiKey` with the key the handshake used (a value that does not open is ignored; a cleartext `apiKey` is never used), hands it to the shell's `KeyStore` (`BindingSetKeyStore`: Android `EngineKeyStore` -> `RotatedApiKeyStore`, iOS `KeychainRotatedKeyStore` -> `PairingCredentialStore.saveRotatedAPIKey`), and switches the in-memory key only after that durable write returns without error, then adopts it with a confirming handshake. A store must throw unless the key is really written (Android `commit()` and read-back, never `apply()`; no plaintext fallback). A `401` on the new key's first use reverts to the old key, retries that request once, stores the old key again once accepted, and never re-adopts that key id in the process. Every request reads the key once and signs with that same value.
+
 ## PR titles must be Conventional Commits
 
 This repo squash-merges PRs (`squash_merge_commit_title: COMMIT_OR_PR_TITLE`),

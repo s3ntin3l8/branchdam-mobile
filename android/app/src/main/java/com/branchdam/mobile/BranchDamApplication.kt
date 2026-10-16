@@ -45,7 +45,11 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
         // (like those from MediaStoreObserver) will safely queue up behind
         // this on the EngineHolder's single-threaded executor.
         val dbFile = File(filesDir, "branchdam_queue.db")
-        Thread({ initCoreEngine(dbFile.absolutePath) }, "EngineInit").apply {
+        Thread({
+            // Before the engine opens, so it can store a rotated API key.
+            EngineKeyStore.install(this)
+            initCoreEngine(dbFile.absolutePath)
+        }, "EngineInit").apply {
             isDaemon = true
             start()
         }

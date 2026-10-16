@@ -58,7 +58,11 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 		return nil, fmt.Errorf("failed to create upload request: %w", err)
 	}
 
-	c.setHeaders(req)
+	// The streamed body cannot be replayed, so a refused rotated key is
+	// not retried here; observeAuth still reverts the client's key, so the
+	// next request goes out with the previous key.
+	apiKey := c.currentKey()
+	c.setHeaders(req, apiKey)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("X-Filename", filename)
 	req.ContentLength = sizeBytes
@@ -92,6 +96,7 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 		}
 	}
 	defer resp.Body.Close()
+	c.observeAuth(ctx, apiKey, resp.StatusCode)
 
 	// B.2.4: bound the response body. 1 MiB is generous for the
 	// metadata responses /api/v1/agent/upload returns.
