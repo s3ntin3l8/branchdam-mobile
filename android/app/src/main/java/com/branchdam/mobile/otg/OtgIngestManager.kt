@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import java.util.concurrent.CancellationException
 
 data class OtgIngestProgress(
@@ -146,19 +147,24 @@ class OtgIngestManager(
 
     /**
      * The current scan or import run. A cancelled import clears its state
-     * only while it is still this job (see [confirmImport]). Volatile:
-     * the UI thread replaces it while the run reads it on [scope].
+     * only while it is still this job (see [confirmImport]). Guarded by
+     * [jobLock]: the UI thread replaces it while a cancelled run on
+     * [scope] checks it.
      */
-    @Volatile
     private var inFlightJob: Job? = null
+
+    /**
+     * Makes [replaceInFlight]'s swap and [clearIfCurrent]'s check-and-clear
+     * atomic with respect to each other. Nothing inside it suspends.
+     */
+    private val jobLock = Any()
 
     /**
      * Called when a USB mass storage / SD card is attached or selected via SAF.
      * Starts background scanning and transitions to AwaitingConfirmation upon completion.
      */
     fun onCardDetected(deviceLabel: String, directory: File) {
-        inFlightJob?.cancel()
-        inFlightJob = scope.launch {
+        startRun {
             _state.value = OtgState.Scanning(deviceLabel)
             val result = withContext(ioDispatcher) {
                 OtgCardScanner.scanDirectory(directory, deviceLabel)
@@ -179,8 +185,7 @@ class OtgIngestManager(
      * came from the card).
      */
     fun onCardNeedsAccess(deviceLabel: String) {
-        inFlightJob?.cancel()
-        inFlightJob = null
+        replaceInFlight(null)
         _state.value = OtgState.NeedsCardAccess(deviceLabel)
     }
 
@@ -188,8 +193,7 @@ class OtgIngestManager(
      * Called when a SAF DocumentTree URI is provided by the user.
      */
     fun onDocumentTreeSelected(treeUri: Uri, deviceLabel: String = "SD Card") {
-        inFlightJob?.cancel()
-        inFlightJob = scope.launch {
+        startRun {
             _state.value = OtgState.Scanning(deviceLabel)
             val result = withContext(ioDispatcher) {
                 if (context != null) {
@@ -221,10 +225,7 @@ class OtgIngestManager(
         destinationDir: File = defaultSessionDir(),
         onFileStaged: (file: File, candidate: OtgMediaCandidate) -> Unit = { _, _ -> }
     ) {
-        inFlightJob?.cancel()
-        // Started lazily so inFlightJob already holds this run when its
-        // body (and its cancellation handler) first runs.
-        val run = scope.launch(start = CoroutineStart.LAZY) {
+        startRun {
             val thisRun = coroutineContext[Job]
             val candidates = scanResult.candidates
             val totalBytes = scanResult.totalSizeBytes
@@ -300,23 +301,18 @@ class OtgIngestManager(
                 // its own progress: checking the run, not the state type,
                 // keeps a late cancellation from dismissing a newer
                 // Ingesting.
-                if (inFlightJob === thisRun) {
-                    _state.value = OtgState.Idle
-                }
+                clearIfCurrent(thisRun)
             } catch (e: Exception) {
                 _state.value = OtgState.Error("Failed to import SD card media: ${e.message ?: "Unknown error"}")
             }
         }
-        inFlightJob = run
-        run.start()
     }
 
     /**
      * Human cancellation hook to reject or skip the ingest.
      */
     fun cancelImport() {
-        inFlightJob?.cancel()
-        inFlightJob = null
+        replaceInFlight(null)
         _state.value = OtgState.Idle
     }
 
@@ -324,9 +320,50 @@ class OtgIngestManager(
      * Resets state back to Idle after viewing completion or error.
      */
     fun reset() {
-        inFlightJob?.cancel()
-        inFlightJob = null
+        replaceInFlight(null)
         _state.value = OtgState.Idle
+    }
+
+    /**
+     * Launches [block] as the new current run. It is started lazily, after
+     * [replaceInFlight] has made it current, so its body (and its
+     * cancellation handler) never runs while [inFlightJob] still names an
+     * older run, and every state it publishes comes after the swap.
+     */
+    private fun startRun(block: suspend CoroutineScope.() -> Unit) {
+        val run = scope.launch(start = CoroutineStart.LAZY, block = block)
+        replaceInFlight(run)
+        run.start()
+    }
+
+    /**
+     * Makes [next] the current run and cancels the previous one, as one
+     * step under [jobLock]. [next] is assigned before the cancel: a
+     * cancelled run's handler, inline on this thread or later on another,
+     * can never find itself still current.
+     */
+    private fun replaceInFlight(next: Job?) {
+        synchronized(jobLock) {
+            val previous = inFlightJob
+            inFlightJob = next
+            previous?.cancel()
+        }
+    }
+
+    /**
+     * A cancelled run's cleanup: clears the state to Idle only while [run]
+     * is still the current run. The check, the write and the clear happen
+     * under [jobLock], so a [replaceInFlight] on another thread cannot slip
+     * in between the check and the write and have its newer state
+     * (Scanning, Ingesting, NeedsCardAccess) overwritten with Idle.
+     */
+    private fun clearIfCurrent(run: Job?) {
+        synchronized(jobLock) {
+            if (inFlightJob === run) {
+                inFlightJob = null
+                _state.value = OtgState.Idle
+            }
+        }
     }
 
     /**
@@ -346,16 +383,18 @@ class OtgIngestManager(
         }
         if (id > 0L) return null
         stagedFile.delete()
-        return text(R.string.otg_error_enqueue_failed, "Could not add to the upload queue")
+        return text(R.string.otg_error_enqueue_failed, ENQUEUE_FAILED)
     }
 
     /**
      * A user-facing message from strings.xml, formatted with [args]. JVM
      * unit tests build the manager without a Context; they get the
-     * English [fallback], which must say the same as the resource.
+     * English [fallback], formatted with the same [args], which must be
+     * the resource's own text (OtgIngestManagerFallbackTest pins that).
      */
     private fun text(@StringRes id: Int, fallback: String, vararg args: Any): String =
-        context?.getString(id, *args) ?: fallback
+        context?.getString(id, *args)
+            ?: if (args.isEmpty()) fallback else String.format(Locale.ROOT, fallback, *args)
 
     private fun defaultSessionDir(): File {
         val root = context?.let { OtgStaging.root(it) }
@@ -396,11 +435,7 @@ class OtgIngestManager(
 
         val targetFile = OtgStaging.stagedFile(stageDir, candidate.relativePath)
             ?: return StageResult.Failure(
-                text(
-                    R.string.otg_error_unsafe_path,
-                    "Skipped file with an unsafe path: ${candidate.relativePath}",
-                    candidate.relativePath,
-                ),
+                text(R.string.otg_error_unsafe_path, UNSAFE_PATH, candidate.relativePath),
             )
         val partFile = OtgStaging.partFileFor(targetFile)
         targetFile.parentFile?.mkdirs()
@@ -432,7 +467,7 @@ class OtgIngestManager(
             if (!partFile.renameTo(targetFile)) {
                 partFile.delete()
                 return StageResult.Failure(
-                    text(R.string.otg_error_finish_copy_failed, "Could not finish the staged copy"),
+                    text(R.string.otg_error_finish_copy_failed, FINISH_COPY_FAILED),
                 )
             }
             if (targetFile.length() != candidate.sizeBytes) {
@@ -491,9 +526,22 @@ class OtgIngestManager(
         private const val TAG = "OtgIngestManager"
         private const val COPY_BUFFER = 64 * 1024
 
-        /** English text of R.string.otg_error_no_media_in_folder, for a manager without a Context. */
+        // English text of the R.string.otg_error_* resources, for a
+        // manager without a Context. OtgIngestManagerFallbackTest checks
+        // each one against its resource.
+
+        /** R.string.otg_error_no_media_in_folder. */
         internal const val NO_MEDIA_IN_FOLDER =
             "No photos or videos were found in the selected folder. Choose the card's root or its DCIM folder."
+
+        /** R.string.otg_error_enqueue_failed. */
+        internal const val ENQUEUE_FAILED = "Could not add to the upload queue"
+
+        /** R.string.otg_error_unsafe_path; its one argument is the file's path on the card. */
+        internal const val UNSAFE_PATH = "Skipped file with an unsafe path: %1\$s"
+
+        /** R.string.otg_error_finish_copy_failed. */
+        internal const val FINISH_COPY_FAILED = "Could not finish the staged copy"
 
         /**
          * Per-file size cap for staged copies. Chosen to comfortably

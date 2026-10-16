@@ -289,7 +289,7 @@ fun GalleryScreen(
                                                 } else {
                                                     Spacer(Modifier.width(16.dp))
                                                 }
-                                                Text(filter.label)
+                                                Text(stringResource(filter.labelRes))
                                             }
                                         },
                                         onClick = {

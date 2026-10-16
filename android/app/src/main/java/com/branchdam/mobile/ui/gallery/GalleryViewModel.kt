@@ -3,12 +3,14 @@ package com.branchdam.mobile.ui.gallery
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.SharedPreferences
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.R
 import com.branchdam.mobile.lineage.LineageReview
 import com.branchdam.mobile.lineage.PairDetector
 import com.branchdam.mobile.observer.MediaItem
@@ -31,23 +33,24 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class GalleryFilter(val label: String) {
-    ALL("All"),
-    PHOTOS("Photos"),
-    VIDEOS("Videos"),
-    RAW("RAW"),
-    BACKED_UP("Backed Up")
+/** A media-type filter; [labelRes] is the name the filter menu shows. */
+enum class GalleryFilter(@StringRes val labelRes: Int) {
+    ALL(R.string.gallery_filter_all),
+    PHOTOS(R.string.gallery_filter_photos),
+    VIDEOS(R.string.gallery_filter_videos),
+    RAW(R.string.gallery_filter_raw),
+    BACKED_UP(R.string.gallery_filter_backed_up)
 }
 
-enum class GallerySortProperty(val label: String) {
-    DATE("Date"),
-    SIZE("Size"),
-    NAME("Name")
+enum class GallerySortProperty {
+    DATE,
+    SIZE,
+    NAME
 }
 
-enum class GallerySortDirection(val label: String) {
-    DESC("Descending"),
-    ASC("Ascending")
+enum class GallerySortDirection {
+    DESC,
+    ASC
 }
 
 const val ALL_FOLDERS = "All Folders"

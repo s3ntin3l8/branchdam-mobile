@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Localizable.stringsdict (English, development language)
+
+  Plural forms for keys whose text depends on a count. Foundation looks a
+  key up here before Localizable.strings, so a key lives in one file only.
+  The key is what String(localized:) builds from the Swift literal (an
+  Int interpolation becomes %lld); NSStringLocalizedFormatKey names the
+  plural variable, and each variable lists its CLDR forms (one, other,
+  and whatever else a translation's language needs).
+
+  Used by: AppleCameraRollImportNotifier (import confirmation notification).
+-->
+<dict>
+	<key>%lld new photos ready to import to branchDAM</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@ ready to import to branchDAM</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld new photo</string>
+			<key>other</key>
+			<string>%lld new photos</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

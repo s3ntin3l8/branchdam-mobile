@@ -32,6 +32,7 @@
 		A100000E /* SafeSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* SafeSpaceView.swift */; };
 		A100000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000F /* Assets.xcassets */; };
 		A8100003 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A8100001 /* Localizable.strings */; };
+		A8100006 /* Localizable.stringsdict in Resources */ = {isa = PBXBuildFile; fileRef = A8100004 /* Localizable.stringsdict */; };
 		A1000012 /* AppleOtgCardScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012 /* AppleOtgCardScanner.swift */; };
 		A1000013 /* AppleOtgIngestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* AppleOtgIngestManager.swift */; };
 		A1000014 /* AppleOtgImportConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* AppleOtgImportConfirmationView.swift */; };
@@ -122,6 +123,7 @@
 		A200000E /* SafeSpaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeSpaceView.swift; sourceTree = "<group>"; };
 		A200000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A8100002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A8100005 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = en; path = en.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
 		A2000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000012 /* AppleOtgCardScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgCardScanner.swift; sourceTree = "<group>"; };
 		A2000013 /* AppleOtgIngestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOtgIngestManager.swift; sourceTree = "<group>"; };
@@ -204,6 +206,7 @@
 				A200000F /* Assets.xcassets */,
 				A2000010 /* Info.plist */,
 				A8100001 /* Localizable.strings */,
+				A8100004 /* Localizable.stringsdict */,
 				A2000017 /* PrivacyInfo.xcprivacy */,
 			);
 			path = BranchDAM;
@@ -407,6 +410,7 @@
 				A100000F /* Assets.xcassets in Resources */,
 				A1000017 /* PrivacyInfo.xcprivacy in Resources */,
 				A8100003 /* Localizable.strings in Resources */,
+				A8100006 /* Localizable.stringsdict in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -500,6 +504,14 @@
 				A8100002 /* en */,
 			);
 			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		A8100004 /* Localizable.stringsdict */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A8100005 /* en */,
+			);
+			name = Localizable.stringsdict;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */

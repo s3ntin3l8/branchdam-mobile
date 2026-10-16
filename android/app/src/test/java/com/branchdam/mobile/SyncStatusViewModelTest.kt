@@ -196,7 +196,7 @@ class SyncStatusViewModelTest {
             12_345L,
             snapshot.lastSyncTime
         )
-        assertEquals("Last sync succeeded", snapshot.workerState)
+        assertEquals(resources().getString(R.string.sync_state_succeeded), snapshot.workerState)
         assertFalse(snapshot.needsRepair)
     }
 
@@ -212,7 +212,7 @@ class SyncStatusViewModelTest {
             waitingForWifi = true,
         )
         assertFalse("nothing can run until Wi-Fi returns", held.isSyncing)
-        assertEquals("Waiting for Wi-Fi", held.workerState)
+        assertEquals(resources().getString(R.string.sync_state_waiting_for_wifi), held.workerState)
 
         val ready = SyncStatusViewModel.workerSnapshot(
             resources = resources(),
@@ -223,7 +223,7 @@ class SyncStatusViewModelTest {
             engineReady = true,
         )
         assertTrue(ready.isSyncing)
-        assertEquals("Enqueued", ready.workerState)
+        assertEquals(resources().getString(R.string.sync_state_enqueued), ready.workerState)
     }
 
     @Test
@@ -251,7 +251,7 @@ class SyncStatusViewModelTest {
             engineReady = true,
         )
         assertTrue(snapshot.needsRepair)
-        assertEquals("Device not authorised — re-pair it in Settings", snapshot.workerState)
+        assertEquals(resources().getString(R.string.sync_repair_required), snapshot.workerState)
 
         // A sync running after a re-pair shows as running.
         val running = SyncStatusViewModel.workerSnapshot(
@@ -262,7 +262,7 @@ class SyncStatusViewModelTest {
             authFailedAt = 99L,
             engineReady = true,
         )
-        assertEquals("Running", running.workerState)
+        assertEquals(resources().getString(R.string.sync_state_running), running.workerState)
     }
 
     @Test
