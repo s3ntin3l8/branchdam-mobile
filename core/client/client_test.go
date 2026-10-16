@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -960,5 +961,65 @@ func TestIsRetryableStatus(t *testing.T) {
 		if got := IsRetryableStatus(code); got != want {
 			t.Errorf("IsRetryableStatus(%d) = %v, want %v", code, got, want)
 		}
+	}
+}
+
+// TestErrorCodeKeepsAuthStatus: 401/403 surface as AUTH_FAILED (the shells
+// show "re-pair") on both the JSON calls and the upload; other non-2xx
+// answers and transport failures stay NETWORK_ERROR. The status survives
+// on the error either way.
+func TestErrorCodeKeepsAuthStatus(t *testing.T) {
+	cases := []struct {
+		status int
+		code   string
+	}{
+		{http.StatusUnauthorized, CodeAuthFailed},
+		{http.StatusForbidden, CodeAuthFailed},
+		{http.StatusInternalServerError, CodeNetworkError},
+		{http.StatusServiceUnavailable, CodeNetworkError},
+		{http.StatusUnprocessableEntity, CodeNetworkError},
+	}
+	for _, c := range cases {
+		t.Run(http.StatusText(c.status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(c.status)
+				_, _ = io.WriteString(w, `{"error":"nope"}`)
+			}))
+			defer server.Close()
+			cl := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent-1"})
+
+			_, hsErr := cl.Handshake(context.Background(), "")
+			_, upErr := cl.UploadStream(context.Background(), bytes.NewReader([]byte("abcd")), 4, "a.jpg", UploadOptions{})
+			for name, err := range map[string]error{"handshake": hsErr, "upload": upErr} {
+				var ce *ClientError
+				if !errors.As(err, &ce) {
+					t.Fatalf("%s: err = %v, want *ClientError", name, err)
+				}
+				if ce.Code != c.code || ce.StatusCode != c.status {
+					t.Errorf("%s: code=%s status=%d, want %s/%d", name, ce.Code, ce.StatusCode, c.code, c.status)
+				}
+				if got := IsAuthError(err); got != (c.code == CodeAuthFailed) {
+					t.Errorf("%s: IsAuthError = %v", name, got)
+				}
+				// The shells still match the status number in the message.
+				if !strings.Contains(err.Error(), strconv.Itoa(c.status)) {
+					t.Errorf("%s: message %q lost the status", name, err.Error())
+				}
+				if ce.Body != `{"error":"nope"}` {
+					t.Errorf("%s: Body = %q", name, ce.Body)
+				}
+			}
+		})
+	}
+
+	// Transport failure: no response at all.
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := server.URL
+	server.Close()
+	cl := New(Config{BaseURL: url, APIKey: "key", AgentID: "agent-1"})
+	_, err := cl.Handshake(context.Background(), "")
+	var ce *ClientError
+	if !errors.As(err, &ce) || ce.Code != CodeNetworkError || ce.StatusCode != 0 {
+		t.Fatalf("transport failure = %v, want NETWORK_ERROR with no status", err)
 	}
 }

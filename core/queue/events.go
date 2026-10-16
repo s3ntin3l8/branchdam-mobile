@@ -55,12 +55,15 @@ func (q *Queue) EnqueueEvent(eventType, payloadJSON string) (string, error) {
 // come first, then the least recently attempted: an event that was
 // deferred or retried goes to the back, so a run of events waiting on
 // something (MarkEventDeferred) can never starve the rest of the queue.
+// Backoff is exponential in retry_count, as in ClaimPendingUploads.
 func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries int) ([]*EventItem, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	now := nowUnix()
-	cutoff := now - retryBackoffSecs
+	if retryBackoffSecs < 0 {
+		retryBackoffSecs = 0
+	}
 
 	query := `
 	UPDATE event_queue
@@ -71,14 +74,14 @@ func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries
 	  SELECT id FROM event_queue
 	  WHERE status = 'PENDING'
 	    AND retry_count < ?
-	    AND (last_attempt_unix = 0 OR last_attempt_unix <= ?)
+	    AND ` + retryBackoffClause + `
 	  ORDER BY last_attempt_unix ASC, id ASC
 	  LIMIT ?
 	)
 	RETURNING id, event_uuid, event_type, payload_json, status, retry_count,
 	          last_attempt_unix, error_msg, created_at_unix, updated_at_unix
 	`
-	rows, err := q.db.Query(query, now, now, maxRetries, cutoff, limit)
+	rows, err := q.db.Query(query, now, now, maxRetries, now, retryBackoffSecs, int64(DefaultMaxRetryBackoffSecs), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to claim pending events: %w", err)
 	}
@@ -98,6 +101,9 @@ func (q *Queue) ClaimPendingEvents(limit int, retryBackoffSecs int64, maxRetries
 		}
 		item.Status = EventStatus(statusStr)
 		items = append(items, &item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate claimed events: %w", err)
 	}
 
 	return items, nil

@@ -132,17 +132,28 @@ func BindingEnqueueDeleteEvent(localID string) (string, error) {
 	return e.EnqueueDeleteEvent(localID)
 }
 
-// BindingSyncBatch runs a sync cycle. Returns "uploaded,eventsSent" string on success.
+// BindingSyncBatch runs a sync cycle with the default retry policy.
+// Returns "uploaded,eventsSent" string on success.
 func BindingSyncBatch(timeoutSecs, batchSize int64) (string, error) {
+	return BindingSyncBatchWithRetry(timeoutSecs, batchSize, 0, 0)
+}
+
+// BindingSyncBatchWithRetry is BindingSyncBatch with the retry policy
+// spelled out: retryBackoffSecs is the base of the exponential backoff
+// after a failed attempt and maxRetries the number of failed attempts
+// before an item is FAILED (0 = the defaults, 10s and 5). See SyncOptions.
+func BindingSyncBatchWithRetry(timeoutSecs, batchSize, retryBackoffSecs, maxRetries int64) (string, error) {
 	e, err := getBindingEngine()
 	if err != nil {
 		return "0,0", err
 	}
 	res, syncErr := e.SyncBatch(SyncOptions{
-		TimeoutSecs:    int(timeoutSecs),
-		BatchSize:      int(batchSize),
-		IncludeEvents:  true,
-		IncludeUploads: true,
+		TimeoutSecs:      int(timeoutSecs),
+		BatchSize:        int(batchSize),
+		RetryBackoffSecs: retryBackoffSecs,
+		MaxRetries:       int(maxRetries),
+		IncludeEvents:    true,
+		IncludeUploads:   true,
 	})
 	if syncErr != nil {
 		return "0,0", syncErr
@@ -365,4 +376,56 @@ func BindingGetActiveUploadProgress() (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// BindingStagePendingImport persists a camera-roll item awaiting the
+// user's import confirmation; see Engine.StagePendingImport. Returns false
+// (without error) when the user already skipped the item.
+func BindingStagePendingImport(localID, localPath, filename, mimeType string, sizeBytes, capturedAtUnix int64) (bool, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return false, err
+	}
+	return e.StagePendingImport(localID, localPath, filename, mimeType, sizeBytes, capturedAtUnix)
+}
+
+// BindingListPendingImports returns the items awaiting an import decision
+// as a JSON array; see Engine.ListPendingImportsJSON. limit <= 0 returns
+// all of them.
+func BindingListPendingImports(limit int64) (string, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return "[]", err
+	}
+	return e.ListPendingImportsJSON(int(limit))
+}
+
+// BindingDeletePendingImport forgets a pending or skipped item; see
+// Engine.DeletePendingImport.
+func BindingDeletePendingImport(localID string) (bool, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return false, err
+	}
+	return e.DeletePendingImport(localID)
+}
+
+// BindingSuppressPendingImport records that the user skipped localID; see
+// Engine.SuppressPendingImport.
+func BindingSuppressPendingImport(localID string) error {
+	e, err := getBindingEngine()
+	if err != nil {
+		return err
+	}
+	return e.SuppressPendingImport(localID)
+}
+
+// BindingIsImportSuppressed reports whether the user skipped localID. On
+// error returns false.
+func BindingIsImportSuppressed(localID string) (bool, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return false, err
+	}
+	return e.IsImportSuppressed(localID)
 }

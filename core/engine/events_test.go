@@ -553,21 +553,24 @@ func TestSyncEvents_EdgeConfidenceClamped(t *testing.T) {
 // TestSyncEvents_ServerRejectionTerminalVsRetryable: a 4xx answer (other
 // than 401/403/408/429) ends the event as FAILED with the status and body
 // after one attempt; 5xx and the transient 4xx codes keep it PENDING with a
-// retry counted.
+// retry counted; 401/403 stop the batch with AUTH_FAILED and keep the event
+// PENDING without using a retry (the device needs re-pairing, the event is
+// fine).
 func TestSyncEvents_ServerRejectionTerminalVsRetryable(t *testing.T) {
 	cases := []struct {
 		status   int
 		terminal bool
+		auth     bool
 	}{
-		{http.StatusBadRequest, true},
-		{http.StatusConflict, true},
-		{http.StatusUnprocessableEntity, true},
-		{http.StatusUnauthorized, false},
-		{http.StatusForbidden, false},
-		{http.StatusRequestTimeout, false},
-		{http.StatusTooManyRequests, false},
-		{http.StatusInternalServerError, false},
-		{http.StatusServiceUnavailable, false},
+		{http.StatusBadRequest, true, false},
+		{http.StatusConflict, true, false},
+		{http.StatusUnprocessableEntity, true, false},
+		{http.StatusUnauthorized, false, true},
+		{http.StatusForbidden, false, true},
+		{http.StatusRequestTimeout, false, false},
+		{http.StatusTooManyRequests, false, false},
+		{http.StatusInternalServerError, false, false},
+		{http.StatusServiceUnavailable, false, false},
 	}
 	for _, c := range cases {
 		t.Run(http.StatusText(c.status), func(t *testing.T) {
@@ -577,6 +580,17 @@ func TestSyncEvents_ServerRejectionTerminalVsRetryable(t *testing.T) {
 			recordMedia(t, q, "item", parentNodeUUID)
 			id := enqueueDelete(t, q, "item")
 
+			if c.auth {
+				n, err := eng.SyncEvents(context.Background(), 10)
+				if n != 0 || !client.IsAuthError(err) {
+					t.Fatalf("SyncEvents = %d, %v; want 0 and an AUTH_FAILED error", n, err)
+				}
+				ev := eventRow(t, q, id)
+				if ev.Status != queue.EventPending || ev.RetryCount != 0 {
+					t.Fatalf("status=%s retry=%d, want PENDING/0", ev.Status, ev.RetryCount)
+				}
+				return
+			}
 			if n := syncEvents(t, eng, 10); n != 0 {
 				t.Fatalf("sent = %d, want 0", n)
 			}

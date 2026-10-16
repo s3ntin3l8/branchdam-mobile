@@ -127,16 +127,23 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		bodyMsg := strings.TrimSpace(string(respBody))
+		body := respBody
+		if len(body) > MaxErrorBodyBytes {
+			body = body[:MaxErrorBodyBytes]
+		}
+		bodyMsg := strings.TrimSpace(strings.ToValidUTF8(string(body), ""))
 		if bodyMsg != "" {
-			if len(bodyMsg) > 256 {
-				bodyMsg = bodyMsg[:256] + "..."
+			logMsg := bodyMsg
+			if len(logMsg) > 256 {
+				logMsg = logMsg[:256] + "..."
 			}
-			slog.Warn("client: upload rejected by server", "status", resp.StatusCode, "response", bodyMsg)
+			slog.Warn("client: upload rejected by server", "status", resp.StatusCode, "response", logMsg)
 		}
 		return nil, &ClientError{
-			Code:    CodeNetworkError,
-			Message: fmt.Sprintf("upload rejected with status %d", resp.StatusCode),
+			Code:       CodeForStatus(resp.StatusCode),
+			Message:    fmt.Sprintf("upload rejected with status %d", resp.StatusCode),
+			StatusCode: resp.StatusCode,
+			Body:       bodyMsg,
 		}
 	}
 
