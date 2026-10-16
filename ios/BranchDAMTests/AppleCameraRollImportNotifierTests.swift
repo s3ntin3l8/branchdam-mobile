@@ -169,6 +169,18 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
         XCTAssertTrue(engine.enqueued.allSatisfy { $0.localPath.hasPrefix("/staged/") })
     }
 
+    func testGalleryReimportOfAQueuedAssetCountsAsQueued() async {
+        let notifier = makeNotifier()
+        let item = PendingImportItem(localId: "G/L0/002", filename: "g.heic", capturedAtUnix: 1, createdAtUnix: 0)
+
+        let first = await notifier.importAssets([item])
+        let again = await notifier.importAssets([item])
+
+        XCTAssertEqual(first, 1)
+        XCTAssertEqual(again, 1, "an asset already in the upload queue is not a failure")
+        XCTAssertEqual(engine.enqueued.map { $0.localID }, ["G/L0/002"], "and is not queued twice")
+    }
+
     func testAssetWhoseStagingFailsStaysPending() {
         let notifier = makeNotifier(failing: ["B/L0/001"])
         _ = notifier.stagePendingAsset(asset("A/L0/001"))

@@ -628,26 +628,6 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         await offMainActor { self.testConnectionDetailed() }
     }
 
-    public func enqueueMediaAsync(
-        localPath: String,
-        filename: String,
-        capturedAtUnix: Int64,
-        localID: String,
-        cameraModel: String = "",
-        sizeBytes: Int64 = 0
-    ) async -> Int64 {
-        await offMainActor {
-            self.enqueueMedia(
-                localPath: localPath,
-                filename: filename,
-                capturedAtUnix: capturedAtUnix,
-                localID: localID,
-                cameraModel: cameraModel,
-                sizeBytes: sizeBytes
-            )
-        }
-    }
-
     public func reclaimSafeSpaceAsync(localID: String) async -> (eligible: Bool, reason: String) {
         await offMainActor { self.reclaimSafeSpace(localID: localID) }
     }

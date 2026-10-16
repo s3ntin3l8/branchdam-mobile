@@ -349,7 +349,8 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     static let importChunkSize = 4
 
     /// Imports [items] a chunk at a time; [completion] (on `queue`) gets
-    /// how many of them had something newly queued. Call on `queue`.
+    /// how many of them are in the upload queue afterwards (newly queued
+    /// or already there). Call on `queue`.
     private func importItems(_ items: [PendingImportItem], completion: @escaping @Sendable (Int) -> Void) {
         importChunk(items[...], queuedSoFar: 0, completion: completion)
     }
@@ -369,8 +370,8 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
         let counter = QueuedCounter()
         for item in chunk {
             group.enter()
-            importItem(item) { queuedSomething in
-                if queuedSomething { counter.increment() }
+            importItem(item) { inQueue in
+                if inQueue { counter.increment() }
                 group.leave()
             }
         }
@@ -384,11 +385,12 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     /// pending row is forgotten only once both are queued (or there is no
     /// motion track), so a failed video copy -- or a process killed
     /// between the two -- leaves the row for a later pass, which skips the
-    /// already-queued still and retries just the video.
+    /// already-queued still and retries just the video. [done] gets
+    /// whether the still is in the upload queue afterwards, newly or
+    /// already (a gallery re-tap of a queued asset is not a failure).
     private func importItem(_ item: PendingImportItem, done: @escaping @Sendable (Bool) -> Void) {
-        let stillQueued = engine.mediaStatus(localID: item.localId) != "NOT_ENQUEUED"
-        if stillQueued {
-            importPairedVideo(of: item, queuedStill: false, done: done)
+        if engine.mediaStatus(localID: item.localId) != "NOT_ENQUEUED" {
+            importPairedVideo(of: item, done: done)
             return
         }
         stager.stage(localIdentifier: item.localId, filename: item.filename) { [engine] path in
@@ -408,7 +410,7 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
                 done(false)
                 return
             }
-            self.importPairedVideo(of: item, queuedStill: true, done: done)
+            self.importPairedVideo(of: item, done: done)
         }
     }
 
@@ -437,27 +439,27 @@ extension AppleCameraRollImportNotifier {
     /// Queues a Live Photo's motion track once its still is queued, links
     /// the two, and only then forgets the pending row. Runs for every
     /// import path (auto-import, Import now, Later, the gallery), so the
-    /// video never depends on the import mode. [done] gets whether
-    /// anything (the still or the video) was newly queued.
+    /// video never depends on the import mode. The still is already in
+    /// the upload queue, so [done] always gets true; a video that could
+    /// not be queued keeps the row for a later pass.
     fileprivate func importPairedVideo(
         of item: PendingImportItem,
-        queuedStill: Bool,
         done: @escaping @Sendable (Bool) -> Void
     ) {
         let videoID = Self.pairedVideoLocalID(stillLocalID: item.localId)
         if engine.mediaStatus(localID: videoID) != "NOT_ENQUEUED" {
             engine.deletePendingImport(localID: item.localId)
-            done(queuedStill)
+            done(true)
             return
         }
         stager.stagePairedVideo(localIdentifier: item.localId) { [engine, linkPairedVideo] result in
             switch result {
             case .none:
                 engine.deletePendingImport(localID: item.localId)
-                done(queuedStill)
+                done(true)
             case .failed:
                 NSLog("AppleCameraRollImportNotifier: staging the motion track of %@ failed; left pending", item.localId)
-                done(queuedStill)
+                done(true)
             case .staged(let staged):
                 let queueId = engine.enqueueStagedMedia(
                     localPath: staged.path,
@@ -467,7 +469,7 @@ extension AppleCameraRollImportNotifier {
                 )
                 guard queueId > 0 else {
                     NSLog("AppleCameraRollImportNotifier: enqueue of the motion track of %@ failed; left pending", item.localId)
-                    done(queuedStill)
+                    done(true)
                     return
                 }
                 linkPairedVideo(item.localId, videoID, item.filename, staged.filename)
