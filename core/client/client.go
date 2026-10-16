@@ -7,7 +7,9 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -15,7 +17,8 @@ import (
 
 // Config defines the client configuration.
 // HTTPClient and UploadClient are optional overrides for testing or power-users.
-// When nil, the default clients use TLS 1.2 minimum (MinVersion: tls.VersionTLS12).
+// When nil, the default clients use TLS 1.2 minimum (MinVersion: tls.VersionTLS12)
+// and refuse unsafe redirects (see refuseUnsafeRedirect).
 // If injected, the caller MUST ensure the client enforces TLS 1.2+; the
 // injected client is used as-is without validation.
 type Config struct {
@@ -23,8 +26,14 @@ type Config struct {
 	APIKey        string
 	AgentID       string
 	ClientVersion string
-	HTTPClient    *http.Client
-	UploadClient  *http.Client
+	// HTTPClient, when set, replaces the default API client as-is. It must
+	// set CheckRedirect: refuseUnsafeRedirect itself; otherwise net/http
+	// follows redirects to any host and copies X-API-Key onto them.
+	HTTPClient *http.Client
+	// UploadClient, when set, replaces the default upload client as-is.
+	// Like HTTPClient, it must set CheckRedirect: refuseUnsafeRedirect
+	// itself, or it loses the X-API-Key redirect guard.
+	UploadClient *http.Client
 }
 
 type Client struct {
@@ -78,12 +87,14 @@ const maxRedirects = 10
 // strips only Authorization and cookies, and only across hosts), so a
 // redirect could hand the API key to another host, or send it in cleartext
 // after an https to http downgrade. Only same-host redirects that keep TLS
-// are followed, up to net/http's default limit.
+// are followed, up to net/http's default limit. Hosts compare
+// case-insensitively, with an explicit default port (443 for https, 80 for
+// http) treated as no port, so https://h/x -> https://h:443/x is the same host.
 func refuseUnsafeRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxRedirects {
 		return fmt.Errorf("stopped after %d redirects", maxRedirects)
 	}
-	if len(via) > 0 && !strings.EqualFold(req.URL.Host, via[0].URL.Host) {
+	if len(via) > 0 && !strings.EqualFold(redirectHostKey(req.URL), redirectHostKey(via[0].URL)) {
 		return fmt.Errorf("refusing redirect from %s to %s: it would send the API key to another host",
 			via[0].URL.Redacted(), req.URL.Redacted())
 	}
@@ -94,6 +105,23 @@ func refuseUnsafeRedirect(req *http.Request, via []*http.Request) error {
 		}
 	}
 	return nil
+}
+
+// redirectHostKey is u's host for the same-host redirect check: the
+// hostname, plus the port unless it is the scheme's default (443 for
+// https, 80 for http), which is dropped so an explicit default port
+// matches an omitted one.
+func redirectHostKey(u *url.URL) string {
+	host, port := u.Hostname(), u.Port()
+	scheme := strings.ToLower(u.Scheme)
+	if port == "" || (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		if strings.Contains(host, ":") {
+			// Keep IPv6 literals bracketed, as in URL.Host.
+			return "[" + host + "]"
+		}
+		return host
+	}
+	return net.JoinHostPort(host, port)
 }
 
 func (c *Client) AgentID() string {

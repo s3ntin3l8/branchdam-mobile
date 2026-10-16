@@ -9,6 +9,7 @@ import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -88,5 +89,43 @@ class ConnectionSettingsStoreTest {
         assertEquals(ConnectionSettingsStore.SaveResult.WRITE_FAILED, result)
         assertNotNull(ConnectionSettingsStore.messageFor(result))
         verify(plainEditor, never()).putString(eq(BranchDamApplication.KEY_API_KEY), anyOrNull())
+    }
+
+    @Test
+    fun encryptedWriteFailure_leavesThePlainCopiesUntouched() {
+        // The plain serverUrl must not move ahead of the encrypted one,
+        // which readSecureEngineConfig prefers on the next cold start.
+        whenever(secureEditor.commit()).thenReturn(false)
+        ConnectionSettingsStore.save(secure, plain, "https://new.example.com", "bdam_secret", "pixel-10") // pragma: allowlist secret
+        verify(plain, never()).edit()
+        verify(plainEditor, never()).putString(eq(BranchDamApplication.KEY_SERVER_URL), anyOrNull())
+        verify(plainEditor, never()).commit()
+    }
+
+    @Test
+    fun encryptedPrefsAreCommittedBeforeThePlainCopies() {
+        val result = ConnectionSettingsStore.save(secure, plain, "https://dam.example.com", "bdam_secret", "pixel-10") // pragma: allowlist secret
+        assertEquals(ConnectionSettingsStore.SaveResult.SAVED, result)
+        inOrder(secureEditor, plainEditor) {
+            verify(secureEditor).commit()
+            verify(plainEditor).putString(BranchDamApplication.KEY_SERVER_URL, "https://dam.example.com")
+            verify(plainEditor).commit()
+        }
+    }
+
+    @Test
+    fun plainWriteFailureAfterTheEncryptedWriteIsReported() {
+        whenever(plainEditor.commit()).thenReturn(false)
+        val result = ConnectionSettingsStore.save(secure, plain, "https://dam.example.com", "bdam_secret", "pixel-10") // pragma: allowlist secret
+        assertEquals(ConnectionSettingsStore.SaveResult.WRITE_FAILED, result)
+        assertNotNull(ConnectionSettingsStore.messageFor(result))
+        verify(secureEditor).commit()
+    }
+
+    @Test
+    fun keystoreUnavailable_withoutAKey_plainWriteFailureIsReported() {
+        whenever(plainEditor.commit()).thenReturn(false)
+        val result = ConnectionSettingsStore.save(null, plain, "https://dam.example.com", "", "pixel-10")
+        assertEquals(ConnectionSettingsStore.SaveResult.WRITE_FAILED, result)
     }
 }

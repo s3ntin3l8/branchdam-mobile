@@ -1,6 +1,8 @@
 package com.branchdam.mobile
 
 import android.content.SharedPreferences
+import android.util.Log
+import androidx.annotation.VisibleForTesting
 
 /**
  * One-time SharedPreferences key migration for the T2-10
@@ -59,6 +61,15 @@ object PrefKeyMigration {
         BooleanMigration(LEGACY_AUTO_IMPORT_CAMERA_ROLL, LEGACY_AUTO_IMPORT_CAMERA_ROLL_NEW)
     )
 
+    private const val TAG = "PrefKeyMigration"
+
+    /**
+     * Logs a warning. A seam so tests can see the warning: JVM unit tests
+     * run with `isReturnDefaultValues`, where [Log.w] is a no-op stub.
+     */
+    @VisibleForTesting
+    internal var warn: (String) -> Unit = { message -> Log.w(TAG, message) }
+
     private val SECRET_KEYS = listOf(
         BranchDamApplication.KEY_SERVER_URL,
         BranchDamApplication.KEY_API_KEY,
@@ -115,7 +126,12 @@ object PrefKeyMigration {
             // Keystore unavailable: an API key an older release left in
             // plain prefs can't be moved anywhere safe, and nothing reads
             // it, so delete it rather than keep a plaintext secret on
-            // disk. The user re-pairs once the Keystore works.
+            // disk. The user re-pairs once the Keystore works. Logged so
+            // a "my key vanished after updating" report is diagnosable.
+            warn(
+                "Deleted a plaintext API key left by an older release: secure storage " +
+                    "(Android Keystore) is unavailable, so it could not be moved. Re-pair this device."
+            )
             editor.remove(BranchDamApplication.KEY_API_KEY)
             changed = true
         }
