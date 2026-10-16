@@ -248,6 +248,20 @@ public enum AppleOtgStaging {
         return String(path[range.upperBound...])
     }
 
+    /// Sweeps the default staging root against the engine's current upload
+    /// statuses. Called after every sync batch (`BackgroundSyncManager`),
+    /// as Android does from its post-batch cleanup, so a copy goes as soon
+    /// as its upload completes rather than at the next card scan. Safe to
+    /// call from any thread; a no-op when nothing was ever staged.
+    @discardableResult
+    public static func sweepAfterSync(
+        engine: any AppleOtgIngestEngine = BridgeOtgIngestEngine(),
+        root: URL = defaultRoot()
+    ) -> Int {
+        guard FileManager.default.fileExists(atPath: root.path) else { return 0 }
+        return sweep(root: root, statuses: engine.mediaStatuses())
+    }
+
     /// Deletes the staged copies under `root` that `shouldDelete` allows,
     /// then old empty session directories. Returns the number of files removed.
     @discardableResult

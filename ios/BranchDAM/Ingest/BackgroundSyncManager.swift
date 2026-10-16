@@ -107,6 +107,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
         DispatchQueue.global(qos: .userInitiated).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
             AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
+            AppleOtgStaging.sweepAfterSync()
             completion?(result.uploaded > 0 || result.eventsSent > 0)
         }
     }
@@ -161,6 +162,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
         DispatchQueue.global(qos: .background).async {
             let result = BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeout, batchSize: batch)
             AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
+            AppleOtgStaging.sweepAfterSync()
             tracker.completeOnce {
                 task.setTaskCompleted(success: true)
                 self.scheduleBackgroundSync()

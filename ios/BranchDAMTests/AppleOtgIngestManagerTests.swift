@@ -441,6 +441,26 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         XCTAssertTrue(fm.fileExists(atPath: pending.path))
     }
 
+    func testSweepAfterSyncRemovesUploadedCopies() throws {
+        let fm = FileManager.default
+        let session = try AppleOtgStaging.newSessionDirectory(in: stagingRoot)
+        let done = session.appendingPathComponent("DCIM/DONE.JPG")
+        let pending = session.appendingPathComponent("DCIM/PENDING.JPG")
+        try fm.createDirectory(at: done.deletingLastPathComponent(), withIntermediateDirectories: true)
+        for url in [done, pending] { try Data([1]).write(to: url) }
+        let engine = FakeOtgEngine()
+        engine.statuses = [done.path: "COMPLETED", pending.path: "PENDING"]
+
+        XCTAssertEqual(AppleOtgStaging.sweepAfterSync(engine: engine, root: stagingRoot), 1)
+        XCTAssertFalse(fm.fileExists(atPath: done.path))
+        XCTAssertTrue(fm.fileExists(atPath: pending.path))
+    }
+
+    func testSweepAfterSyncWithoutStagingIsANoOp() {
+        let missing = stagingRoot.appendingPathComponent("never-created")
+        XCTAssertEqual(AppleOtgStaging.sweepAfterSync(engine: FakeOtgEngine(), root: missing), 0)
+    }
+
     func testSweepKeepsUnknownCopiesWhenTheEngineDidNotAnswer() throws {
         let session = try AppleOtgStaging.newSessionDirectory(in: stagingRoot)
         let file = session.appendingPathComponent("IMG.JPG")

@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -279,8 +280,12 @@ class OtgIngestManager(
                     )
                 }
             } catch (ce: CancellationException) {
-                // Job was cancelled by user
-                _state.value = OtgState.Idle
+                // Cancelled: by the user (cancelImport already set Idle) or
+                // by a newer card event that has already published its own
+                // state, such as NeedsCardAccess. Only clear a state this run
+                // still owns, so a late cancellation can't dismiss the
+                // newer one.
+                _state.update { if (it is OtgState.Ingesting) OtgState.Idle else it }
             } catch (e: Exception) {
                 _state.value = OtgState.Error("Failed to import SD card media: ${e.message ?: "Unknown error"}")
             }
