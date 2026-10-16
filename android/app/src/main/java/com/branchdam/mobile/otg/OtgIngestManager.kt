@@ -154,8 +154,10 @@ class OtgIngestManager(
     private var inFlightJob: Job? = null
 
     /**
-     * Makes [replaceInFlight]'s swap and [clearIfCurrent]'s check-and-clear
-     * atomic with respect to each other. Nothing inside it suspends.
+     * Guards [inFlightJob] and every write to [_state]: [replaceInFlight]'s
+     * swap, [clearRunAndPublish]'s clear-and-write, [publishIfCurrent]'s and
+     * [clearIfCurrent]'s check-and-write are atomic with respect to each
+     * other. Nothing inside it suspends.
      */
     private val jobLock = Any()
 
@@ -186,8 +188,7 @@ class OtgIngestManager(
      * came from the card).
      */
     fun onCardNeedsAccess(deviceLabel: String) {
-        replaceInFlight(null)
-        _state.value = OtgState.NeedsCardAccess(deviceLabel)
+        clearRunAndPublish(OtgState.NeedsCardAccess(deviceLabel))
     }
 
     /**
@@ -323,16 +324,14 @@ class OtgIngestManager(
      * Human cancellation hook to reject or skip the ingest.
      */
     fun cancelImport() {
-        replaceInFlight(null)
-        _state.value = OtgState.Idle
+        clearRunAndPublish(OtgState.Idle)
     }
 
     /**
      * Resets state back to Idle after viewing completion or error.
      */
     fun reset() {
-        replaceInFlight(null)
-        _state.value = OtgState.Idle
+        clearRunAndPublish(OtgState.Idle)
     }
 
     /**
@@ -358,6 +357,18 @@ class OtgIngestManager(
             val previous = inFlightJob
             inFlightJob = next
             previous?.cancel()
+        }
+    }
+
+    /**
+     * Ends the current run (if any) and publishes [next] as one step under
+     * [jobLock], so a [startRun] on another thread cannot land between the
+     * clear and the write and have its first state overwritten.
+     */
+    private fun clearRunAndPublish(next: OtgState) {
+        synchronized(jobLock) {
+            replaceInFlight(null)
+            _state.value = next
         }
     }
 
