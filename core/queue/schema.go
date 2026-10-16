@@ -71,4 +71,22 @@ CREATE TABLE IF NOT EXISTS pending_import (
 
 CREATE INDEX IF NOT EXISTS idx_pending_import_state
 ON pending_import(state, captured_at_unix);
+
+-- lineage_review holds the user's decision on a lineage pair the device
+-- proposed below confidence 1.00. Such a pair is never sent on its own; it
+-- waits in the review screen until the user confirms it (CONFIRMED, and
+-- event_uuid names the EVENT_EDGE_ATTACHED that carries it) or rejects it
+-- (REJECTED, so it is never proposed again, across restarts).
+CREATE TABLE IF NOT EXISTS lineage_review (
+    parent_local_id     TEXT    NOT NULL,
+    child_local_id      TEXT    NOT NULL,
+    decision            TEXT    NOT NULL,
+    relationship        TEXT    NOT NULL DEFAULT '',
+    resolver            TEXT    NOT NULL DEFAULT '',
+    confidence          REAL    NOT NULL DEFAULT 0,
+    event_uuid          TEXT    NOT NULL DEFAULT '',
+    created_at_unix     INTEGER NOT NULL,
+    updated_at_unix     INTEGER NOT NULL,
+    PRIMARY KEY (parent_local_id, child_local_id)
+);
 `

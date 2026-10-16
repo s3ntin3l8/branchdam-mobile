@@ -34,10 +34,14 @@ public class AppleEditCorrelator {
         return edits
     }
 
+    /// Enqueues the edits the device may send on its own: those at
+    /// confidence 1.00. An edit matched by filename (0.95, every edit
+    /// `findAppEdits` reports today) is only a guess and is NOT sent here;
+    /// it waits in the lineage review screen. Returns the number enqueued.
     @discardableResult
     public static func registerEditLineage(edits: [AppleInPhoneEdit]) -> Int {
         var count = 0
-        for edit in edits {
+        for edit in edits where LineageReviewPolicy.isAutomatic(edit.confidence) {
             let resolver = "in_phone_\(edit.editorApp.lowercased().replacingOccurrences(of: " ", with: "_"))"
             let eventId = BranchDamCoreBridge.shared.enqueueLineageEvent(
                 parentUUID: edit.originalMasterId,

@@ -38,8 +38,10 @@ final class AppleEditCorrelatorTests: XCTestCase {
         XCTAssertEqual(edits[2].editedDerivativeId, "ph://deriv-3")
         XCTAssertEqual(edits[2].editorApp, "Darkroom")
 
+        // Filename-matched edits (0.95) are guesses: the user confirms them in
+        // the lineage review screen, they are never sent on their own.
         let registered = AppleEditCorrelator.registerEditLineage(edits: edits)
-        XCTAssertEqual(registered, 3)
+        XCTAssertEqual(registered, 0)
     }
 
     func testNonMatchingDerivatives() {

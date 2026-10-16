@@ -80,6 +80,10 @@ class PairDetectorTest {
         val pairs = PairDetector.findPairs(listOf(raw, jpeg))
         assertEquals(1, pairs.size)
         assertEquals(0.95, pairs[0].confidence, 0.001)
+
+        // A capture-time guess is never sent on its own: it waits for the
+        // user in the lineage review screen.
+        assertEquals(0, PairDetector.registerPairLineage(pairs))
     }
 
     @Test

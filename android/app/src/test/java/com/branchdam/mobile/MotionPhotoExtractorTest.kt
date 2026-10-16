@@ -125,4 +125,136 @@ class MotionPhotoExtractorTest {
             tempDir.deleteRecursively()
         }
     }
+    // --- Motion Photo format 1.0 (current Pixels) ---------------------
+
+    /**
+     * The XMP a current Pixel writes: `Camera:MotionPhoto` plus a
+     * `Container:Directory` of items in file order, no MicroVideoOffset.
+     */
+    private fun pixelXmp(vararg items: String): String = """
+        <x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+        <rdf:Description rdf:about=""
+            xmlns:Camera="http://ns.google.com/photos/1.0/camera/"
+            xmlns:Container="http://ns.google.com/photos/1.0/container/"
+            xmlns:Item="http://ns.google.com/photos/1.0/container/item/"
+            Camera:MotionPhoto="1" Camera:MotionPhotoVersion="1"
+            Camera:MotionPhotoPresentationTimestampUs="968133">
+          <Container:Directory><rdf:Seq>
+            ${items.joinToString("\n") { "<rdf:li rdf:parseType=\"Resource\">$it</rdf:li>" }}
+          </rdf:Seq></Container:Directory>
+        </rdf:Description></rdf:RDF></x:xmpmeta>
+    """.trimIndent()
+
+    private fun item(semantic: String, mime: String, length: Long, padding: Long = 0) =
+        "<Container:Item Item:Mime=\"$mime\" Item:Semantic=\"$semantic\" Item:Length=\"$length\" Item:Padding=\"$padding\"/>"
+
+    @Test
+    fun testParseMotionPhotoStream_pixelContainerFormat() {
+        val xmp = pixelXmp(
+            item("Primary", "image/jpeg", 0),
+            item("MotionPhoto", "video/mp4", 2_681_512),
+        )
+        val info = MotionPhotoExtractor.parseMotionPhotoStream(
+            ByteArrayInputStream(xmp.toByteArray(Charsets.ISO_8859_1)), fileLength = 6_000_000L,
+        )
+        assertTrue("Camera:MotionPhoto + Container:Directory is a motion photo", info.isMotionPhoto)
+        assertEquals(2_681_512L, info.microVideoLength)
+        assertEquals(6_000_000L - 2_681_512L, info.microVideoOffset)
+    }
+
+    @Test
+    fun testParseMotionPhotoStream_pixelContainerWithItemsAroundTheVideo() {
+        // Ultra HDR motion photo: a gain map before the video, and a
+        // padded item after it. The video starts where the lengths and
+        // paddings from it to the end of the file say.
+        val xmp = pixelXmp(
+            item("Primary", "image/jpeg", 0),
+            item("GainMap", "image/jpeg", 40_000),
+            item("MotionPhoto", "video/mp4", 1_000_000, padding = 16),
+            item("Depth", "image/jpeg", 5_000, padding = 4),
+        )
+        val info = MotionPhotoExtractor.parseMotionPhotoStream(
+            ByteArrayInputStream(xmp.toByteArray(Charsets.ISO_8859_1)), fileLength = 3_000_000L,
+        )
+        assertTrue(info.isMotionPhoto)
+        assertEquals(1_000_000L, info.microVideoLength)
+        assertEquals(3_000_000L - (1_000_000L + 16 + 5_000 + 4), info.microVideoOffset)
+    }
+
+    @Test
+    fun testParseMotionPhotoStream_elementFormFields() {
+        val xmp = """
+            <rdf:Description xmlns:Camera="http://ns.google.com/photos/1.0/camera/">
+              <Camera:MotionPhoto>1</Camera:MotionPhoto>
+              <Container:Directory><rdf:Seq>
+                <rdf:li><Container:Item><Item:Semantic>Primary</Item:Semantic><Item:Mime>image/jpeg</Item:Mime></Container:Item></rdf:li>
+                <rdf:li><Container:Item><Item:Semantic>MotionPhoto</Item:Semantic><Item:Mime>video/mp4</Item:Mime><Item:Length>4096</Item:Length></Container:Item></rdf:li>
+              </rdf:Seq></Container:Directory>
+            </rdf:Description>
+        """.trimIndent()
+        val info = MotionPhotoExtractor.parseMotionPhotoStream(
+            ByteArrayInputStream(xmp.toByteArray(Charsets.ISO_8859_1)), fileLength = 100_000L,
+        )
+        assertTrue(info.isMotionPhoto)
+        assertEquals(4096L, info.microVideoLength)
+        assertEquals(100_000L - 4096L, info.microVideoOffset)
+    }
+
+    @Test
+    fun testParseMotionPhotoStream_containerSizeUnknown() {
+        val xmp = pixelXmp(item("Primary", "image/jpeg", 0), item("MotionPhoto", "video/mp4", 777))
+        val info = MotionPhotoExtractor.parseMotionPhotoStream(
+            ByteArrayInputStream(xmp.toByteArray(Charsets.ISO_8859_1)), fileLength = -1L,
+        )
+        assertTrue(info.isMotionPhoto)
+        assertEquals(777L, info.microVideoLength)
+        assertEquals("no offset without a file size: the extractors refuse to cut", 0L, info.microVideoOffset)
+    }
+
+    @Test
+    fun testParseMotionPhotoStream_containerThatDoesNotFitIsRefused() {
+        val tooLong = pixelXmp(item("Primary", "image/jpeg", 0), item("MotionPhoto", "video/mp4", 9_000_000))
+        assertFalse(
+            MotionPhotoExtractor.parseMotionPhotoStream(
+                ByteArrayInputStream(tooLong.toByteArray(Charsets.ISO_8859_1)), fileLength = 500_000L,
+            ).isMotionPhoto,
+        )
+        val noLength = pixelXmp(item("Primary", "image/jpeg", 0), item("MotionPhoto", "video/mp4", 0))
+        assertFalse(
+            MotionPhotoExtractor.parseMotionPhotoStream(
+                ByteArrayInputStream(noLength.toByteArray(Charsets.ISO_8859_1)), fileLength = 500_000L,
+            ).isMotionPhoto,
+        )
+        // A directory without the MotionPhoto flag (a plain Ultra HDR
+        // JPEG with a gain map) is not a motion photo.
+        val ultraHdrOnly = pixelXmp(item("Primary", "image/jpeg", 0), item("GainMap", "image/jpeg", 40_000))
+            .replace("Camera:MotionPhoto=\"1\"", "")
+        assertFalse(
+            MotionPhotoExtractor.parseMotionPhotoStream(
+                ByteArrayInputStream(ultraHdrOnly.toByteArray(Charsets.ISO_8859_1)), fileLength = 500_000L,
+            ).isMotionPhoto,
+        )
+    }
+
+    @Test
+    fun testExtractMicroVideo_pixelContainerCopiesOnlyTheVideo() {
+        val tempDir = java.nio.file.Files.createTempDirectory("motion_photo_v1").toFile()
+        try {
+            val video = "MP4_VIDEO_BYTES".toByteArray(Charsets.ISO_8859_1)
+            val trailer = "DEPTH".toByteArray(Charsets.ISO_8859_1)
+            val xmp = pixelXmp(
+                item("Primary", "image/jpeg", 0),
+                item("MotionPhoto", "video/mp4", video.size.toLong()),
+                item("Depth", "image/jpeg", trailer.size.toLong()),
+            ).toByteArray(Charsets.ISO_8859_1)
+            val file = java.io.File(tempDir, "PXL_20260101_000000000.MP.jpg")
+            file.writeBytes(xmp + ByteArray(2048) { 0x20 } + video + trailer)
+
+            val out = java.io.File(tempDir, "out.mp4")
+            assertTrue(MotionPhotoExtractor.extractMicroVideo(file, out))
+            assertEquals("MP4_VIDEO_BYTES", out.readText(Charsets.ISO_8859_1))
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

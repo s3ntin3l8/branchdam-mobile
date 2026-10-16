@@ -184,7 +184,7 @@ func TestSyncEvents_MotionPhotoAliasGoldenPayload(t *testing.T) {
 		ParentLocalID: "content://media/external/images/media/20",
 		ChildLocalID:  "content://media/external/images/media/20/microvideo",
 		Relationship:  "MOTION_PHOTO_CONTAINS",
-		Confidence:    0.95,
+		Confidence:    1.00,
 		Resolver:      "android_motion_photo_xmp",
 	})
 
@@ -193,7 +193,7 @@ func TestSyncEvents_MotionPhotoAliasGoldenPayload(t *testing.T) {
 	if len(reqs) != 1 {
 		t.Fatalf("server saw %d requests, want 1", len(reqs))
 	}
-	want := `{"sourceNodeUuid":"` + parentNodeUUID + `","targetNodeUuid":"` + childNodeUUID + `","relationshipType":"DERIVED_FROM","confidence":0.95,"tier":1,"resolver":"android_motion_photo_xmp","evidenceJson":{"mobileRelationship":"MOTION_PHOTO_CONTAINS"}}`
+	want := `{"sourceNodeUuid":"` + parentNodeUUID + `","targetNodeUuid":"` + childNodeUUID + `","relationshipType":"DERIVED_FROM","confidence":1,"tier":1,"resolver":"android_motion_photo_xmp","evidenceJson":{"mobileRelationship":"MOTION_PHOTO_CONTAINS"}}`
 	if reqs[0].Payload != want {
 		t.Errorf("payload =\n  %s\nwant\n  %s", reqs[0].Payload, want)
 	}
@@ -531,14 +531,14 @@ func TestSyncEvents_EdgeNeverSentWhenServerWouldRefuse(t *testing.T) {
 	}
 }
 
-// TestSyncEvents_EdgeConfidenceClamped: a confidence at the floor is sent
-// unchanged; one above 1.00 (only possible from a hand-written row) is sent
+// TestSyncEvents_EdgeConfidenceClamped: a reviewed confidence at the floor
+// is sent unchanged; one above 1.00 (only possible from a hand-written row) is sent
 // as 1.
 func TestSyncEvents_EdgeConfidenceClamped(t *testing.T) {
 	eng, q, srv := newEventTestEngine(t)
 	recordMedia(t, q, "p", parentNodeUUID)
 	recordMedia(t, q, "c", childNodeUUID)
-	enqueueRaw(t, q, EventEdgeAttached, `{"parentLocalId":"p","childLocalId":"c","relationship":"DERIVED_FROM","confidence":0.5,"resolver":"r"}`)
+	enqueueRaw(t, q, EventEdgeAttached, `{"parentLocalId":"p","childLocalId":"c","relationship":"DERIVED_FROM","confidence":0.5,"resolver":"r","reviewed":true}`)
 	enqueueRaw(t, q, EventEdgeAttached, `{"parentLocalId":"p","childLocalId":"c","relationship":"DERIVED_FROM","confidence":1.7,"resolver":"r"}`)
 	syncEvents(t, eng, 10)
 	reqs := srv.sent()
@@ -615,5 +615,71 @@ func TestSyncEvents_ServerRejectionTerminalVsRetryable(t *testing.T) {
 				t.Fatalf("status=%s retry=%d, want PENDING/1", ev.Status, ev.RetryCount)
 			}
 		})
+	}
+}
+
+// TestSyncEvents_UnreviewedGuessNeverSent: an edge below 1.00 that nobody
+// confirmed on the device (a row queued by a release that auto-emitted its
+// timestamp-proximity and in-phone-edit guesses) is SKIPPED, never sent;
+// an exact (1.00) edge in the same batch still goes out on its own.
+func TestSyncEvents_UnreviewedGuessNeverSent(t *testing.T) {
+	eng, q, srv := newEventTestEngine(t)
+	recordMedia(t, q, "p", parentNodeUUID)
+	recordMedia(t, q, "c", childNodeUUID)
+
+	guess := enqueueLineage(t, q, LineageIntent{ParentLocalID: "p", ChildLocalID: "c", Relationship: "DERIVED_FROM", Confidence: 0.95, Resolver: "android_camera_pair"})
+	legacy := enqueueRaw(t, q, EventEdgeAttached, `{"parentLocalId":"p","childLocalId":"c","relationship":"DERIVED_FROM","confidence":0.95,"resolver":"in_phone_google_photos_editor"}`)
+	exact := enqueueLineage(t, q, LineageIntent{ParentLocalID: "p", ChildLocalID: "c", Relationship: "DERIVED_FROM", Confidence: 1.0, Resolver: "android_camera_pair"})
+
+	if n := syncEvents(t, eng, 10); n != 1 {
+		t.Fatalf("sent = %d, want 1 (the exact edge only)", n)
+	}
+	reqs := srv.sent()
+	if len(reqs) != 1 || !strings.Contains(reqs[0].Payload, `"confidence":1,`) {
+		t.Fatalf("server saw %+v, want one 1.00 edge", reqs)
+	}
+	if strings.Contains(reqs[0].Payload, "reviewedOnDevice") {
+		t.Errorf("automatic edge claims a device review: %s", reqs[0].Payload)
+	}
+	for _, id := range []int64{guess, legacy} {
+		ev := eventRow(t, q, id)
+		if ev.Status != queue.EventSkipped || !strings.Contains(ev.ErrorMsg, "nobody confirmed") {
+			t.Errorf("event %d: status=%s err=%q, want SKIPPED awaiting review", id, ev.Status, ev.ErrorMsg)
+		}
+	}
+	if ev := eventRow(t, q, exact); ev.Status != queue.EventSent {
+		t.Errorf("exact edge status = %s, want SENT", ev.Status)
+	}
+}
+
+// TestSyncEvents_ReviewedGuessKeepsItsConfidence: a pair confirmed on the
+// device goes out at the resolver's own confidence (never bumped to 1.00),
+// with evidenceJson telling the server's reviewer it was confirmed on the
+// device, alongside any relationship alias.
+func TestSyncEvents_ReviewedGuessKeepsItsConfidence(t *testing.T) {
+	eng, q, srv := newEventTestEngine(t)
+	recordMedia(t, q, "p", parentNodeUUID)
+	recordMedia(t, q, "c", childNodeUUID)
+	enqueueLineage(t, q, LineageIntent{
+		ParentLocalID: "p", ChildLocalID: "c", Relationship: "DERIVED_FROM",
+		Confidence: 0.95, Resolver: "in_phone_google_photos_editor", Reviewed: true,
+	})
+	enqueueLineage(t, q, LineageIntent{
+		ParentLocalID: "p", ChildLocalID: "c", Relationship: "MOTION_PHOTO_CONTAINS",
+		Confidence: 0.9, Resolver: "r", Reviewed: true,
+	})
+
+	syncEvents(t, eng, 10)
+	reqs := srv.sent()
+	if len(reqs) != 2 {
+		t.Fatalf("server saw %d requests, want 2", len(reqs))
+	}
+	want0 := `{"sourceNodeUuid":"` + parentNodeUUID + `","targetNodeUuid":"` + childNodeUUID + `","relationshipType":"DERIVED_FROM","confidence":0.95,"tier":1,"resolver":"in_phone_google_photos_editor","evidenceJson":{"reviewedOnDevice":true}}`
+	if reqs[0].Payload != want0 {
+		t.Errorf("payload =\n  %s\nwant\n  %s", reqs[0].Payload, want0)
+	}
+	if !strings.Contains(reqs[1].Payload, `"confidence":0.9,`) ||
+		!strings.Contains(reqs[1].Payload, `"evidenceJson":{"mobileRelationship":"MOTION_PHOTO_CONTAINS","reviewedOnDevice":true}`) {
+		t.Errorf("alias payload = %s", reqs[1].Payload)
 	}
 }

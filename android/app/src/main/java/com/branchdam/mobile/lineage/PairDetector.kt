@@ -60,11 +60,16 @@ object PairDetector {
     }
 
     /**
-     * Enqueues deterministic Confidence-1.00 lineage edges for detected pairs.
+     * Enqueues the lineage edges the device may send on its own: the exact
+     * (1.00) stem-match pairs. A timestamp-proximity pair (0.95) is only a
+     * guess and is NOT sent here; it waits in the lineage review screen
+     * for the user to confirm or reject it (see [LineageReview]). Returns
+     * the number of edges enqueued.
      */
     fun registerPairLineage(pairs: List<LineagePair>): Int {
         var count = 0
         for (pair in pairs) {
+            if (!LineageReview.isAutomatic(pair.confidence)) continue
             EngineHolder.enqueueLineageEvent(
                 parentLocalID = pair.masterRaw.contentUri,
                 childLocalID = pair.derivativeJpeg.contentUri,

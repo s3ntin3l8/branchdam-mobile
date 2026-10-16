@@ -74,9 +74,18 @@ object EditCorrelator {
         return edits
     }
 
+    /**
+     * Enqueues the edits the device may send on its own: those at
+     * confidence 1.00. An edit matched by filename (0.95, every edit
+     * [findInPhoneEdits] reports today) is only a guess and is NOT sent
+     * here; it waits in the lineage review screen for the user to confirm
+     * or reject it (see [LineageReview]). Returns the number of edges
+     * enqueued.
+     */
     fun registerEditLineage(edits: List<InPhoneEdit>): Int {
         var count = 0
         for (edit in edits) {
+            if (!LineageReview.isAutomatic(edit.confidence)) continue
             EngineHolder.enqueueLineageEvent(
                 parentLocalID = edit.originalMaster.contentUri,
                 childLocalID = edit.editedDerivative.contentUri,

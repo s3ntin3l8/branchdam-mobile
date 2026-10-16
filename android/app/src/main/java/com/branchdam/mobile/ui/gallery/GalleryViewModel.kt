@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import android.content.SharedPreferences
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.lineage.LineageReview
 import com.branchdam.mobile.lineage.PairDetector
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.observer.MediaScanner
@@ -55,6 +56,13 @@ const val ALL_FOLDERS = "All Folders"
 data class GalleryItem(
     val primaryMediaItem: MediaItem,
     val companionMediaItem: MediaItem? = null,
+    /**
+     * Confidence of the RAW/JPEG pairing behind [companionMediaItem]. Only
+     * an exact (1.00) stem-match pair is sent as a lineage edge on upload;
+     * a capture-time guess (0.95) waits for the user in the lineage
+     * review screen.
+     */
+    val companionConfidence: Double = 0.0,
     val lineageStatus: String = "Unpaired",
     val isOffloaded: Boolean = false,
     val backupStatus: String = "NOT_ENQUEUED",
@@ -265,6 +273,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     GalleryItem(
                         primaryMediaItem = item,
                         companionMediaItem = companionRaw,
+                        companionConfidence = pair?.confidence ?: 0.0,
                         lineageStatus = "RAW+JPEG",
                         isOffloaded = isOffloaded,
                         backupStatus = combinedStatus,
@@ -333,7 +342,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 var companionId = 0L
                 if (companion != null) {
                     companionId = UploadStaging.enqueue(context, companion)
-                    if (primaryId > 0L && companionId > 0L) {
+                    if (primaryId > 0L && companionId > 0L && LineageReview.isAutomatic(item.companionConfidence)) {
                         EngineHolder.enqueueLineageEvent(
                             parentLocalID = companion.contentUri,
                             childLocalID = primary.contentUri,
@@ -380,7 +389,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             var companionId = 0L
             if (companion != null) {
                 companionId = UploadStaging.enqueue(context, companion)
-                if (primaryId > 0L && companionId > 0L) {
+                if (primaryId > 0L && companionId > 0L &&
+                    LineageReview.isAutomatic(galleryItem?.companionConfidence ?: 0.0)
+                ) {
                     EngineHolder.enqueueLineageEvent(
                         parentLocalID = companion.contentUri,
                         childLocalID = primary.contentUri,
