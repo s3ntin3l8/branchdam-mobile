@@ -13,6 +13,31 @@ type HandshakeResponse struct {
 	AcknowledgedEventUUID string `json:"acknowledgedEventUuid,omitempty"`
 	PendingEventsCount    int64  `json:"pendingEventsCount"`
 	NamingTemplate        string `json:"namingTemplate,omitempty"`
+	// CurrentKeyID is the id of the paired-device key the request
+	// authenticated with (0 = omitted, not a paired-device key).
+	CurrentKeyID int64 `json:"currentKeyId,omitempty"`
+	// PendingRotation is set when the pairing has a newer active key than
+	// the one the request used; Client.Handshake acts on it
+	// (keyrotation.go).
+	PendingRotation *PendingRotation `json:"pendingRotation,omitempty"`
+}
+
+// PendingRotation mirrors branchDAM's pendingRotationDTO
+// (internal/httpapi/routes.go in the server repo).
+type PendingRotation struct {
+	// KeyID is the new key's id, for logging only.
+	KeyID int64 `json:"keyId"`
+	// APIKey is always "": the new key is never sent in the clear, and a
+	// non-empty value is ignored.
+	APIKey string `json:"apiKey"`
+	// SealedAPIKey is the new key sealed for this device (OpenRotatedKey).
+	// Empty when the server cannot deliver it (no BRANCHDAM_SECRET_KEY,
+	// or a rotation from before delivery existed): the device then has to
+	// be paired again before PreviousKeyExpiresAtUnix.
+	SealedAPIKey string `json:"sealedApiKey,omitempty"`
+	// PreviousKeyExpiresAtUnix is when the request's key stops working
+	// (0 = no expiry set).
+	PreviousKeyExpiresAtUnix int64 `json:"previousKeyExpiresAtUnix"`
 }
 
 type AgentEventRequest struct {

@@ -193,6 +193,50 @@ final class AppleKeychainTests: XCTestCase {
         XCTAssertThrowsError(try credentials.save(apiKey: "k", agentId: "a")) { XCTAssertEqual($0 as? PairingStoreError, .agentIdNotStored) } // pragma: allowlist secret
     }
 
+    // MARK: - Rotated API keys (branchDAM S13)
+
+    func testRotatedKeyReplacesTheStoredKeyAndKeepsTheAgent() {
+        let store = InMemorySecretStore()
+        let credentials = PairingCredentialStore(store: store)
+        XCTAssertNoThrow(try credentials.save(apiKey: "old-key", agentId: "agent-a")) // pragma: allowlist secret
+
+        XCTAssertNoThrow(try credentials.saveRotatedAPIKey("rotated-key")) // pragma: allowlist secret
+
+        XCTAssertEqual(store.getString(account: AppleKeychain.apiKeyAccount), "rotated-key") // pragma: allowlist secret
+        XCTAssertEqual(credentials.agentId, "agent-a")
+    }
+
+    func testRotatedKeyRefusesAnEmptyKey() {
+        let store = InMemorySecretStore()
+        let credentials = PairingCredentialStore(store: store)
+        XCTAssertNoThrow(try credentials.save(apiKey: "old-key", agentId: "agent-a")) // pragma: allowlist secret
+
+        XCTAssertThrowsError(try credentials.saveRotatedAPIKey("")) { XCTAssertEqual($0 as? PairingStoreError, .apiKeyNotStored) }
+        XCTAssertEqual(store.getString(account: AppleKeychain.apiKeyAccount), "old-key") // pragma: allowlist secret
+    }
+
+    func testRotatedKeyWriteFailureThrows() {
+        let store = InMemorySecretStore()
+        store.failWrites = true
+        let credentials = PairingCredentialStore(store: store)
+
+        XCTAssertThrowsError(try credentials.saveRotatedAPIKey("rotated-key")) { XCTAssertEqual($0 as? PairingStoreError, .apiKeyNotStored) } // pragma: allowlist secret
+    }
+
+    func testRotatedKeyThrowsWhenTheKeychainDoesNotHoldIt() {
+        let store = InMemorySecretStore()
+        store.dropWrites = true
+        let credentials = PairingCredentialStore(store: store)
+
+        XCTAssertThrowsError(try credentials.saveRotatedAPIKey("rotated-key")) { XCTAssertEqual($0 as? PairingStoreError, .apiKeyNotStored) } // pragma: allowlist secret
+    }
+
+    func testAppleKeychainStoresTheRotatedKey() {
+        let credentials = PairingCredentialStore(store: keychain)
+        XCTAssertNoThrow(try credentials.saveRotatedAPIKey("kc-rotated-key")) // pragma: allowlist secret
+        XCTAssertEqual(keychain.getString(account: AppleKeychain.apiKeyAccount), "kc-rotated-key") // pragma: allowlist secret
+    }
+
     func testAgentIdAccountSitsNextToTheApiKey() {
         XCTAssertEqual(PairingCredentialStore.agentIdAccount, "branchdam_agent_id")
         XCTAssertEqual(PairingCredentialStore.apiKeyAccount, AppleKeychain.apiKeyAccount)
@@ -205,15 +249,19 @@ final class AppleKeychainTests: XCTestCase {
     }
 }
 
-/// In-memory [SecretStore] test double; can be told to refuse writes.
+/// In-memory [SecretStore] test double; can be told to refuse writes, or
+/// to report them as done without keeping them.
 private final class InMemorySecretStore: SecretStore {
     private var values: [String: String] = [:]
     var failWrites = false
+    var dropWrites = false
     var failingAccounts: Set<String> = []
 
     func setString(_ value: String, account: String) -> Bool {
         guard !failWrites, !failingAccounts.contains(account) else { return false }
-        values[account] = value
+        if !dropWrites {
+            values[account] = value
+        }
         return true
     }
 

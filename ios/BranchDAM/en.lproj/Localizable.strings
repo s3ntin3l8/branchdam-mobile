@@ -229,7 +229,7 @@
 
 /* Import confirmation notification (AppleCameraRollImportNotifier) */
 "New Photos Detected" = "New Photos Detected";
-"%lld new photo(s) ready to import to branchDAM" = "%lld new photo(s) ready to import to branchDAM";
+/* "%lld new photos ready to import to branchDAM" has plural forms: Localizable.stringsdict */
 "Import now" = "Import now";
 "Later" = "Later";
 "Skip" = "Skip";

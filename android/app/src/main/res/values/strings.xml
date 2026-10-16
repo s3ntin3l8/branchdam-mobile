@@ -21,6 +21,12 @@
     <string name="gallery_filter_media">Filter media</string>
     <string name="gallery_filter_folder">Folder</string>
     <string name="gallery_filter_media_type">Media Type</string>
+    <string name="gallery_filter_all">All</string>
+    <string name="gallery_filter_all_folders">All Folders</string>
+    <string name="gallery_filter_photos">Photos</string>
+    <string name="gallery_filter_videos">Videos</string>
+    <string name="gallery_filter_raw">RAW</string>
+    <string name="gallery_filter_backed_up">Backed Up</string>
     <string name="gallery_sort_media">Sort media</string>
     <string name="gallery_sort_date_newest">Date (Newest First)</string>
     <string name="gallery_sort_date_oldest">Date (Oldest First)</string>

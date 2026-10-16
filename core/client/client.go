@@ -37,12 +37,16 @@ type Config struct {
 }
 
 type Client struct {
-	baseURL       string
+	baseURL string
+	// apiKey can change during the client's life (rotated-key adoption,
+	// keyrotation.go); it is guarded by keys.mu and every request reads it
+	// once through currentKey.
 	apiKey        string
 	agentID       string
 	clientVersion string
 	httpClient    *http.Client
 	uploadClient  *http.Client
+	keys          keyState
 }
 
 func New(cfg Config) *Client {
@@ -135,7 +139,10 @@ func (c *Client) Version() string {
 	return "0.1.0"
 }
 
-func (c *Client) setHeaders(req *http.Request) {
+// setHeaders sets the auth and identity headers. apiKey is the key this
+// request is sent with, read once per request (currentKey) so the header
+// and the signature always agree.
+func (c *Client) setHeaders(req *http.Request, apiKey string) {
 	// T2-6: send the API key only in the X-API-Key header. The
 	// Authorization header is intentionally NOT set here; it is
 	// reserved for future short-lived bearer tokens issued by the
@@ -143,8 +150,8 @@ func (c *Client) setHeaders(req *http.Request) {
 	// "Authorization: Bearer <key>" were set, which doubled the
 	// key's surface area in any log line, proxy log, or error
 	// message.
-	if c.apiKey != "" {
-		req.Header.Set("X-API-Key", c.apiKey)
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
 	}
 	req.Header.Set("User-Agent", fmt.Sprintf("branchdam-mobile/%s (%s)", c.Version(), c.agentID))
 	req.Header.Set("Content-Type", "application/json")
@@ -152,9 +159,10 @@ func (c *Client) setHeaders(req *http.Request) {
 
 // signRequest computes the HMAC-SHA256 signature over the canonical string
 // "method\npath\nnonce\ntimestamp\n" followed by the raw request body bytes,
-// keyed by the API key. For GET requests, path includes the full query string.
-func (c *Client) signRequest(method, path, nonce, timestamp string, body []byte) string {
-	mac := hmac.New(sha256.New, []byte(c.apiKey))
+// keyed by apiKey, the key the request is sent with. For GET requests, path
+// includes the full query string.
+func signRequest(apiKey, method, path, nonce, timestamp string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(apiKey))
 	mac.Write([]byte(method + "\n" + path + "\n" + nonce + "\n" + timestamp + "\n"))
 	mac.Write(body)
 	return hex.EncodeToString(mac.Sum(nil))

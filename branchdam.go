@@ -648,7 +648,6 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 	if !opts.IncludeEvents && !opts.IncludeUploads {
 		return SyncResult{}, newError(CodeInvalidInput, "SyncBatch requires IncludeEvents or IncludeUploads")
 	}
-
 	timeoutSecs := opts.TimeoutSecs
 	if timeoutSecs <= 0 {
 		timeoutSecs = 60
@@ -670,6 +669,7 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 
 	stdCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
 	defer cancel()
+	e.checkKeyRotation(stdCtx)
 
 	var result SyncResult
 	if opts.IncludeUploads {
@@ -1065,6 +1065,9 @@ func NewEngine(opts EngineOptions) (*Engine, error) {
 		HTTPClient:    nil,
 		UploadClient:  nil,
 	})
+
+	// Rotated API keys go to the shell's secure storage (keyrotation.go).
+	httpClient.SetKeyStore(storeRotatedKey)
 
 	eng := engine.New(q, httpClient)
 

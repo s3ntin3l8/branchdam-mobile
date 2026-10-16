@@ -249,7 +249,9 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
 
         let content = UNMutableNotificationContent()
         content.title = String(localized: "New Photos Detected")
-        content.body = String(localized: "\(count) new photo(s) ready to import to branchDAM")
+        // Plural forms (one/other) live in Localizable.stringsdict under
+        // "%lld new photos ready to import to branchDAM".
+        content.body = String(localized: "\(count) new photos ready to import to branchDAM")
         content.categoryIdentifier = Self.categoryIdentifier
         content.userInfo = [Self.userInfoStagedBeforeKey: NSNumber(value: stagedBeforeUnix)]
 

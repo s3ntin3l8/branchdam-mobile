@@ -263,6 +263,20 @@ public struct PairingCredentialStore {
         }
     }
 
+    /// Stores an API key the engine received from the server's key
+    /// rotation (branchDAM S13), keeping the agent ID. The engine starts
+    /// using the key only after this returns, so it throws unless the
+    /// Keychain holds exactly this key afterwards. Unlike `save`, an empty
+    /// key is refused: a rotation must never clear the stored key.
+    public func saveRotatedAPIKey(_ apiKey: String) throws {
+        guard !apiKey.isEmpty,
+              store.setString(apiKey, account: Self.apiKeyAccount),
+              store.getString(account: Self.apiKeyAccount) == apiKey
+        else {
+            throw PairingStoreError.apiKeyNotStored
+        }
+    }
+
     /// The agent ID stored at pairing, if any.
     public var agentId: String? {
         guard let stored = store.getString(account: Self.agentIdAccount), !stored.isEmpty else { return nil }
