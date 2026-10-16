@@ -54,7 +54,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * Keystore is unavailable. There is deliberately no plaintext
      * fallback: see [ConnectionSettingsStore].
      */
-    private val securePrefs: SharedPreferences? = EncryptedPrefs.get(application)
+    private val securePrefs: SharedPreferences? = securePrefsProvider(application)
     private val nonSecretPrefs: SharedPreferences = application.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
 
     private val initialConfig = BranchDamApplication.readSecureEngineConfig(application)
@@ -389,6 +389,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         const val NO_FOLDERS_SENTINEL = "__NONE__"
+
+        /**
+         * Test seam for the Keystore-backed prefs. Defaults to
+         * [EncryptedPrefs.get]; Robolectric has no Android Keystore, so
+         * tests that need a stored key pass plain prefs here.
+         */
+        @androidx.annotation.VisibleForTesting
+        var securePrefsProvider: (Application) -> SharedPreferences? = { EncryptedPrefs.get(it) }
 
         /**
          * Default upper bound on the time `checkConnection` will wait
