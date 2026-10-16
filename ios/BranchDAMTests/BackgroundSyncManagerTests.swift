@@ -3,13 +3,23 @@ import XCTest
 
 final class BackgroundSyncManagerTests: XCTestCase {
 
+    /// The `syncOnMobileData` value stored before the test, restored in
+    /// tearDown so no test leaks the shared singleton's preference into
+    /// the next one (or into the test host's defaults).
+    private var savedSyncOnMobileData: Any?
+
     override func setUp() {
         super.setUp()
+        savedSyncOnMobileData = UserDefaults.standard.object(forKey: BackgroundSyncManager.keySyncOnMobileData)
         UserDefaults.standard.removeObject(forKey: BackgroundSyncManager.keySyncOnMobileData)
     }
 
     override func tearDown() {
-        UserDefaults.standard.removeObject(forKey: BackgroundSyncManager.keySyncOnMobileData)
+        if let saved = savedSyncOnMobileData {
+            UserDefaults.standard.set(saved, forKey: BackgroundSyncManager.keySyncOnMobileData)
+        } else {
+            UserDefaults.standard.removeObject(forKey: BackgroundSyncManager.keySyncOnMobileData)
+        }
         super.tearDown()
     }
 
