@@ -22,6 +22,7 @@
     <string name="gallery_filter_folder">Folder</string>
     <string name="gallery_filter_media_type">Media Type</string>
     <string name="gallery_filter_all">All</string>
+    <string name="gallery_filter_all_folders">All Folders</string>
     <string name="gallery_filter_photos">Photos</string>
     <string name="gallery_filter_videos">Videos</string>
     <string name="gallery_filter_raw">RAW</string>

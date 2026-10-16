@@ -58,18 +58,21 @@ func storeRotatedKey(_ context.Context, apiKey string) error {
 // the background still sees a rotation in time.
 const rotationCheckInterval = 6 * time.Hour
 
-// rotationCheckTimeout bounds that handshake.
+// rotationCheckTimeout bounds that handshake, within the batch's own
+// deadline.
 const rotationCheckTimeout = 10 * time.Second
 
 // checkKeyRotation handshakes when the last successful handshake is older
 // than rotationCheckInterval, which adopts a pending rotated key (see
-// core/client/keyrotation.go). Best effort: a failure is logged and the
-// sync batch runs anyway, where an auth failure surfaces as usual.
-func (e *Engine) checkKeyRotation() {
+// core/client/keyrotation.go). It runs on the sync batch's context, so it
+// spends the batch's TimeoutSecs, never more. Best effort: a failure is
+// logged and the sync batch runs anyway, where an auth failure surfaces
+// as usual.
+func (e *Engine) checkKeyRotation(batchCtx context.Context) {
 	if !e.client.HandshakeDue(rotationCheckInterval) {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), rotationCheckTimeout)
+	ctx, cancel := context.WithTimeout(batchCtx, rotationCheckTimeout)
 	defer cancel()
 	if _, err := e.client.Handshake(ctx, ""); err != nil {
 		slog.Debug("branchdam: pre-sync handshake failed", "err", err)

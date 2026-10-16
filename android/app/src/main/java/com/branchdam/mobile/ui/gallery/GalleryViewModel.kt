@@ -53,6 +53,10 @@ enum class GallerySortDirection {
     ASC
 }
 
+/**
+ * The folder-filter key meaning "no folder filter". It is a key, not UI
+ * text: the menu shows it as R.string.gallery_filter_all_folders.
+ */
 const val ALL_FOLDERS = "All Folders"
 
 @Immutable

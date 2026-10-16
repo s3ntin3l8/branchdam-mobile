@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Made by branchDAM's pairing.SealForDevice (the server's reference
@@ -144,5 +145,26 @@ func TestSyncBatchPicksUpRotation(t *testing.T) {
 	}
 	if got := seen(); len(got) != n {
 		t.Fatalf("second batch handshook again within the check interval: %v", got[n:])
+	}
+}
+
+// TestSyncBatchRotationCheckWithinBatchTimeout: the pre-sync handshake
+// spends the batch's own TimeoutSecs, not a separate 10 s on top of it.
+func TestSyncBatchRotationCheckWithinBatchTimeout(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select { // a handshake that never answers
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	openRotationEngine(t, srv.URL, &fakeShellStore{})
+
+	start := time.Now()
+	_, _ = BindingSyncBatch(1, 1)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("SyncBatch(TimeoutSecs=1) took %v, want the rotation check bounded by the batch timeout", elapsed)
 	}
 }

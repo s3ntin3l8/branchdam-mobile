@@ -648,8 +648,6 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 	if !opts.IncludeEvents && !opts.IncludeUploads {
 		return SyncResult{}, newError(CodeInvalidInput, "SyncBatch requires IncludeEvents or IncludeUploads")
 	}
-	e.checkKeyRotation()
-
 	timeoutSecs := opts.TimeoutSecs
 	if timeoutSecs <= 0 {
 		timeoutSecs = 60
@@ -671,6 +669,7 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 
 	stdCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
 	defer cancel()
+	e.checkKeyRotation(stdCtx)
 
 	var result SyncResult
 	if opts.IncludeUploads {

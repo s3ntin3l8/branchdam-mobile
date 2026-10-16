@@ -165,14 +165,15 @@ class OtgIngestManager(
      */
     fun onCardDetected(deviceLabel: String, directory: File) {
         startRun {
-            _state.value = OtgState.Scanning(deviceLabel)
+            val thisRun = coroutineContext[Job]
+            publishIfCurrent(thisRun, OtgState.Scanning(deviceLabel))
             val result = withContext(ioDispatcher) {
                 OtgCardScanner.scanDirectory(directory, deviceLabel)
             }
             if (result.candidates.isNotEmpty()) {
-                _state.value = OtgState.AwaitingConfirmation(result)
+                publishIfCurrent(thisRun, OtgState.AwaitingConfirmation(result))
             } else {
-                _state.value = OtgState.Idle
+                publishIfCurrent(thisRun, OtgState.Idle)
             }
         }
     }
@@ -194,7 +195,8 @@ class OtgIngestManager(
      */
     fun onDocumentTreeSelected(treeUri: Uri, deviceLabel: String = "SD Card") {
         startRun {
-            _state.value = OtgState.Scanning(deviceLabel)
+            val thisRun = coroutineContext[Job]
+            publishIfCurrent(thisRun, OtgState.Scanning(deviceLabel))
             val result = withContext(ioDispatcher) {
                 if (context != null) {
                     OtgCardScanner.scanDocumentTree(context, treeUri, deviceLabel)
@@ -204,11 +206,14 @@ class OtgIngestManager(
             }
             // The user picked this folder on purpose: say so when it holds
             // nothing importable instead of silently closing.
-            _state.value = if (result.candidates.isNotEmpty()) {
-                OtgState.AwaitingConfirmation(result)
-            } else {
-                OtgState.Error(text(R.string.otg_error_no_media_in_folder, NO_MEDIA_IN_FOLDER))
-            }
+            publishIfCurrent(
+                thisRun,
+                if (result.candidates.isNotEmpty()) {
+                    OtgState.AwaitingConfirmation(result)
+                } else {
+                    OtgState.Error(text(R.string.otg_error_no_media_in_folder, NO_MEDIA_IN_FOLDER))
+                },
+            )
         }
     }
 
@@ -244,14 +249,17 @@ class OtgIngestManager(
                 for ((index, candidate) in candidates.withIndex()) {
                     if (!isActive) break
 
-                    _state.value = OtgState.Ingesting(
-                        OtgIngestProgress(
-                            currentFileIndex = index + 1,
-                            totalFiles = candidates.size,
-                            currentFileName = candidate.fileName,
-                            bytesProcessed = bytesProcessed,
-                            totalBytes = totalBytes
-                        )
+                    publishIfCurrent(
+                        thisRun,
+                        OtgState.Ingesting(
+                            OtgIngestProgress(
+                                currentFileIndex = index + 1,
+                                totalFiles = candidates.size,
+                                currentFileName = candidate.fileName,
+                                bytesProcessed = bytesProcessed,
+                                totalBytes = totalBytes
+                            )
+                        ),
                     )
 
                     val stageResult = withContext(ioDispatcher) {
@@ -285,10 +293,13 @@ class OtgIngestManager(
                 }
 
                 if (isActive) {
-                    _state.value = OtgState.Completed(
-                        importedCount = importedCount,
-                        totalBytes = importedBytes,
-                        fileErrors = fileErrors,
+                    publishIfCurrent(
+                        thisRun,
+                        OtgState.Completed(
+                            importedCount = importedCount,
+                            totalBytes = importedBytes,
+                            fileErrors = fileErrors,
+                        ),
                     )
                 }
             } catch (ce: CancellationException) {
@@ -303,7 +314,7 @@ class OtgIngestManager(
                 // Ingesting.
                 clearIfCurrent(thisRun)
             } catch (e: Exception) {
-                _state.value = OtgState.Error("Failed to import SD card media: ${e.message ?: "Unknown error"}")
+                publishIfCurrent(thisRun, OtgState.Error("Failed to import SD card media: ${e.message ?: "Unknown error"}"))
             }
         }
     }
@@ -347,6 +358,20 @@ class OtgIngestManager(
             val previous = inFlightJob
             inFlightJob = next
             previous?.cancel()
+        }
+    }
+
+    /**
+     * Publishes [next] only while [run] is the current run, checked and
+     * written under [jobLock]. A run's `isActive` check alone leaves a
+     * window: cancelled right after it, a stale run would overwrite the
+     * newer run's state. Every state a run publishes goes through here.
+     */
+    private fun publishIfCurrent(run: Job?, next: OtgState) {
+        synchronized(jobLock) {
+            if (inFlightJob === run) {
+                _state.value = next
+            }
         }
     }
 

@@ -214,7 +214,7 @@ fun GalleryScreen(
             } else {
                 var showFilterMenu by remember { mutableStateOf(false) }
                 var showSortMenu by remember { mutableStateOf(false) }
-                val isFilterActive = selectedFilter != GalleryFilter.ALL || selectedFolder != "All Folders"
+                val isFilterActive = selectedFilter != GalleryFilter.ALL || selectedFolder != ALL_FOLDERS
 
                 CenterAlignedTopAppBar(
                     title = { Text(stringResource(R.string.gallery_title)) },
@@ -260,7 +260,7 @@ fun GalleryScreen(
                                                 } else {
                                                     Spacer(Modifier.width(16.dp))
                                                 }
-                                                Text(folder)
+                                                Text(if (folder == ALL_FOLDERS) stringResource(R.string.gallery_filter_all_folders) else folder)
                                             }
                                         },
                                         onClick = {
