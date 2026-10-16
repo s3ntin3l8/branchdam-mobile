@@ -7,6 +7,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.observer.UploadStaging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -32,6 +33,7 @@ class SyncWorker(
             // signal the Go engine to abort its current batch.
             SyncLogger.log(applicationContext, "Starting syncBatch (batch=$batchSize, timeout=${timeoutSecs}s)")
             val success = EngineHolder.syncBatch(timeoutSecs = timeoutSecs, batchSize = batchSize)
+            cleanupStagedUploads()
             if (success) {
                 SyncLogger.log(applicationContext, "syncBatch succeeded")
                 Log.i(TAG, "syncBatch complete (batch=$batchSize, timeout=${timeoutSecs}s)")
@@ -52,6 +54,20 @@ class SyncWorker(
             } else {
                 Result.failure()
             }
+        }
+    }
+
+    /**
+     * Deletes the staged original copies (see [UploadStaging]) whose
+     * upload the batch just COMPLETED. Runs after every batch, successful
+     * or not, and never fails the work.
+     */
+    private fun cleanupStagedUploads() {
+        try {
+            val removed = UploadStaging.cleanup(applicationContext)
+            if (removed > 0) Log.i(TAG, "removed $removed staged upload copies")
+        } catch (e: Exception) {
+            Log.w(TAG, "staged upload cleanup failed", e)
         }
     }
 

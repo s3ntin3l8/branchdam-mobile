@@ -7,6 +7,16 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- API 34+: lets the user grant access to selected photos/videos only
+         ("Select photos"). Requesting it alongside READ_MEDIA_IMAGES/VIDEO
+         opts the app into partial access instead of falling back to a
+         compatibility mode. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <!-- API 29+: without it MediaStore redacts the GPS EXIF of camera-roll
+         files, so the archived bytes and hashes would not match the
+         original (and the SD-card copy of the same shot). Uploads read
+         through MediaStore.setRequireOriginal() when it is granted. -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <!-- Pre-API 33 fallback for media access. Capped via maxSdkVersion
          because READ_EXTERNAL_STORAGE is a no-op (and grantable only on
          a per-app basis with no runtime effect) on API 33+. Without

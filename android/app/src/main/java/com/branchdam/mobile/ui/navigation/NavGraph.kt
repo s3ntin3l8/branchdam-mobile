@@ -16,6 +16,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.branchdam.mobile.MediaAccessLevel
 import com.branchdam.mobile.ui.gallery.GalleryDetailScreen
 import com.branchdam.mobile.ui.gallery.GalleryScreen
 import com.branchdam.mobile.ui.gallery.GalleryViewModel
@@ -33,6 +34,9 @@ fun AppNavGraph(
     windowSizeClass: WindowSizeClass,
     startDestination: String = Screen.Lineage.route,
     onRequestPermissions: () -> Unit = {},
+    mediaAccess: MediaAccessLevel = MediaAccessLevel.FULL,
+    mediaAccessGeneration: Int = 0,
+    onSelectMorePhotos: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // SettingsViewModel is scoped to the activity (top-level
@@ -120,6 +124,9 @@ fun AppNavGraph(
         }
         composable(Screen.Gallery.route) {
             GalleryScreen(
+                mediaAccess = mediaAccess,
+                mediaAccessGeneration = mediaAccessGeneration,
+                onSelectMorePhotos = onSelectMorePhotos,
                 onNavigateToDetail = { mediaId ->
                     navController.navigate(Screen.GalleryDetail.createRoute(mediaId)) {
                         launchSingleTop = true

@@ -1,11 +1,15 @@
 import android.content.ContentResolver
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.IntentSender
 import android.net.Uri
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.branchdam.mobile.observer.MediaItem
+import com.branchdam.mobile.triage.MediaStoreDeleter
 import com.branchdam.mobile.ui.gallery.GalleryItem
 import com.branchdam.mobile.ui.gallery.GalleryViewModel
 import com.branchdam.mobile.ui.gallery.formatDateTaken
@@ -62,6 +66,7 @@ class GalleryViewModelTest {
         Dispatchers.resetMain()
         GalleryViewModel.ioDispatcher = Dispatchers.IO
         GalleryViewModel.defaultDispatcher = Dispatchers.Default
+        GalleryViewModel.deleterFactory = { MediaStoreDeleter.forContext(it) }
     }
 
     @Test
@@ -346,6 +351,10 @@ class GalleryViewModelTest {
         advanceUntilIdle()
         assertEquals(2, viewModel.items.value.size)
 
+        // API 28 path: legacy storage deletes directly through the
+        // ContentResolver, no system confirmation.
+        GalleryViewModel.deleterFactory = { ctx -> MediaStoreDeleter.forContext(ctx, sdkInt = 28) }
+
         // Test failed delete: contentResolver returns 0
         val failResolver = mock<ContentResolver>()
         whenever(failResolver.delete(eq(Uri.parse("content://images/10")), anyOrNull(), anyOrNull())).thenReturn(0)
@@ -376,5 +385,73 @@ class GalleryViewModelTest {
         val remaining = viewModel.items.value
         assertEquals(1, remaining.size)
         assertEquals(20L, remaining[0].primaryMediaItem.id)
+    }
+
+    @Test
+    fun testDeleteOnApi30WaitsForTheSystemConfirmation() = runTest(testDispatcher) {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val sender: IntentSender = PendingIntent.getActivity(
+            app, 0, Intent("test.CONFIRM_DELETE"), PendingIntent.FLAG_IMMUTABLE,
+        ).intentSender
+        val requested = mutableListOf<List<String>>()
+        GalleryViewModel.deleterFactory = {
+            MediaStoreDeleter(
+                sdkInt = 30,
+                directDelete = { error("API 30+ must not call ContentResolver.delete") },
+                createDeleteRequest = { uris ->
+                    requested += uris
+                    sender
+                },
+            )
+        }
+        val viewModel = GalleryViewModel(app)
+        advanceUntilIdle()
+
+        val raw = MediaItem(
+            id = 30L, contentUri = "content://images/30",
+            filePath = "/sdcard/DCIM/PXL_30.dng", displayName = "PXL_30.dng",
+            mimeType = "image/x-adobe-dng", sizeBytes = 1000L,
+            dateTakenUnix = 1000L, isRaw = true
+        )
+        val pair = GalleryItem(
+            primaryMediaItem = MediaItem(
+                id = 31L, contentUri = "content://images/31",
+                filePath = "/sdcard/DCIM/PXL_30.jpg", displayName = "PXL_30.jpg",
+                mimeType = "image/jpeg", sizeBytes = 1000L,
+                dateTakenUnix = 1000L, isRaw = false
+            ),
+            companionMediaItem = raw,
+        )
+        viewModel.setItemsForTesting(listOf(pair))
+        advanceUntilIdle()
+
+        // 1. The user declines the system dialog: nothing is deleted and
+        //    the item comes back.
+        var result: Boolean? = null
+        viewModel.deleteItem(app, pair) { result = it }
+        advanceUntilIdle()
+
+        assertEquals(listOf(listOf("content://images/31", "content://images/30")), requested)
+        val pending = viewModel.pendingDeleteConsent.value
+        assertNotNull("API 30+ deletes must wait for the user", pending)
+        assertNull("the outcome is unknown until the user answers", result)
+        assertTrue(viewModel.items.value.isEmpty())
+
+        assertTrue(viewModel.onDeleteConsentLaunched(pending!!.id))
+        viewModel.onDeleteConsentResult(approved = false)
+        advanceUntilIdle()
+
+        assertEquals(false, result)
+        assertNull(viewModel.pendingDeleteConsent.value)
+        assertEquals(listOf(pair), viewModel.items.value)
+
+        // 2. The user confirms: the system deleted both files.
+        viewModel.deleteItem(app, pair) { result = it }
+        advanceUntilIdle()
+        viewModel.onDeleteConsentResult(approved = true)
+        advanceUntilIdle()
+
+        assertEquals(true, result)
+        assertTrue(viewModel.items.value.isEmpty())
     }
 }

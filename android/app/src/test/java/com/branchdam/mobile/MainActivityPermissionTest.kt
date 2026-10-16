@@ -76,19 +76,25 @@ class MainActivityPermissionTest {
 
     @Test
     fun testRuntimePermissionBatchesMediaSelectionMatchesApiLevel() {
+        // The exact per-level lists (including READ_MEDIA_VISUAL_USER_SELECTED
+        // on 34+ and ACCESS_MEDIA_LOCATION on 29+) are pinned for every API
+        // level in MediaAccessPermissionTest; here only the read permission
+        // for the current device is checked.
         val (_, media) = runtimePermissionBatches()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            assertEquals(
-                setOf(
-                    android.Manifest.permission.READ_MEDIA_IMAGES,
-                    android.Manifest.permission.READ_MEDIA_VIDEO,
+            assertTrue(
+                media.containsAll(
+                    listOf(
+                        android.Manifest.permission.READ_MEDIA_IMAGES,
+                        android.Manifest.permission.READ_MEDIA_VIDEO,
+                    ),
                 ),
-                media.toSet(),
             )
+            assertTrue(android.Manifest.permission.READ_EXTERNAL_STORAGE !in media)
         } else {
             assertEquals(
-                listOf(android.Manifest.permission.READ_EXTERNAL_STORAGE),
-                media,
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                media.first(),
             )
         }
     }
