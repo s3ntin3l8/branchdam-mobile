@@ -9,7 +9,7 @@ set -euo pipefail
 #   scripts/screenshots.sh --out DIR
 #
 # What it does, end to end:
-#   1. Builds the debug APK (and the gomobile AAR if it is missing).
+#   1. Builds the gomobile AAR and the debug APK from this checkout.
 #   2. Boots a throwaway copy of the AVD (default: pixel_10) headless. Only
 #      its config.ini is copied into a scratch ANDROID_AVD_HOME, so the
 #      emulator starts from a fresh userdata image and the user's AVD is
@@ -43,7 +43,7 @@ set -euo pipefail
 #   DEBUG_DIR       on failure, save a screencap, UI dump, logcat and the
 #                   build/demo logs here before teardown
 #
-# Prerequisites: JDK 17+, Go, node + npm, ffmpeg, exiftool, curl, jq, KVM.
+# Prerequisites: JDK 17+, an Android NDK, Go, node + npm, ffmpeg, exiftool, curl, jq, KVM.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
         --out=*) OUT="${1#--out=}"; shift ;;
-        -h|--help) sed -n '4,46p' "$0"; exit 0 ;;
+        -h|--help) awk 'NR > 3 && /^#/ { sub(/^# ?/, ""); print; next } NR > 3 { exit }' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -230,7 +230,15 @@ wait_for_demo() {
     local i
     for ((i = 0; i < 1200; i++)); do
         if [[ -z "${DEMO_DIR}" ]]; then
-            DEMO_DIR="$(sed -n 's/^\[demo\] scratch dir //p' "${SCRATCH}/demo.log" | head -n 1)"
+            local announced tmp="${TMPDIR:-/tmp}"
+            announced="$(sed -n 's/^\[demo\] scratch dir //p' "${SCRATCH}/demo.log" | head -n 1)"
+            # Teardown rm -rf's this path, so accept only what instance.mjs
+            # creates: <os.tmpdir()>/branchdam-demo.
+            if [[ -n "${announced}" ]]; then
+                [[ "${announced}" == "${tmp%/}/branchdam-demo" ]] ||
+                    die "unexpected demo scratch dir '${announced}'"
+                DEMO_DIR="${announced}"
+            fi
         fi
         grep -q 'branchDAM demo is up' "${SCRATCH}/demo.log" && {
             log "demo is up (${DEMO_DIR})"
@@ -249,18 +257,18 @@ wait_for_demo() {
 
 build_apk() {
     export ANDROID_HOME="${SDK}"
-    if [[ ! -f "${REPO_ROOT}/android/app/libs/branchdam.aar" ]]; then
-        if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
-            ANDROID_NDK_HOME="$(find "${SDK}/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)"
-            [[ -n "${ANDROID_NDK_HOME}" ]] || die "no NDK under ${SDK}/ndk (needed to build branchdam.aar)"
-            export ANDROID_NDK_HOME
-        fi
-        log "building branchdam.aar"
-        "${REPO_ROOT}/scripts/build-mobile.sh" --android-only >"${SCRATCH}/aar.log" 2>&1 || {
-            tail -n 30 "${SCRATCH}/aar.log" >&2
-            die "AAR build failed"
-        }
+    # Always rebuild the Go core: a branchdam.aar left over from another
+    # checkout would silently put stale code in the screenshots.
+    if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
+        ANDROID_NDK_HOME="$(find "${SDK}/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)"
+        [[ -n "${ANDROID_NDK_HOME}" ]] || die "no NDK under ${SDK}/ndk (needed to build branchdam.aar)"
+        export ANDROID_NDK_HOME
     fi
+    log "building branchdam.aar"
+    "${REPO_ROOT}/scripts/build-mobile.sh" --android-only >"${SCRATCH}/aar.log" 2>&1 || {
+        tail -n 30 "${SCRATCH}/aar.log" >&2
+        die "AAR build failed"
+    }
     log "building the debug APK"
     make -C "${REPO_ROOT}" --no-print-directory android >"${SCRATCH}/gradle.log" 2>&1 || {
         tail -n 30 "${SCRATCH}/gradle.log" >&2
@@ -272,6 +280,12 @@ build_apk() {
 adb_s() { "${ADB}" -s "${SERIAL}" "$@"; }
 
 prepare_device() {
+    # The UI is driven by its (English) labels. A fresh userdata image
+    # boots in the image's default locale; make sure that is en-US.
+    local locale
+    locale="$(adb_s shell getprop persist.sys.locale | tr -d '\r')"
+    [[ -n "${locale}" ]] || locale="$(adb_s shell getprop ro.product.locale | tr -d '\r')"
+    [[ "${locale}" == en-US ]] || die "device locale is '${locale}', expected en-US"
     log "dark theme, demo-mode status bar, animations off"
     adb_s shell cmd uimode night yes >/dev/null
     local s
@@ -290,20 +304,22 @@ prepare_device() {
 }
 
 push_media() {
-    local media="${SCRATCH}/media" year="${DEMO_DIR}/archive/2026" n=0 stem slug
+    local media="${SCRATCH}/media" n=0 shoot slug stem
     mkdir -p "${media}"
     # Camera JPEGs plus their graded exports, renamed the way an in-phone
     # editor saves them (<stem>_edited.jpg), which EditCorrelator turns
-    # into 0.95-confidence audit candidates. All synthetic demo media.
-    for slug in dolomites lisbon-coast atacama midsummer; do
+    # into 0.95-confidence audit candidates. All synthetic demo media; the
+    # shoots are discovered (archive/<year>/<slug>/), not hardcoded.
+    for shoot in "${DEMO_DIR}"/archive/*/*/; do
+        slug="$(basename "${shoot}")"
         while read -r stem; do
-            cp "${year}/${slug}/${stem}.JPG" "${media}/${stem}.JPG"
+            cp "${shoot}${stem}.JPG" "${media}/${stem}.JPG"
             n=$((n + 1))
             if [[ -f "${DEMO_DIR}/exports/${slug}/${stem}_edit.jpg" ]]; then
                 cp "${DEMO_DIR}/exports/${slug}/${stem}_edit.jpg" "${media}/${stem}_edited.jpg"
                 n=$((n + 1))
             fi
-        done < <(find "${year}/${slug}" -name 'DSC*.JPG' -printf '%f\n' | sed 's/\.JPG$//' | sort | head -n 3)
+        done < <(find "${shoot}" -maxdepth 1 -name '*.JPG' -printf '%f\n' | sed 's/\.JPG$//' | sort | head -n 3)
     done
     [[ "${n}" -gt 0 ]] || die "no sample media found under ${DEMO_DIR}"
     # MediaStore ignores an EXIF capture time without a UTC offset (DATE_TAKEN
@@ -323,7 +339,7 @@ push_media() {
     local count=0
     for ((i = 0; i < 30; i++)); do
         count="$(adb_s shell content query --uri content://media/external/images/media \
-            --projection _display_name:datetaken 2>/dev/null | grep 'DSC0' | grep -vc 'datetaken=NULL' || true)"
+            --projection _display_name:datetaken 2>/dev/null | grep -c 'datetaken=[0-9]' || true)"
         [[ "${count}" -ge "${n}" ]] && break
         sleep 1
     done
@@ -440,9 +456,16 @@ settle() {
     done
 }
 
+# Captures to a temp file first, so a failed screencap never truncates a
+# committed PNG.
 capture() {
+    local tmp="${SCRATCH}/$1.png"
     sleep 2
-    adb_s exec-out screencap -p >"${OUT}/$1.png"
+    adb_s exec-out screencap -p >"${tmp}" || die "screencap failed for $1"
+    # Bytes 2-4 of the PNG signature spell "PNG".
+    [[ "$(head -c 4 "${tmp}" | tail -c 3)" == PNG ]] ||
+        die "screencap for $1 is not a PNG"
+    mv -f "${tmp}" "${OUT}/$1.png"
     log "captured $1.png"
 }
 
@@ -451,19 +474,17 @@ capture_screens() {
     adb_s shell am start -W -n "${PKG}/.MainActivity" >/dev/null
     wait_text 'text="Lineage Audit"' 120 || die "the app did not open on the Lineage Audit screen"
     # The audit queue loads from MediaStore on open; give it a moment.
-    wait_text '_edited\.jpg' 30 || log "warning: no audit candidates on screen"
+    wait_text '_edited\.jpg' 60 || die "no audit candidates on screen"
     capture audit-queue
 
     tap_text "Gallery" || die "cannot open the Gallery tab"
-    wait_text 'DSC0' 30 || log "warning: gallery shows no sample photos"
+    wait_text 'class="android.widget.Image"|DSC0' 60 || die "the gallery shows no photos"
     capture gallery
 
     tap_text "Sync" || die "cannot open the Sync tab"
     wait_text 'text="Sync Status"' 30 || die "the Sync tab did not open"
     tap_text "Sync Now" || die "no Sync Now button"
-    if ! wait_text 'All backed up' 180; then
-        log "warning: uploads still pending after 3 minutes"
-    fi
+    wait_text 'All backed up' 300 || die "uploads still pending after 5 minutes"
     # Re-read the status so "Last Sync" reflects the finished run.
     tap_text "Refresh Status" || true
     capture sync-status

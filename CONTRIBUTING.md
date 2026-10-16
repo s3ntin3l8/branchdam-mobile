@@ -45,14 +45,15 @@ demo-mode status bar and captures each screen with `adb exec-out screencap`.
 On any exit it kills the emulator and the demo and deletes the scratch dirs.
 
 Requirements: Android SDK at `$ANDROID_HOME` (default `~/Android/Sdk`, adb
-and emulator are used from there), a `pixel_10` AVD, KVM, JDK, Go, node/npm,
-ffmpeg, exiftool, curl and jq; `../branchDAM` must include the demo tooling
-(branchdam#530). Override with `AVD`, `EMU_PORT` (default 5580),
-`BRANCHDAM_DIR` and `DEMO_PORT`; set `DEBUG_DIR` to keep a screencap, UI
-dump, logcat and the build/demo logs when a run fails. The script only ever
-addresses its own `emulator-$EMU_PORT` and refuses to run if that serial is
-already attached. A full run takes 10-20 minutes, most of it the demo's
-build and media scan.
+and emulator are used from there), a `pixel_10` AVD, an NDK under
+`$ANDROID_HOME/ndk` (the Go core is rebuilt every run), KVM, JDK, Go,
+node/npm, ffmpeg, exiftool, curl and jq; `../branchDAM` must include the
+demo tooling (branchdam#530). Override with `AVD`, `EMU_PORT` (default
+5580), `BRANCHDAM_DIR` and `DEMO_PORT`; set `DEBUG_DIR` to keep a screencap,
+UI dump, logcat and the build/demo logs when a run fails. The script only
+ever addresses its own `emulator-$EMU_PORT` and refuses to run if that
+serial is already attached. A full run takes 10-20 minutes, most of it the
+demo's build and media scan.
 
 The throwaway emulator boots with `-selinux permissive`. That stops zygote
 from applying the per-app seccomp filter, which kills the x86_64 build of the
