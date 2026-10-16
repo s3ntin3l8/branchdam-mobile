@@ -203,7 +203,7 @@ behind.
   - `X-Filename`: Original camera roll file name.
   - `X-Camera-Model`: Hardware camera model string (e.g. `Google Pixel 10 Pro Fold`, `iPhone 16 Pro Max`).
   - `X-Blake3-Hash`: BLAKE3 checksum for integrity and archive verification.
-  - `X-Source-Path-Hash`: SHA-256 of the device-side path, for `GET /api/v1/agent/source-status`.
+  - `X-Source-Path-Hash`: SHA-256 of the device-side path; the upload route stores it for `GET /api/v1/agent/source-status` lookups (which take it as `?sourcePathHash=`).
   - `X-Fast-Hash`: Streaming fast hash (xxHash), sent for older servers; branchDAM's upload route ignores it (dedup runs on `X-Blake3-Hash`).
   - `X-Capture-Timestamp`: Capture time in Unix epoch seconds.
   - `X-API-Key`: Companion authentication credential (single header; `Authorization` is reserved for future short-lived bearer tokens and is not sent today — T2-6).

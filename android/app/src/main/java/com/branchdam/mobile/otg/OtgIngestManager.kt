@@ -154,8 +154,10 @@ class OtgIngestManager(
     private var inFlightJob: Job? = null
 
     /**
-     * Makes [replaceInFlight]'s swap and [clearIfCurrent]'s check-and-clear
-     * atomic with respect to each other. Nothing inside it suspends.
+     * Guards [inFlightJob] and every write to [_state]: [replaceInFlight]'s
+     * swap, [clearRunAndPublish]'s clear-and-write, [publishIfCurrent]'s and
+     * [clearIfCurrent]'s check-and-write are atomic with respect to each
+     * other. Nothing inside it suspends.
      */
     private val jobLock = Any()
 
