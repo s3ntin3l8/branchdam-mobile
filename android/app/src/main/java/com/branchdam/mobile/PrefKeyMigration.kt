@@ -74,6 +74,9 @@ object PrefKeyMigration {
      * they are found in the plain prefs. This covers the T2-5
      * upgrade path for existing users whose API keys were stored
      * in plain text before the encrypted prefs were introduced.
+     * When [encryptedPrefs] is null (Keystore unavailable) a
+     * plaintext API key is deleted instead; the non-secret server
+     * URL and agent ID stay where they are.
      */
     fun migrate(prefs: SharedPreferences, encryptedPrefs: SharedPreferences? = null) {
         val editor = prefs.edit()
@@ -108,6 +111,13 @@ object PrefKeyMigration {
             if (secureChanged) {
                 secureEditor.apply()
             }
+        } else if (prefs.contains(BranchDamApplication.KEY_API_KEY)) {
+            // Keystore unavailable: an API key an older release left in
+            // plain prefs can't be moved anywhere safe, and nothing reads
+            // it, so delete it rather than keep a plaintext secret on
+            // disk. The user re-pairs once the Keystore works.
+            editor.remove(BranchDamApplication.KEY_API_KEY)
+            changed = true
         }
 
         if (changed) {

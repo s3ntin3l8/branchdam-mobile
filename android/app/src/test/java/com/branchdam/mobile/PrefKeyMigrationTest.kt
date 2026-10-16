@@ -207,6 +207,21 @@ class PrefKeyMigrationTest {
     }
 
     @Test
+    fun testPlaintextApiKeyDeletedWhenEncryptedPrefsNull() {
+        // Keystore failure with an API key an older release left in
+        // plain prefs: nothing can read it and it can't be moved
+        // anywhere safe, so it is deleted, never kept in plaintext.
+        whenever(prefs.contains(BranchDamApplication.KEY_API_KEY)).thenReturn(true)
+        whenever(editor.remove(any())).thenReturn(editor)
+
+        PrefKeyMigration.migrate(prefs, null)
+
+        verify(editor).remove(BranchDamApplication.KEY_API_KEY)
+        verify(editor, never()).remove(BranchDamApplication.KEY_SERVER_URL)
+        verify(editor).apply()
+    }
+
+    @Test
     fun testSecretMigrationIsIdempotent() {
         // First call: key is in plain prefs, migrated and removed.
         // Second call: key is gone from plain prefs, no-op.

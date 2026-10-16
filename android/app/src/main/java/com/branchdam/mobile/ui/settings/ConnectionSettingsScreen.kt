@@ -48,6 +48,7 @@ fun ConnectionSettingsScreen(
     val isConnecting by viewModel.isConnecting.collectAsStateWithLifecycle()
     val connectionError by viewModel.connectionError.collectAsStateWithLifecycle()
     val urlError by viewModel.urlError.collectAsStateWithLifecycle()
+    val keyStorageError by viewModel.keyStorageError.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.checkConnection()
@@ -112,6 +113,8 @@ fun ConnectionSettingsScreen(
                 value = apiKey,
                 onValueChange = { viewModel.updateApiKey(it) },
                 label = { Text("API Key") },
+                isError = keyStorageError != null,
+                supportingText = keyStorageError?.let { err -> { Text(err) } },
                 modifier = Modifier.fillMaxWidth(),
             )
 

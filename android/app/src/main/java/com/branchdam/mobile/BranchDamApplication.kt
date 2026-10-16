@@ -61,9 +61,7 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
 
     private fun initCoreEngine(dbPath: String) {
         val config = readSecureEngineConfig(this)
-        val cleartextHosts = if (BuildConfig.DEBUG) {
-            UrlValidator.DEV_CLEARTEXT_HOSTS.joinToString(",")
-        } else ""
+        val cleartextHosts = UrlValidator.cleartextHostsCsv(BuildConfig.DEBUG)
         EngineHolder.initialize(
             dbPath = dbPath,
             baseURL = config.serverUrl,
@@ -88,10 +86,11 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
 
         /**
          * Reads the engine configuration from the EncryptedSharedPreferences
-         * produced by [EncryptedPrefs]. Falls back to plain
-         * SharedPreferences if Keystore initialization fails (the
-         * EncryptedPrefs helper logs and returns null in that case) so
-         * the app can still start on a broken device. The default
+         * produced by [EncryptedPrefs]. If Keystore initialization fails
+         * (the EncryptedPrefs helper logs and returns null in that case)
+         * the server URL and agent ID come from plain SharedPreferences
+         * so the app can still start, but the API key is empty: it is
+         * only ever read from, and written to, encrypted storage. The default
          * server URL is the Android emulator's loopback (10.0.2.2 maps
          * to the host machine's localhost). The default agent ID is
          * "pixel-fold-" + Build.MODEL.
@@ -104,7 +103,7 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
         fun readSecureEngineConfig(context: Context): EngineConfig {
             val encrypted = EncryptedPrefs.get(context)
             if (encrypted == null) {
-                android.util.Log.w("BranchDamApplication", "EncryptedPrefs unavailable — falling back to plain SharedPreferences (API key authentication unavailable)")
+                android.util.Log.w("BranchDamApplication", "EncryptedPrefs unavailable: no API key (it is never stored unencrypted)")
             }
             val nonSecret = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

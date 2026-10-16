@@ -45,6 +45,7 @@ func New(cfg Config) *Client {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 			},
+			CheckRedirect: refuseTLSDowngrade,
 		}
 	}
 	uploadClient := cfg.UploadClient
@@ -56,6 +57,7 @@ func New(cfg Config) *Client {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 			},
+			CheckRedirect: refuseTLSDowngrade,
 		}
 	}
 	return &Client{
@@ -66,6 +68,27 @@ func New(cfg Config) *Client {
 		httpClient:    httpClient,
 		uploadClient:  uploadClient,
 	}
+}
+
+// maxRedirects matches net/http's default redirect limit.
+const maxRedirects = 10
+
+// refuseTLSDowngrade is the default clients' CheckRedirect. net/http
+// copies custom headers such as X-API-Key onto a same-host redirect, so a
+// redirect from https to http would send the API key in cleartext; it is
+// refused instead, along with redirect chains longer than net/http's
+// default limit.
+func refuseTLSDowngrade(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+	for _, prev := range via {
+		if prev.URL.Scheme == "https" && req.URL.Scheme != "https" {
+			return fmt.Errorf("refusing redirect from %s to %s: it would send the API key without TLS",
+				prev.URL.Redacted(), req.URL.Redacted())
+		}
+	}
+	return nil
 }
 
 func (c *Client) AgentID() string {

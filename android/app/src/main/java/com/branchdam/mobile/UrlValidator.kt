@@ -3,8 +3,11 @@ package com.branchdam.mobile
 import java.net.URI
 
 /**
- * URL validation for server addresses. Debug builds allow cleartext
- * HTTP to emulator/LAN hosts; production requires HTTPS.
+ * URL validation for server addresses. Release builds require HTTPS for
+ * every host, LAN addresses included. Debug builds also allow cleartext
+ * HTTP to exactly the [DEV_CLEARTEXT_HOSTS]; the debug network security
+ * config (src/debug/res/xml/network_security_config.xml) lists the same
+ * hosts, and NetworkSecurityConfigTest keeps the two in step.
  */
 object UrlValidator {
 
