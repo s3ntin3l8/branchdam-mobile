@@ -12,7 +12,11 @@ import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.lineage.PairDetector
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.observer.MediaScanner
+import com.branchdam.mobile.observer.UploadStaging
 import com.branchdam.mobile.service.SyncScheduler
+import com.branchdam.mobile.triage.MediaDeleteCoordinator
+import com.branchdam.mobile.triage.MediaStoreDeleter
+import com.branchdam.mobile.triage.PendingDeleteConsent
 import com.branchdam.mobile.ui.settings.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -152,6 +156,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
+
+    private val deleteCoordinator = MediaDeleteCoordinator(viewModelScope) { ioDispatcher }
 
     private val _selectedItemIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedItemIds: StateFlow<Set<Long>> = _selectedItemIds.asStateFlow()
@@ -323,20 +329,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val primary = item.primaryMediaItem
                 val companion = item.companionMediaItem
 
-                val primaryId = EngineHolder.enqueueMedia(
-                    localPath = primary.filePath,
-                    filename = primary.displayName,
-                    capturedAtUnix = primary.dateTakenUnix,
-                    localId = primary.contentUri
-                )
+                val primaryId = UploadStaging.enqueue(context, primary)
                 var companionId = 0L
                 if (companion != null) {
-                    companionId = EngineHolder.enqueueMedia(
-                        localPath = companion.filePath,
-                        filename = companion.displayName,
-                        capturedAtUnix = companion.dateTakenUnix,
-                        localId = companion.contentUri
-                    )
+                    companionId = UploadStaging.enqueue(context, companion)
                     if (primaryId > 0L && companionId > 0L) {
                         EngineHolder.enqueueLineageEvent(
                             parentLocalID = companion.contentUri,
@@ -379,20 +375,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         val companion = galleryItem?.companionMediaItem
 
         viewModelScope.launch(ioDispatcher) {
-            val primaryId = EngineHolder.enqueueMedia(
-                localPath = primary.filePath,
-                filename = primary.displayName,
-                capturedAtUnix = primary.dateTakenUnix,
-                localId = primary.contentUri
-            )
+            val primaryId = UploadStaging.enqueue(context, primary)
             var companionId = 0L
             if (companion != null) {
-                companionId = EngineHolder.enqueueMedia(
-                    localPath = companion.filePath,
-                    filename = companion.displayName,
-                    capturedAtUnix = companion.dateTakenUnix,
-                    localId = companion.contentUri
-                )
+                companionId = UploadStaging.enqueue(context, companion)
                 if (primaryId > 0L && companionId > 0L) {
                     EngineHolder.enqueueLineageEvent(
                         parentLocalID = companion.contentUri,
@@ -439,53 +425,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         _selectedSortDirection.value = direction
     }
 
+    /**
+     * System delete confirmation the gallery screens must launch. MediaStore
+     * refuses to delete camera-roll items this app did not create without
+     * it on API 29+ (see [MediaStoreDeleter]).
+     */
+    val pendingDeleteConsent: StateFlow<PendingDeleteConsent?> get() = deleteCoordinator.pendingConsent
+
+    fun onDeleteConsentLaunched(id: Long) = deleteCoordinator.onConsentLaunched(id)
+
+    fun onDeleteConsentResult(approved: Boolean) = deleteCoordinator.onConsentResult(approved)
+
     fun deleteItem(context: Context, item: GalleryItem, onComplete: (Boolean) -> Unit) {
-        viewModelScope.launch(ioDispatcher) {
-            _items.update { list ->
-                list.filter { it.primaryMediaItem.id != item.primaryMediaItem.id }
-            }
-
-            val primaryUri = item.primaryMediaItem.contentUri
-            val companionUri = item.companionMediaItem?.contentUri
-
-            var primarySuccess = false
-            var companionSuccess = false
-            try {
-                val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
-                if (primaryDeleted > 0) {
-                    primarySuccess = true
-                    if (companionUri != null) {
-                        try {
-                            companionSuccess = context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null) > 0
-                        } catch (e: Exception) {
-                            Log.w(TAG, "deleteItem companion contentResolver delete failed", e)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "deleteItem contentResolver delete failed", e)
-            }
-
-            if (primarySuccess) {
-                EngineHolder.enqueueDeleteEvent(primaryUri)
-                if (companionUri != null && companionSuccess) {
-                    EngineHolder.enqueueDeleteEvent(companionUri)
-                }
-                try {
-                    SyncScheduler.triggerImmediateSync(context)
-                } catch (e: Exception) {
-                    Log.w(TAG, "triggerImmediateSync failed", e)
-                }
-            } else {
-                _items.update { list ->
-                    if (list.none { it.primaryMediaItem.id == item.primaryMediaItem.id }) list + item else list
-                }
-            }
-
-            withContext(Dispatchers.Main) {
-                onComplete(primarySuccess)
-            }
-        }
+        deleteGalleryItems(context, listOf(item)) { deleted -> onComplete(deleted.isNotEmpty()) }
     }
 
     fun deleteSelectedItems(context: Context, onComplete: (Int) -> Unit) {
@@ -496,66 +448,63 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             onComplete(0)
             return
         }
+        deleteGalleryItems(context, itemsToDelete) { deleted ->
+            clearSelection()
+            onComplete(deleted.size)
+        }
+    }
 
-        viewModelScope.launch(ioDispatcher) {
-            _items.update { list ->
-                list.filter { !selectedIds.contains(it.primaryMediaItem.id) }
+    /**
+     * Removes [items] from the list optimistically, asks MediaStore to
+     * delete them (pausing for the user's confirmation on API 29+), then
+     * emits delete events for what was actually deleted and restores the
+     * rest. [onFinished] runs on the main dispatcher with the items whose
+     * primary media was deleted.
+     */
+    private fun deleteGalleryItems(
+        context: Context,
+        items: List<GalleryItem>,
+        onFinished: (List<GalleryItem>) -> Unit,
+    ) {
+        val primaryIds = items.map { it.primaryMediaItem.id }.toSet()
+        _items.update { list -> list.filter { it.primaryMediaItem.id !in primaryIds } }
+
+        // Primary first so the API 28/29 sequential path attempts it
+        // before its RAW companion.
+        val uris = items.flatMap { item ->
+            listOfNotNull(item.primaryMediaItem.contentUri, item.companionMediaItem?.contentUri)
+        }
+
+        val accepted = deleteCoordinator.delete(deleterFactory(context), uris) { done ->
+            for (uri in uris) {
+                if (uri in done.deleted) EngineHolder.enqueueDeleteEvent(uri)
             }
-
-            var deletedCount = 0
-            val failedItems = mutableListOf<GalleryItem>()
-
-            for (item in itemsToDelete) {
-                val primaryUri = item.primaryMediaItem.contentUri
-                val companionUri = item.companionMediaItem?.contentUri
-
-                var primarySuccess = false
-                var companionSuccess = false
-                try {
-                    val primaryDeleted = context.contentResolver.delete(android.net.Uri.parse(primaryUri), null, null)
-                    if (primaryDeleted > 0) {
-                        primarySuccess = true
-                        if (companionUri != null) {
-                            try {
-                                companionSuccess = context.contentResolver.delete(android.net.Uri.parse(companionUri), null, null) > 0
-                            } catch (e: Exception) {
-                                Log.w(TAG, "deleteSelectedItems companion contentResolver delete failed", e)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "deleteSelectedItems contentResolver delete failed", e)
-                }
-
-                if (primarySuccess) {
-                    EngineHolder.enqueueDeleteEvent(primaryUri)
-                    if (companionUri != null && companionSuccess) {
-                        EngineHolder.enqueueDeleteEvent(companionUri)
-                    }
-                    deletedCount++
-                } else {
-                    failedItems.add(item)
-                }
-            }
-
+            val deletedItems = items.filter { it.primaryMediaItem.contentUri in done.deleted }
+            val failedItems = items.filter { it.primaryMediaItem.contentUri !in done.deleted }
             if (failedItems.isNotEmpty()) {
-                _items.update { list ->
-                    list + failedItems.filter { failed -> list.none { it.primaryMediaItem.id == failed.primaryMediaItem.id } }
-                }
+                restoreItems(failedItems)
             }
-
-            if (deletedCount > 0) {
+            if (done.deleted.isNotEmpty()) {
                 try {
                     SyncScheduler.triggerImmediateSync(context)
                 } catch (e: Exception) {
                     Log.w(TAG, "triggerImmediateSync failed", e)
                 }
             }
-
             withContext(Dispatchers.Main) {
-                clearSelection()
-                onComplete(deletedCount)
+                onFinished(deletedItems)
             }
+        }
+        if (!accepted) {
+            Log.w(TAG, "delete ignored: another delete is still waiting for confirmation")
+            restoreItems(items)
+            onFinished(emptyList())
+        }
+    }
+
+    private fun restoreItems(toRestore: List<GalleryItem>) {
+        _items.update { list ->
+            list + toRestore.filter { restored -> list.none { it.primaryMediaItem.id == restored.primaryMediaItem.id } }
         }
     }
 
@@ -572,5 +521,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         @androidx.annotation.VisibleForTesting
         internal var defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default
+
+        @androidx.annotation.VisibleForTesting
+        internal var deleterFactory: (Context) -> MediaStoreDeleter = { MediaStoreDeleter.forContext(it) }
     }
 }

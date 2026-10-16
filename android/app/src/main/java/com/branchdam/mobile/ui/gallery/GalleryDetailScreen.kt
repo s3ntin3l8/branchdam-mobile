@@ -55,6 +55,15 @@ fun GalleryDetailScreen(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val galleryItem = remember(items, mediaId) { viewModel.getItemById(mediaId) }
+    val pendingDeleteConsent by viewModel.pendingDeleteConsent.collectAsStateWithLifecycle()
+
+    // API 29+: MediaStore deletes camera-roll items this app did not create
+    // only after the user confirms in a system dialog.
+    com.branchdam.mobile.ui.components.MediaDeleteConsentEffect(
+        pending = pendingDeleteConsent,
+        onLaunched = viewModel::onDeleteConsentLaunched,
+        onResult = viewModel::onDeleteConsentResult,
+    )
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }

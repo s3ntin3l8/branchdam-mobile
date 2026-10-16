@@ -173,12 +173,8 @@ class MediaStoreObserver(
             val autoImport = com.branchdam.mobile.service.ImportConfirmationNotifier.getAutoImportEnabled(context)
             if (autoImport) {
                 for (item in newItems) {
-                    EngineHolder.enqueueMedia(
-                        localPath = item.filePath,
-                        filename = item.displayName,
-                        capturedAtUnix = item.dateTakenUnix,
-                        localId = item.contentUri
-                    )
+                    // Reads the original (unredacted) bytes on API 29+.
+                    UploadStaging.enqueue(context, item)
                 }
                 SyncScheduler.triggerImmediateSync(context)
             } else {

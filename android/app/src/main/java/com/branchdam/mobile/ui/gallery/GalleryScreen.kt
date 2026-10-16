@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
+import com.branchdam.mobile.MediaAccessLevel
 import com.branchdam.mobile.ui.components.*
 import com.branchdam.mobile.ui.theme.*
 import kotlinx.coroutines.launch
@@ -56,12 +58,24 @@ fun GalleryScreen(
     viewModel: GalleryViewModel = viewModel(),
     onNavigateToDetail: (Long) -> Unit = {},
     onNavigateToSafeSpace: () -> Unit = {},
+    mediaAccess: MediaAccessLevel = MediaAccessLevel.FULL,
+    mediaAccessGeneration: Int = 0,
+    onSelectMorePhotos: () -> Unit = {},
 ) {
     val rawItems by viewModel.items.collectAsStateWithLifecycle()
     val displayedItems by viewModel.displayedItems.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
+    val pendingDeleteConsent by viewModel.pendingDeleteConsent.collectAsStateWithLifecycle()
+
+    // API 29+: MediaStore deletes camera-roll items this app did not create
+    // only after the user confirms in a system dialog.
+    com.branchdam.mobile.ui.components.MediaDeleteConsentEffect(
+        pending = pendingDeleteConsent,
+        onLaunched = viewModel::onDeleteConsentLaunched,
+        onResult = viewModel::onDeleteConsentResult,
+    )
 
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
@@ -77,6 +91,17 @@ fun GalleryScreen(
     val scope = rememberCoroutineScope()
 
     val isSelectionMode = selectedItemIds.isNotEmpty()
+
+    // A permission dialog returned (e.g. the user picked a different set
+    // of photos): reload once. Saved across navigation so coming back to
+    // the gallery does not reload for an already-handled change.
+    var handledAccessGeneration by rememberSaveable { mutableIntStateOf(mediaAccessGeneration) }
+    LaunchedEffect(mediaAccessGeneration) {
+        if (mediaAccessGeneration != handledAccessGeneration) {
+            handledAccessGeneration = mediaAccessGeneration
+            viewModel.loadItems()
+        }
+    }
 
     LaunchedEffect(loadError) {
         val currentError = loadError
@@ -416,6 +441,17 @@ fun GalleryScreen(
                     }
                 }
             }
+
+            // API 34+ "Select photos": only the picked items are visible to
+            // the app (and backed up), so keep that in view.
+            if (mediaAccess == MediaAccessLevel.LIMITED) {
+                LimitedMediaAccessBanner(
+                    onSelectMorePhotos = onSelectMorePhotos,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(12.dp),
+                )
+            }
         }
     }
 }
@@ -649,5 +685,44 @@ private fun EmptyGalleryState() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
+    }
+}
+
+/**
+ * Shown when the user granted access to selected photos only (API 34+
+ * "Select photos"). Items outside the selection are invisible to the app
+ * and are never backed up, so say so and offer the system picker again.
+ */
+@Composable
+private fun LimitedMediaAccessBanner(
+    onSelectMorePhotos: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        shadowElevation = 3.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.PhotoLibrary,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                text = "branchDAM can only see the photos you selected. Others are not backed up.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onSelectMorePhotos) {
+                Text("Select more")
+            }
+        }
     }
 }

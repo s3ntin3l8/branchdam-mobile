@@ -1,30 +1,22 @@
 package com.branchdam.mobile
 
-import android.content.Context
+import com.branchdam.mobile.triage.ReclaimCandidate
+import com.branchdam.mobile.triage.ReclaimPlan
 import com.branchdam.mobile.triage.SafeSpaceManager
 import com.branchdam.mobile.triage.SafeSpaceResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.mockito.kotlin.mock
 
 /**
- * Tests for [SafeSpaceManager.reclaimSafeSpace] using the test seams
- * (engineReclaim, deleteLocal) to avoid requiring a real engine or
- * ContentResolver. Production callers pass the defaults; tests pass
- * lambdas that record what was called.
+ * Tests for the two-phase reclaim in [SafeSpaceManager]: the engine's
+ * reclaim gate ([SafeSpaceManager.planReclaim]) decides what may be
+ * deleted, the MediaStore delete runs (and may wait for the user), and
+ * [SafeSpaceManager.completeReclaim] rolls the offloaded flag back for
+ * anything not actually deleted. The engine and flag calls are injected
+ * seams, so no engine or ContentResolver is needed.
  */
 class SafeSpaceManagerTest {
-
-    /**
-     * The context is only used by the default `deleteLocal` (which
-     * calls `contentResolver.delete`). Since every test in this file
-     * overrides `deleteLocal`, the context is never dereferenced.
-     * We pass a mock to satisfy the non-null parameter type without
-     * actually constructing a Context (which would require Android
-     * framework classes).
-     */
-    private val stubContext: Context = mock()
 
     @Test
     fun testSafeSpaceResultModel() {
@@ -42,148 +34,109 @@ class SafeSpaceManagerTest {
     }
 
     @Test
-    fun testReclaimEligibleTriggersDelete() {
-        // Engine says "eligible", delete succeeds → reclaimedCount=1.
-        val reclaimed = mutableListOf<String>()
-        val result = SafeSpaceManager.reclaimSafeSpace(
-            context = stubContext,
-            candidateUris = listOf("content://media/external/images/1"),
-            statusChecker = { _ -> true to 1_000_000L },
-            engineReclaim = { true },
-            deleteLocal = { _, uri ->
-                reclaimed.add(uri)
+    fun testPlanKeepsOnlyWhatTheEngineApproves() {
+        val gated = mutableListOf<String>()
+        val plan = SafeSpaceManager.planReclaim(
+            candidates = listOf(
+                ReclaimCandidate("u1", 1_000_000L),
+                ReclaimCandidate("u2", 2_000_000L),
+                ReclaimCandidate("u3", 3_000_000L),
+            ),
+            engineReclaim = { uri ->
+                gated += uri
+                uri != "u2"
+            },
+        )
+
+        assertEquals("every candidate goes through the gate", listOf("u1", "u2", "u3"), gated)
+        assertEquals(3, plan.totalChecked)
+        assertEquals(listOf("u1", "u3"), plan.approved.map { it.uri })
+    }
+
+    @Test
+    fun testCompleteCountsDeletedItems() {
+        val rolledBack = mutableListOf<Pair<String, Boolean>>()
+        val plan = ReclaimPlan(
+            totalChecked = 1,
+            approved = listOf(ReclaimCandidate("content://media/external/images/1", 1_000_000L)),
+        )
+
+        val result = SafeSpaceManager.completeReclaim(
+            plan,
+            deletedUris = setOf("content://media/external/images/1"),
+            setOffloaded = { uri, flag ->
+                rolledBack += uri to flag
                 true
             },
         )
 
-        assertEquals(1, result.totalChecked)
-        assertEquals(1, result.eligibleCount)
+        assertEquals(SafeSpaceResult(1, 1, 1, 1_000_000L), result)
+        assertTrue("a deleted item keeps its offloaded flag", rolledBack.isEmpty())
+    }
+
+    @Test
+    fun testCancelledConsentRollsBackEveryApprovedItem() {
+        // The engine set is_offloaded=1 for both, then the user cancelled
+        // the system delete dialog: nothing was deleted, so both flags
+        // must be rolled back or the assets stay permanently marked
+        // offloaded while still on the device (PR #54 leak).
+        val rolledBack = mutableListOf<Pair<String, Boolean>>()
+        val plan = ReclaimPlan(
+            totalChecked = 2,
+            approved = listOf(ReclaimCandidate("u1", 10L), ReclaimCandidate("u2", 20L)),
+        )
+
+        val result = SafeSpaceManager.completeReclaim(
+            plan,
+            deletedUris = emptySet(),
+            setOffloaded = { uri, flag ->
+                rolledBack += uri to flag
+                true
+            },
+        )
+
+        assertEquals(listOf("u1" to false, "u2" to false), rolledBack)
+        assertEquals(0, result.reclaimedCount)
+        assertEquals(0L, result.freedBytesEstimate)
+        assertEquals(2, result.eligibleCount)
+    }
+
+    @Test
+    fun testMixedBatch() {
+        // u1 deleted, u2 approved but its delete failed, u3 refused by the
+        // engine gate (never offered for deletion, never rolled back).
+        val rolledBack = mutableListOf<Pair<String, Boolean>>()
+        val plan = SafeSpaceManager.planReclaim(
+            candidates = listOf(
+                ReclaimCandidate("u1", 1_000_000L),
+                ReclaimCandidate("u2", 2_000_000L),
+                ReclaimCandidate("u3", 3_000_000L),
+            ),
+            engineReclaim = { uri -> uri != "u3" },
+        )
+
+        val result = SafeSpaceManager.completeReclaim(
+            plan,
+            deletedUris = setOf("u1"),
+            setOffloaded = { uri, flag ->
+                rolledBack += uri to flag
+                true
+            },
+        )
+
+        assertEquals(3, result.totalChecked)
+        assertEquals(2, result.eligibleCount)
         assertEquals(1, result.reclaimedCount)
         assertEquals(1_000_000L, result.freedBytesEstimate)
-        assertEquals(listOf("content://media/external/images/1"), reclaimed)
-    }
-
-    @Test
-    fun testReclaimIneligibleDoesNotDelete() {
-        // Engine says "not eligible" → delete is NOT called, reclaimedCount=0.
-        var deleteCalled = false
-        val result = SafeSpaceManager.reclaimSafeSpace(
-            context = stubContext,
-            candidateUris = listOf("content://media/external/images/2"),
-            statusChecker = { _ -> true to 1_000_000L },
-            engineReclaim = { false },
-            deleteLocal = { _, _ ->
-                deleteCalled = true
-                true
-            },
-        )
-
-        assertEquals(1, result.totalChecked)
-        assertEquals(1, result.eligibleCount) // verified, but engine said no
-        assertEquals(0, result.reclaimedCount)
-        assertEquals(0L, result.freedBytesEstimate)
-        assertTrue("delete must not be called when engine says ineligible", !deleteCalled)
-    }
-
-    @Test
-    fun testReclaimUnverifiedSkipsEntirely() {
-        // statusChecker says not verified → loop continues, engine never called.
-        var engineCalled = false
-        var deleteCalled = false
-        val result = SafeSpaceManager.reclaimSafeSpace(
-            context = stubContext,
-            candidateUris = listOf("content://media/external/images/3"),
-            statusChecker = { _ -> false to 0L },
-            engineReclaim = {
-                engineCalled = true
-                true
-            },
-            deleteLocal = { _, _ ->
-                deleteCalled = true
-                true
-            },
-        )
-
-        assertEquals(1, result.totalChecked)
-        assertEquals(0, result.eligibleCount)
-        assertEquals(0, result.reclaimedCount)
-        assertTrue("engine must not be called for unverified items", !engineCalled)
-        assertTrue("delete must not be called for unverified items", !deleteCalled)
-    }
-
-    @Test
-    fun testReclaimDeleteFailureRollsBack() {
-        // Engine says eligible, delete fails → reclaimedCount=0,
-        // AND the rollback seam must be called with (uri, false)
-        // so the asset is not permanently marked offloaded.
-        val rolledBack = mutableListOf<Pair<String, Boolean>>()
-        val result = SafeSpaceManager.reclaimSafeSpace(
-            context = stubContext,
-            candidateUris = listOf("content://media/external/images/4"),
-            statusChecker = { _ -> true to 500_000L },
-            engineReclaim = { true },
-            deleteLocal = { _, _ -> false }, // delete fails
-            setOffloaded = { uri, flag ->
-                rolledBack.add(uri to flag)
-                true
-            },
-        )
-
-        // B.2.7 invariant: when delete fails after the engine sets
-        // is_offloaded=1, the shell MUST call setMediaOffloaded(uri, false)
-        // to prevent the asset from being permanently unreachable.
-        // If this assertion fails, the rollback path was removed
-        // and the asset is permanently marked offloaded (PR #54 leak).
-        assertEquals(1, rolledBack.size)
-        assertEquals("content://media/external/images/4" to false, rolledBack[0])
-
-        // The result still shows 0 reclaimed (delete failed).
-        assertEquals(1, result.totalChecked)
-        assertEquals(1, result.eligibleCount)
-        assertEquals(0, result.reclaimedCount)
-        assertEquals(0L, result.freedBytesEstimate)
-    }
-
-    @Test
-    fun testReclaimMixedBatch() {
-        // 4 items: 2 verified, 1 ineligible, 1 delete-fails.
-        val deleted = mutableListOf<String>()
-        val rolledBack = mutableListOf<Pair<String, Boolean>>()
-        val result = SafeSpaceManager.reclaimSafeSpace(
-            context = stubContext,
-            candidateUris = listOf("u1", "u2", "u3", "u4"),
-            statusChecker = { uri ->
-                when (uri) {
-                    "u1" -> true to 1_000_000L
-                    "u2" -> true to 2_000_000L
-                    "u3" -> true to 3_000_000L
-                    "u4" -> false to 0L
-                    else -> false to 0L
-                }
-            },
-            engineReclaim = { uri -> uri != "u3" }, // u3 ineligible
-            deleteLocal = { _, uri ->
-                deleted.add(uri)
-                uri != "u2" // u2 delete fails
-            },
-            setOffloaded = { uri, flag ->
-                rolledBack.add(uri to flag)
-                true
-            },
-        )
-
-        assertEquals(4, result.totalChecked)
-        assertEquals(3, result.eligibleCount) // u1, u2, u3 verified
-        assertEquals(1, result.reclaimedCount) // u1 succeeded
-        assertEquals(1_000_000L, result.freedBytesEstimate)
-        // u3 is ineligible (engineReclaim returns false), so deleteLocal
-        // is not called for it. u1 and u2 are attempted; u2's delete
-        // fails but the attempt still records the URI.
-        assertEquals(setOf("u1", "u2"), deleted.toSet())
-        // B.2.7 invariant: u2's delete failed, so the rollback
-        // seam must be called with (u2, false) to prevent the
-        // asset from being permanently marked offloaded. u1 and u3
-        // do not trigger rollback (u1 succeeded, u3 was ineligible).
         assertEquals(listOf("u2" to false), rolledBack)
+    }
+
+    @Test
+    fun testNothingApprovedMeansNothingToDelete() {
+        val plan = SafeSpaceManager.planReclaim(
+            candidates = listOf(ReclaimCandidate("u1", 1L)),
+            engineReclaim = { false },
+        )
+        assertTrue(plan.approved.isEmpty())
     }
 }

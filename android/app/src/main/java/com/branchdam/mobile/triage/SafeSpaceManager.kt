@@ -1,7 +1,5 @@
 package com.branchdam.mobile.triage
 
-import android.content.Context
-import android.net.Uri
 import com.branchdam.mobile.EngineHolder
 
 data class SafeSpaceResult(
@@ -11,80 +9,76 @@ data class SafeSpaceResult(
     val freedBytesEstimate: Long
 )
 
+/** A local media item the Safe Space screen wants to reclaim. */
+data class ReclaimCandidate(val uri: String, val sizeBytes: Long)
+
+/**
+ * The result of the engine's reclaim gate: [approved] items already have
+ * `is_offloaded = 1` set and are waiting for the MediaStore delete (which
+ * may need the user's confirmation). [completeReclaim] must run once the
+ * delete has finished, so the flag is rolled back for anything that was
+ * not actually deleted.
+ */
+data class ReclaimPlan(
+    val totalChecked: Int,
+    val approved: List<ReclaimCandidate>,
+)
+
 object SafeSpaceManager {
 
     /**
-     * Executes safe space reclaim for verified media items:
-     * 1. Confirms node is archived and verified on Tier 3 NAS storage.
-     * 2. Sets is_offloaded = 1 in SQLite queue.db to suppress deletion sync.
-     * 3. Deletes local full-res file via MediaStore.
+     * Phase 1 of a reclaim: run the engine-owned atomic reclaim gate
+     * (B.2.7) on each candidate. The engine re-queries the server for the
+     * node's current verified + Tier-3 + live state and sets the local
+     * offloaded flag only when the node is safe to reclaim. Only the
+     * candidates it approves may be deleted locally.
      *
-     * @param engineReclaim optional test seam: returns true if the engine
-     *   confirms the asset is safely reclaimable. Defaults to
+     * @param engineReclaim test seam; defaults to
      *   [EngineHolder.reclaimSafeSpace].
-     * @param deleteLocal optional test seam: deletes the local MediaStore
-     *   row for the given URI. Defaults to `contentResolver.delete`.
-     * @param setOffloaded optional test seam: sets the engine's offloaded
-     *   flag. Defaults to [EngineHolder.setMediaOffloaded]. Called on
-     *   the rollback path when deleteLocal fails, to prevent the asset
-     *   from being permanently marked offloaded.
      */
-    fun reclaimSafeSpace(
-        context: Context,
-        candidateUris: List<String>,
-        statusChecker: (uri: String) -> Pair<Boolean, Long>,
+    fun planReclaim(
+        candidates: List<ReclaimCandidate>,
         engineReclaim: (uri: String) -> Boolean = { EngineHolder.reclaimSafeSpace(it) },
-        deleteLocal: (context: Context, uri: String) -> Boolean = { ctx, u ->
-            try {
-                ctx.contentResolver.delete(Uri.parse(u), null, null) > 0
-            } catch (_: Exception) {
-                false
-            }
-        },
+    ): ReclaimPlan {
+        val approved = candidates
+            .distinctBy { it.uri }
+            .filter { engineReclaim(it.uri) }
+        return ReclaimPlan(totalChecked = candidates.size, approved = approved)
+    }
+
+    /**
+     * Phase 2 of a reclaim, after the MediaStore delete (and the user's
+     * confirmation, on API 29+) has finished. Every approved item that
+     * was not deleted -- the user cancelled, or the delete failed -- gets
+     * its offloaded flag rolled back: the file is still on the device, and
+     * a stale flag would make the engine treat it as intentionally
+     * offloaded forever (PR #54 leak).
+     *
+     * @param setOffloaded test seam; defaults to
+     *   [EngineHolder.setMediaOffloaded].
+     */
+    fun completeReclaim(
+        plan: ReclaimPlan,
+        deletedUris: Set<String>,
         setOffloaded: (uri: String, isOffloaded: Boolean) -> Boolean = { uri, flag ->
             EngineHolder.setMediaOffloaded(uri, flag)
         },
     ): SafeSpaceResult {
-        var eligibleCount = 0
         var reclaimedCount = 0
         var freedBytes = 0L
-
-        for (uriString in candidateUris) {
-            val (isVerified, sizeBytes) = statusChecker(uriString)
-            if (!isVerified) {
-                continue
-            }
-
-            eligibleCount++
-
-            // 1. Engine-owned atomic reclaim (B.2.7): the engine re-queries
-            // the server for current verified + tier state, sets the
-            // local flag, and only returns Eligible=true on success.
-            // The shell deletes the local copy only after the engine
-            // confirms the asset is safely archived.
-            val eligible = engineReclaim(uriString)
-            if (eligible) {
-                // 2. Delete the local copy AFTER the engine confirms.
-                val deleted = deleteLocal(context, uriString)
-                if (deleted) {
-                    reclaimedCount++
-                    freedBytes += sizeBytes
-                } else {
-                    // Rollback: if delete fails the file is still on disk
-                    // but the engine already set is_offloaded=1. Without
-                    // rollback the asset is permanently unreachable — the
-                    // engine treats it as intentionally offloaded and
-                    // suppresses any future reclaim attempts.
-                    setOffloaded(uriString, false)
-                }
+        for (candidate in plan.approved) {
+            if (candidate.uri in deletedUris) {
+                reclaimedCount++
+                freedBytes += candidate.sizeBytes
+            } else {
+                setOffloaded(candidate.uri, false)
             }
         }
-
         return SafeSpaceResult(
-            totalChecked = candidateUris.size,
-            eligibleCount = eligibleCount,
+            totalChecked = plan.totalChecked,
+            eligibleCount = plan.approved.size,
             reclaimedCount = reclaimedCount,
-            freedBytesEstimate = freedBytes
+            freedBytesEstimate = freedBytes,
         )
     }
 }

@@ -129,6 +129,24 @@ object ImportConfirmationNotifier {
         notificationManager?.notify(NOTIFICATION_ID, builder.build())
     }
 
+    /**
+     * Enqueues a confirmed item, reading its original bytes on API 29+
+     * (see [com.branchdam.mobile.observer.UploadStaging]). Without a
+     * Context (unit tests) the DATA path is used as before.
+     */
+    private fun enqueueItem(context: Context?, item: MediaItem) {
+        if (context != null) {
+            com.branchdam.mobile.observer.UploadStaging.enqueue(context, item)
+        } else {
+            EngineHolder.enqueueMedia(
+                localPath = item.filePath,
+                filename = item.displayName,
+                capturedAtUnix = item.dateTakenUnix,
+                localId = item.contentUri
+            )
+        }
+    }
+
     fun handleAction(context: Context?, action: String?, itemIds: Array<String> = emptyArray()) {
         val notificationManager = context?.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.cancel(NOTIFICATION_ID)
@@ -140,12 +158,7 @@ object ImportConfirmationNotifier {
                 for (id in targetIds) {
                     val item = pendingItemsMap.remove(id)
                     if (item != null && !isItemSuppressed(id)) {
-                        EngineHolder.enqueueMedia(
-                            localPath = item.filePath,
-                            filename = item.displayName,
-                            capturedAtUnix = item.dateTakenUnix,
-                            localId = item.contentUri
-                        )
+                        enqueueItem(context, item)
                     }
                 }
                 if (context != null) {
@@ -156,12 +169,7 @@ object ImportConfirmationNotifier {
                 for (id in targetIds) {
                     val item = pendingItemsMap.remove(id)
                     if (item != null && !isItemSuppressed(id)) {
-                        EngineHolder.enqueueMedia(
-                            localPath = item.filePath,
-                            filename = item.displayName,
-                            capturedAtUnix = item.dateTakenUnix,
-                            localId = item.contentUri
-                        )
+                        enqueueItem(context, item)
                     }
                 }
                 if (context != null) {

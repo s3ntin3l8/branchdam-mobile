@@ -16,6 +16,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.branchdam.mobile.ui.components.MediaDeleteConsentEffect
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,6 +27,15 @@ fun SafeSpaceScreen(
     viewModel: SafeSpaceViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingDeleteConsent by viewModel.pendingDeleteConsent.collectAsStateWithLifecycle()
+
+    // API 29+: MediaStore only deletes camera-roll items this app did not
+    // create after the user confirms in a system dialog.
+    MediaDeleteConsentEffect(
+        pending = pendingDeleteConsent,
+        onLaunched = viewModel::onDeleteConsentLaunched,
+        onResult = viewModel::onDeleteConsentResult,
+    )
 
     val reclaimableMb = uiState.reclaimableBytes / (1024L * 1024L)
 
@@ -81,9 +91,36 @@ fun SafeSpaceScreen(
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "${uiState.verifiedCount} verified items ready for reclaim",
+                            text = if (uiState.isLoading) {
+                                "Checking archive status..."
+                            } else {
+                                "${uiState.verifiedCount} verified items ready for reclaim"
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (!uiState.isLoading && uiState.notYetVerifiedCount > 0) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "${uiState.notYetVerifiedCount} backed-up items are not yet verified on the archive and stay on this device",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                uiState.loadError?.let { error ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = error,
+                            modifier = Modifier.padding(14.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                         )
                     }
                 }
@@ -133,7 +170,7 @@ fun SafeSpaceScreen(
             // Bottom Fixed Action Button
             Button(
                 onClick = { viewModel.reclaim() },
-                enabled = uiState.verifiedCount > 0 && !uiState.isReclaiming,
+                enabled = uiState.verifiedCount > 0 && !uiState.isReclaiming && !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),

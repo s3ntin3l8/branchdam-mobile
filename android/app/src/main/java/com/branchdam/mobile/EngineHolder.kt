@@ -309,6 +309,34 @@ object EngineHolder {
     }
 
     /**
+     * Asks the engine which of [localIDs] are safe to reclaim. The engine
+     * looks up each local ID's node UUID, batches the server's
+     * node-status calls and applies the same reclaim gate as
+     * [reclaimSafeSpace] (verified, Tier-3 master, live). Returns null
+     * when the engine is unavailable or the server could not be asked, so
+     * the caller can tell "nothing eligible" from "couldn't check".
+     */
+    fun checkSafeSpaceCandidates(localIDs: List<String>): List<com.branchdam.mobile.triage.SafeSpaceVerdict>? {
+        if (localIDs.isEmpty()) return emptyList()
+        if (!nativeAvailable.get() || !isInitialized) return null
+        return try {
+            // The binding takes a comma-separated list; chunk it so one
+            // call never carries an unbounded string across JNI.
+            localIDs.chunked(SAFE_SPACE_CHECK_CHUNK).flatMap { chunk ->
+                val json = queryExecutor.submit(Callable {
+                    Branchdam.bindingCheckSafeSpaceCandidates(chunk.joinToString(","))
+                }).get()
+                com.branchdam.mobile.triage.parseSafeSpaceVerdicts(json)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "checkSafeSpaceCandidates failed: $t")
+            null
+        }
+    }
+
+    private const val SAFE_SPACE_CHECK_CHUNK = 200
+
+    /**
      * Streams localPath through the BLAKE3-256 hasher and returns the
      * 64-hex-character digest. Used by the OTG ingest pipeline (T2-7) to
      * verify a staged file's bytes match what the source claimed before
