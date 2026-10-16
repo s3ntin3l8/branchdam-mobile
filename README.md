@@ -2,6 +2,12 @@
 
 Native mobile companion application for [branchDAM](https://github.com/s3ntin3l8/branchdam), engineered for Android (optimized for Google Pixel Fold & flagships) and iOS.
 
+<p align="center">
+  <img src="docs/screenshots/audit-queue.png" alt="Lineage audit queue" width="240">
+  <img src="docs/screenshots/gallery.png" alt="Gallery" width="240">
+  <img src="docs/screenshots/sync-status.png" alt="Sync status" width="240">
+</p>
+
 ---
 
 ## Features
@@ -217,6 +223,14 @@ This runs:
 - `pre-commit run --all-files` (detect-secrets, formatters, YAML/JSON checks)
 - `go vet ./...` across core modules
 - `go test -race -v ./...` with race detector enabled
+
+### Screenshots
+
+The images at the top of this README come from `make screenshots`
+(`scripts/screenshots.sh`). It runs a headless emulator paired with a
+throwaway branchDAM demo instance and uses synthetic media only. See
+[CONTRIBUTING.md](CONTRIBUTING.md#regenerating-screenshots) for what it does
+and what it needs.
 
 ---
 

@@ -96,3 +96,6 @@ docs/superpowers/
 
 # Developer worktrees (per AGENTS.md make wt convention)
 .wt/
+
+# Kotlin compiler daemon state (written by Gradle builds)
+android/.kotlin/
