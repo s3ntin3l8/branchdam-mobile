@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import PhotosUI
 import UIKit
 
 /// E.5: Banner shown when camera-roll access is denied, restricted, or
