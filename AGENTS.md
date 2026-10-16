@@ -8,7 +8,7 @@ this file, natively or via that import. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the contributor workflow.
 
 Mobile companion app for branchDAM. Shared Go core (BLAKE3/FastHash, SQLite
-queue, chunked uploader) with Kotlin (Android, Jetpack Compose) and Swift (iOS,
+queue, streaming uploader) with Kotlin (Android, Jetpack Compose) and Swift (iOS,
 SwiftUI) shells. Handles camera roll ingestion, lineage pairing, and safe
 storage reclaim.
 
@@ -26,15 +26,15 @@ make android         # Assemble Android debug build
 
 | Subsystem | Responsibility |
 |---|---|
-| `core/` | Shared Go engine (BLAKE3/FastHash, offline SQLite `queue.db`, HTTP chunked uploader, REST client) |
+| `core/` | Shared Go engine (BLAKE3/FastHash, offline SQLite `queue.db`, HTTP streaming uploader with a fixed Content-Length, REST client) |
 | `android/` | Native Android application (Kotlin, Jetpack Compose, MediaStore observers, WorkManager, Pixel Fold dual-pane UI) |
 | `ios/` | Native iOS application (Swift, SwiftUI, PhotoKit, `BGProcessingTask` background sync; uploads run in the Go core) |
 
 ## Key Invariants
 
 1. **Offline Queue Persistence (`queue.db`):** All ingest intent, hashes, and events are recorded in local SQLite before network dispatch.
-2. **Cryptographic Checksum Verification:** Full hashes are computed using BLAKE3-256 (64 hex characters) and streamed during chunked upload.
-3. **Safe Storage Reclaim:** Local media files are NEVER deleted for storage reclaim unless `POST /api/v1/agent/node-status` reports `verified: true`.
+2. **Cryptographic Checksum Verification:** Full hashes are computed using BLAKE3-256 (64 hex characters) before upload, sent in `X-Blake3-Hash` with a single streamed body of fixed `Content-Length`, and the server's returned `blake3Hash` must match.
+3. **Safe Storage Reclaim:** Local media files are NEVER deleted for storage reclaim unless `POST /api/v1/agent/node-status` reports the node found, live (`ACTIVE`/`HIDDEN`), on `TIER3_MASTER_ARCHIVE` and `verified: true` (a server-computed hash; `core/engine` `ReclaimTier`). It does not compare the returned `fullHash` yet (#217).
 4. **Lineage Precision:** DNG RAW + Ultra HDR JPEG pairs and Motion Photos emit `EVENT_EDGE_ATTACHED` with `confidence: 1.00`, automatically. Anything below 1.00 (timestamp-proximity pairs, in-phone edits) is never auto-emitted: the core answers `REVIEW_REQUIRED`, the pair waits in the lineage review screen, and the user's confirm or reject is stored in `queue.db` (`lineage_review`). A confirmed edge keeps its original confidence.
 
 ## Rotated API keys: store, then switch, fall back once

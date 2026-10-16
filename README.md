@@ -13,7 +13,7 @@ Native mobile companion application for [branchDAM](https://github.com/s3ntin3l8
 ## Features
 
 - **Automated Capture Ingest:** Background camera roll sync over Wi-Fi when charging via Android WorkManager and iOS BackgroundTasks.
-- **Server-Governed Direct Streaming:** Uploads directly to `POST /api/v1/agent/upload` with streaming chunked HTTP bodies, `X-Camera-Model` headers, and server-owned archive path resolution.
+- **Server-Governed Direct Streaming:** Uploads directly to `POST /api/v1/agent/upload` as one streamed HTTP body with a fixed `Content-Length` (not chunked transfer encoding), `X-Camera-Model` headers, and server-owned archive path resolution.
 - **Dynamic Naming Template Sync:** Handshakes with the server to fetch and respect centralized naming templates (`{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}`).
 - **Lineage Pairing (Confidence 1.00):** Automatic pairing of computational RAW (DNG) + Ultra HDR JPEG assets and Motion Photos (legacy MicroVideo and the current Motion Photo container format). Weaker matches (capture-time proximity, in-phone edits) wait for the user's confirm or reject in the lineage review screen, and the decision is kept on the device.
 - **Safe Space Reclaim:** Reclaims local device storage only after masters are durably archived and BLAKE3-verified on Tier 3 storage.
@@ -198,12 +198,13 @@ behind.
 - **Key rotation (branchDAM S13)**:
   When the server rotates this device's API key, the next handshake carries the new key sealed for the current one (`pendingRotation.sealedApiKey`: AES-256-GCM keyed by HMAC-SHA256 of the current key). The core opens it, has the shell store it (Android: the Keystore-backed `EncryptedSharedPreferences` `api_key` entry, written with `commit()`; iOS: the Keychain through `PairingCredentialStore.saveRotatedAPIKey`), and only then switches to it and adopts it with a second handshake, which revokes the old key on the server. If the shell cannot store it, the app stays on the old key. If the server refuses the new key on its first use, the core goes back to the old key, retries that request, and stores the old key again. `SyncBatch` handshakes when none succeeded in the last 6 hours, so a phone that only syncs in the background still picks a rotation up within the server's 24-hour grace window. A rotation the server cannot deliver (no `BRANCHDAM_SECRET_KEY` on the server) means pairing the device again by QR.
 - **Direct Upload (`POST /api/v1/agent/upload`)**:
-  Streams chunked binary asset data directly with headers:
+  Streams the file as one raw body with a fixed `Content-Length` and these headers:
   - `User-Agent`: Companion identifier (`branchdam-mobile/<agent_id>`).
   - `X-Filename`: Original camera roll file name.
   - `X-Camera-Model`: Hardware camera model string (e.g. `Google Pixel 10 Pro Fold`, `iPhone 16 Pro Max`).
   - `X-Blake3-Hash`: BLAKE3 checksum for integrity and archive verification.
-  - `X-Fast-Hash`: Streaming fast hash (xxHash) for duplicate detection.
+  - `X-Source-Path-Hash`: SHA-256 of the device-side path, for `GET /api/v1/agent/source-status`.
+  - `X-Fast-Hash`: Streaming fast hash (xxHash), sent for older servers; branchDAM's upload route ignores it (dedup runs on `X-Blake3-Hash`).
   - `X-Capture-Timestamp`: Capture time in Unix epoch seconds.
   - `X-API-Key`: Companion authentication credential (single header; `Authorization` is reserved for future short-lived bearer tokens and is not sent today — T2-6).
 - **Lineage & Delete Events (`POST /api/v1/agent/events`)**:
