@@ -382,6 +382,42 @@ func TestRotatedKeyRefusedFallsBackOnce(t *testing.T) {
 	}
 }
 
+// TestRotatedKeyFallbackSurvivesTransientFailure: a 5xx on the retry with
+// the old key is not a refusal. observeAuth returns before touching the
+// restore state for any status other than 2xx or 401, so the old key is
+// still written back once the next request with it is accepted.
+func TestRotatedKeyFallbackSurvivesTransientFailure(t *testing.T) {
+	k1, k2 := randomKey(t), randomKey(t)
+	rs, srv := newRotationServer(t, k1, k2)
+	rs.refuse[k2] = true
+	var stored []string
+	persist := recordingPersister(rs, &stored, nil)
+	c := newRotationClient(srv.URL, k1, func(ctx context.Context, apiKey string) error {
+		err := persist(ctx, apiKey)
+		if apiKey == k2 { // pragma: allowlist secret
+			// The retry on the old key, after k2 is refused, hits a 503.
+			rs.mu.Lock()
+			rs.failNext[k1] = http.StatusServiceUnavailable
+			rs.mu.Unlock()
+		}
+		return err
+	})
+
+	_, _ = c.Handshake(context.Background(), "") // the fallback retry fails with 503
+	if c.currentKey() != k1 {
+		t.Fatal("client is not back on the old key")
+	}
+	if !slices.Equal(stored, []string{k2}) {
+		t.Fatalf("store = %d keys before any accepted request on the old key, want only the rotated key", len(stored))
+	}
+	if err := postSomething(t, c); err != nil {
+		t.Fatalf("request on the old key: %v", err)
+	}
+	if !slices.Equal(stored, []string{k2, k1}) {
+		t.Fatal("a 503 on the fallback retry dropped the write-back of the old key")
+	}
+}
+
 func TestRotatedKeyBothRefusedKeepsBothKeys(t *testing.T) {
 	k1, k2 := randomKey(t), randomKey(t)
 	rs, srv := newRotationServer(t, k1, k2)

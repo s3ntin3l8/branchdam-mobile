@@ -645,10 +645,10 @@ func (e *Engine) SyncBatch(opts SyncOptions) (SyncResult, error) {
 	if err := e.requireOpen(); err != nil {
 		return SyncResult{}, err
 	}
-	e.checkKeyRotation()
 	if !opts.IncludeEvents && !opts.IncludeUploads {
 		return SyncResult{}, newError(CodeInvalidInput, "SyncBatch requires IncludeEvents or IncludeUploads")
 	}
+	e.checkKeyRotation()
 
 	timeoutSecs := opts.TimeoutSecs
 	if timeoutSecs <= 0 {
