@@ -107,15 +107,20 @@ private final class CompletionBox: @unchecked Sendable {
     }
 
     func call() {
+        if Thread.isMainThread {
+            take()?()
+        } else {
+            // Capture only the (Sendable) box, never the non-Sendable
+            // handler itself; take() still guarantees a single call.
+            DispatchQueue.main.async { self.take()?() }
+        }
+    }
+
+    private func take() -> (() -> Void)? {
         lock.lock()
+        defer { lock.unlock() }
         let h = handler
         handler = nil
-        lock.unlock()
-        guard let h = h else { return }
-        if Thread.isMainThread {
-            h()
-        } else {
-            DispatchQueue.main.async { h() }
-        }
+        return h
     }
 }
