@@ -394,9 +394,16 @@ public class BranchDamCoreBridge: @unchecked Sendable {
     }
 
     public func getMediaStatus(localID: String) -> String {
+        loadMediaStatus(localID: localID) ?? "NOT_ENQUEUED"
+    }
+
+    /// The upload status of [localID], or nil when it could not be read
+    /// (engine not open, query failure) -- unlike getMediaStatus, a
+    /// failure is not "NOT_ENQUEUED".
+    public func loadMediaStatus(localID: String) -> String? {
         #if canImport(branchdam)
-        guard isInitialized else { return "NOT_ENQUEUED" }
-        var status = "NOT_ENQUEUED"
+        guard isInitialized else { return nil }
+        var status: String?
         queryQueue.sync {
             do {
                 status = try branchdam.bindingGetMediaStatus(localID)
@@ -406,7 +413,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return status
         #else
-        return "NOT_ENQUEUED"
+        return nil
         #endif
     }
 
@@ -438,7 +445,7 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         }
         return map
         #else
-        return [:]
+        return nil
         #endif
     }
 

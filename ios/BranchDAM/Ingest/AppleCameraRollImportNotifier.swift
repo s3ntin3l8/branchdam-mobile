@@ -204,6 +204,12 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
         ))
     }
 
+    /// The engine's upload status for [localID]; nil when it could not
+    /// be read.
+    public func uploadStatus(localID: String) -> String? {
+        engine.mediaStatus(localID: localID)
+    }
+
     /// Assets awaiting a decision; empty when they can't be read.
     public func getPendingAssets() -> [PendingImportItem] {
         engine.listPendingImports() ?? []
@@ -394,7 +400,9 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     /// FAILED upload is staged and enqueued again, which is what resets
     /// it for a retry.
     private func importItem(_ item: PendingImportItem, done: @escaping @Sendable (Bool) -> Void) {
-        if UploadStatus.isQueued(engine.mediaStatus(localID: item.localId)) {
+        // An unreadable status is treated as not queued: enqueueing again
+        // is safe, the core dedups by content.
+        if UploadStatus.isQueued(engine.mediaStatus(localID: item.localId) ?? "") {
             importPairedVideo(of: item, done: done)
             return
         }
@@ -453,7 +461,7 @@ extension AppleCameraRollImportNotifier {
         done: @escaping @Sendable (Bool) -> Void
     ) {
         let videoID = Self.pairedVideoLocalID(stillLocalID: item.localId)
-        if UploadStatus.isQueued(engine.mediaStatus(localID: videoID)) {
+        if UploadStatus.isQueued(engine.mediaStatus(localID: videoID) ?? "") {
             engine.deletePendingImport(localID: item.localId)
             done(true)
             return

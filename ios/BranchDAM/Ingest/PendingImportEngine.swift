@@ -93,8 +93,8 @@ public protocol PendingImportEngine: AnyObject, Sendable {
     /// Queues a staged file for upload; returns the queue row ID, 0 on failure.
     func enqueueStagedMedia(localPath: String, filename: String, capturedAtUnix: Int64, localID: String) -> Int64
     /// The upload status of [localID]; "NOT_ENQUEUED" when the engine
-    /// doesn't know it.
-    func mediaStatus(localID: String) -> String
+    /// doesn't know it, nil when it could not be read.
+    func mediaStatus(localID: String) -> String?
 }
 
 /// Upload statuses as the core reports them (`queue.GetMediaStatus`).
@@ -223,8 +223,8 @@ extension BranchDamCoreBridge: PendingImportEngine {
         enqueueMedia(localPath: localPath, filename: filename, capturedAtUnix: capturedAtUnix, localID: localID)
     }
 
-    public func mediaStatus(localID: String) -> String {
-        getMediaStatus(localID: localID)
+    public func mediaStatus(localID: String) -> String? {
+        loadMediaStatus(localID: localID)
     }
 }
 

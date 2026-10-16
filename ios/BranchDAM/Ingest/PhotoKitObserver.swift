@@ -192,12 +192,19 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     }
 
     /// Records one asset's import intent. An asset already in the upload
-    /// queue was imported before and is not offered again; one the user
-    /// skipped stays skipped.
+    /// queue was imported before and is not offered again (a FAILED upload
+    /// is: importing it again is what retries it); one the user skipped
+    /// stays skipped. An unreadable status fails the asset, so the cursor
+    /// stays below it and a later scan offers it again.
     private func persistIntent(_ asset: DiscoveredAsset) -> CameraRollIntake.Outcome {
-        let status = queuedStatuses.map { $0[asset.localIdentifier] ?? "NOT_ENQUEUED" }
-            ?? BranchDamCoreBridge.shared.getMediaStatus(localID: asset.localIdentifier)
-        if status != "NOT_ENQUEUED" {
+        guard let status = CameraRollIntake.uploadStatus(
+            localID: asset.localIdentifier,
+            bulk: queuedStatuses,
+            single: notifier.uploadStatus(localID:)
+        ) else {
+            return .failed
+        }
+        if UploadStatus.isQueued(status) {
             return .alreadyDecided
         }
         switch notifier.stagePendingAsset(asset) {

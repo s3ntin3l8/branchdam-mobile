@@ -105,6 +105,19 @@ public enum CameraRollIntake {
         public let advancedTo: Date?
     }
 
+    /// The engine's upload status for [localID]: the scan's bulk read
+    /// when it worked, else a per-asset [single] read; nil when neither
+    /// could be read. nil is "unknown", never "not queued": treating it as
+    /// new would stage the whole library again.
+    public static func uploadStatus(
+        localID: String,
+        bulk: [String: String]?,
+        single: (String) -> String?
+    ) -> String? {
+        if let bulk { return bulk[localID] ?? "NOT_ENQUEUED" }
+        return single(localID)
+    }
+
     /// Persists [assets] oldest first via [persist]. The pass stops at the
     /// first failure, and the returned cursor stays just below the failed
     /// asset's creation date so the next scan (creationDate > cursor)

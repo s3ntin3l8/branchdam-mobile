@@ -194,6 +194,18 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
         XCTAssertEqual(engine.mediaStatus(localID: "G/L0/003"), "PENDING")
     }
 
+    func testUnreadableStatusStillQueuesTheAsset() async {
+        let notifier = makeNotifier()
+        engine.failStatusReads = true
+        let item = PendingImportItem(localId: "G/L0/004", filename: "g.heic", capturedAtUnix: 1, createdAtUnix: 0)
+
+        let queued = await notifier.importAssets([item])
+
+        XCTAssertEqual(queued, 1)
+        XCTAssertEqual(engine.enqueued.map { $0.localID }, ["G/L0/004"])
+        XCTAssertNil(notifier.uploadStatus(localID: "G/L0/004"))
+    }
+
     func testUploadStatusCountsOnlyRowsTheUploaderWillPick() {
         for status in ["PENDING", "IN_PROGRESS", "COMPLETED", "OFFLOADED"] {
             XCTAssertTrue(UploadStatus.isQueued(status), status)

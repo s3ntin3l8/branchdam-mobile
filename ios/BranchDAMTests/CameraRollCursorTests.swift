@@ -17,7 +17,7 @@ final class CameraRollCursorTests: XCTestCase {
         super.tearDown()
     }
 
-    func testFirstLaunchLooksBackAnHourAndPersistsIt() {
+    func testFirstLaunchLooksBackTheInitialWindowAndPersistsIt() {
         let launch = Date(timeIntervalSince1970: 1_800_000_000)
         let store = CameraRollCursorStore(defaults: defaults, now: { launch })
 
@@ -66,6 +66,18 @@ final class CameraRollCursorTests: XCTestCase {
 }
 
 final class CameraRollIntakeTests: XCTestCase {
+
+    func testUploadStatusPrefersTheBulkReadAndNeverTurnsAFailureIntoNotEnqueued() {
+        var singleReads = [String]()
+        let bulk = ["A": "PENDING"]
+        XCTAssertEqual(CameraRollIntake.uploadStatus(localID: "A", bulk: bulk) { singleReads.append($0); return nil }, "PENDING")
+        XCTAssertEqual(CameraRollIntake.uploadStatus(localID: "B", bulk: bulk) { singleReads.append($0); return nil }, "NOT_ENQUEUED")
+        XCTAssertTrue(singleReads.isEmpty, "a working bulk read needs no per-asset read")
+
+        XCTAssertEqual(CameraRollIntake.uploadStatus(localID: "C", bulk: nil) { _ in "FAILED" }, "FAILED")
+        XCTAssertNil(CameraRollIntake.uploadStatus(localID: "D", bulk: nil) { _ in nil },
+                     "both reads failing is unknown, not NOT_ENQUEUED")
+    }
 
     private func asset(_ id: String, _ seconds: TimeInterval) -> DiscoveredAsset {
         DiscoveredAsset(
