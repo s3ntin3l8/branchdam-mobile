@@ -224,7 +224,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             // The asset is gone, so whether it was a Live Photo is only
             // known from the queue: its paired video was enqueued under
             // this child ID.
-            let pairedVideoId = "\(id)/pairedVideo"
+            let pairedVideoId = AppleCameraRollImportNotifier.pairedVideoLocalID(stillLocalID: id)
             if BranchDamCoreBridge.shared.getMediaStatus(localID: pairedVideoId) != "NOT_ENQUEUED" {
                 AppleTrashSyncObserver.processRemovedAsset(localId: pairedVideoId)
             }
@@ -339,43 +339,9 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                 _ = AppleEditCorrelator.registerEditLineage(edits: edits)
             }
 
-            // Live Photo detection — link paired video resource via LivePhotoExtractor
-            let livePhotos = assets.filter { $0.isLivePhoto == true }
-            for item in livePhotos {
-                let cleanId = item.localIdentifier.hasPrefix("ph://") ? String(item.localIdentifier.dropFirst(5)) : item.localIdentifier
-                let phAssets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
-                if let phAsset = phAssets.firstObject {
-                    let resources = PHAssetResource.assetResources(for: phAsset)
-                    if let pairedVideoRes = resources.first(where: { $0.type == .pairedVideo }) {
-                        let videoLocalId = "\(item.localIdentifier)/pairedVideo"
-                        let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_pairedVideo.mov"
-
-                        Self.stageResourceAtomically(resource: pairedVideoRes, filename: safeFilename) { stagedPath in
-                            guard let targetPath = stagedPath else {
-                                NSLog("PhotoKitObserver: staging failed for Live Photo video %@, skipping enqueue", item.localIdentifier)
-                                return
-                            }
-
-                            if AppleCameraRollImportNotifier.shared.autoImportEnabled {
-                                let queueId = BranchDamCoreBridge.shared.enqueueMedia(
-                                    localPath: targetPath,
-                                    filename: pairedVideoRes.originalFilename,
-                                    capturedAtUnix: item.creationDateUnix,
-                                    localID: videoLocalId
-                                )
-                                if queueId > 0 {
-                                    _ = LivePhotoExtractor.linkLivePhoto(
-                                        stillId: item.localIdentifier,
-                                        videoId: videoLocalId,
-                                        stillFilename: item.filename,
-                                        videoFilename: pairedVideoRes.originalFilename
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // A Live Photo's motion track is queued and linked by
+            // AppleCameraRollImportNotifier when the still is imported, in
+            // every import mode.
         }
     }
 

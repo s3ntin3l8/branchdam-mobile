@@ -66,6 +66,42 @@ final class ImportNotificationDelegateTests: XCTestCase {
         XCTAssertNil(received.action)
     }
 
+    func testCompletionIsReleasedAtTheDeadlineWhileTheImportRuns() {
+        // A handler that has not finished (a long import) must not hold
+        // the system's completion handler past the deadline.
+        let delegate = ImportNotificationDelegate(handler: { _, _, _ in }, completionDeadline: 0.1)
+        let finished = expectation(description: "completion released")
+
+        let routed = delegate.handle(
+            categoryIdentifier: category,
+            actionIdentifier: AppleCameraRollImportNotifier.actionImportNow,
+            userInfo: [:],
+            completion: { finished.fulfill() }
+        )
+
+        XCTAssertTrue(routed)
+        wait(for: [finished], timeout: 2.0)
+    }
+
+    func testCompletionRunsOnceWhenTheHandlerFinishesFirst() {
+        let delegate = ImportNotificationDelegate(handler: { _, _, done in done() }, completionDeadline: 0.1)
+        let finished = expectation(description: "completion called once")
+        finished.assertForOverFulfill = true
+
+        delegate.handle(
+            categoryIdentifier: category,
+            actionIdentifier: AppleCameraRollImportNotifier.actionLater,
+            userInfo: [:],
+            completion: { finished.fulfill() }
+        )
+
+        wait(for: [finished], timeout: 1.0)
+        // Let the deadline pass; an over-fulfil would fail the test.
+        let settle = expectation(description: "deadline passed")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { settle.fulfill() }
+        wait(for: [settle], timeout: 1.0)
+    }
+
     func testNotificationWithoutAPostingTimeAppliesToEverything() {
         XCTAssertEqual(ImportNotificationDelegate.stagedBefore(userInfo: [:]), .max)
     }

@@ -6,6 +6,27 @@ import UserNotifications
 /// engine can read, calling back with its path (nil on failure).
 public protocol AssetStager: Sendable {
     func stage(localIdentifier: String, filename: String, completion: @escaping @Sendable (String?) -> Void)
+    /// Stages a Live Photo's motion track; nil when the asset has none (or
+    /// staging failed).
+    func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void)
+}
+
+/// A resource staged to a local file, with the name it should be uploaded
+/// under.
+public struct StagedResource: Equatable, Sendable {
+    public let path: String
+    public let filename: String
+
+    public init(path: String, filename: String) {
+        self.path = path
+        self.filename = filename
+    }
+}
+
+extension AssetStager {
+    public func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void) {
+        completion(nil)
+    }
 }
 
 /// Stages through `PhotoKitObserver.stageResourceAtomically`, the same
@@ -30,6 +51,20 @@ public struct PhotoKitAssetStager: AssetStager {
         let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_\(filename)"
         PhotoKitObserver.stageResourceAtomically(resource: resource, filename: safeFilename) { path in
             completion(path)
+        }
+    }
+
+    public func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void) {
+        let cleanId = localIdentifier.hasPrefix("ph://") ? String(localIdentifier.dropFirst(5)) : localIdentifier
+        guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil).firstObject,
+              let video = PHAssetResource.assetResources(for: asset).first(where: { $0.type == .pairedVideo }) else {
+            completion(nil)
+            return
+        }
+        let videoFilename = video.originalFilename
+        let safeFilename = "\(cleanId.replacingOccurrences(of: "/", with: "_"))_pairedVideo.mov"
+        PhotoKitObserver.stageResourceAtomically(resource: video, filename: safeFilename) { path in
+            completion(path.map { StagedResource(path: $0, filename: videoFilename) })
         }
     }
 }
@@ -95,6 +130,9 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     private let engine: PendingImportEngine
     private let stager: AssetStager
     private let afterImport: @Sendable (Action, Int) -> Void
+    /// Records the still -> motion-track lineage edge (still ID, video
+    /// ID, still name, video name).
+    private let linkPairedVideo: @Sendable (String, String, String, String) -> Void
     private let queue = DispatchQueue(label: "com.branchdam.mobile.import", qos: .userInitiated)
     /// Auto-import pass state; `queue` only.
     private var autoImportRunning = false
@@ -107,10 +145,14 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     public init(
         engine: PendingImportEngine = BranchDamCoreBridge.shared,
         stager: AssetStager = PhotoKitAssetStager(),
-        afterImport: (@Sendable (Action, Int) -> Void)? = nil
+        afterImport: (@Sendable (Action, Int) -> Void)? = nil,
+        linkPairedVideo: (@Sendable (String, String, String, String) -> Void)? = nil
     ) {
         self.engine = engine
         self.stager = stager
+        self.linkPairedVideo = linkPairedVideo ?? { stillID, videoID, stillName, videoName in
+            _ = LivePhotoExtractor.linkLivePhoto(stillId: stillID, videoId: videoID, stillFilename: stillName, videoFilename: videoName)
+        }
         self.afterImport = afterImport ?? { action, queued in
             switch action {
             case .importNow:
@@ -304,11 +346,42 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
                 if queueId > 0 {
                     engine.deletePendingImport(localID: item.localId)
                     counter.increment()
+                    self.importPairedVideo(of: item, group: group)
                 }
             }
         }
         group.notify(queue: queue) {
             completion(counter.value)
+        }
+    }
+}
+
+extension AppleCameraRollImportNotifier {
+    /// The local ID of a Live Photo's motion track: the still's ID plus
+    /// "/pairedVideo" (what removal handling looks up, too).
+    public static func pairedVideoLocalID(stillLocalID: String) -> String {
+        "\(stillLocalID)/pairedVideo"
+    }
+
+    /// Queues a Live Photo's motion track once its still is queued, and
+    /// links the two. Runs for every import path (auto-import, Import now,
+    /// Later), so the video never depends on the import mode. Holds
+    /// [group] until done.
+    fileprivate func importPairedVideo(of item: PendingImportItem, group: DispatchGroup) {
+        group.enter()
+        stager.stagePairedVideo(localIdentifier: item.localId) { [engine, linkPairedVideo] staged in
+            defer { group.leave() }
+            guard let staged = staged else { return }
+            let videoID = Self.pairedVideoLocalID(stillLocalID: item.localId)
+            let queueId = engine.enqueueStagedMedia(
+                localPath: staged.path,
+                filename: staged.filename,
+                capturedAtUnix: item.capturedAtUnix,
+                localID: videoID
+            )
+            if queueId > 0 {
+                linkPairedVideo(item.localId, videoID, item.filename, staged.filename)
+            }
         }
     }
 }

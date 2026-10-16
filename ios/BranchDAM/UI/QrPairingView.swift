@@ -228,8 +228,11 @@ private struct ConnectionSettingsView: View {
             )
             isConnected = connected
             if connected {
-                // First background sync for the newly paired device.
+                // First background sync for the newly paired device, and a
+                // catch-up scan: the launch-time scan skipped discovery
+                // while the engine was not open yet.
                 BackgroundSyncManager.shared.scheduleBackgroundSync()
+                PhotoKitObserver.shared.scanForChanges()
                 namingTemplate = await BranchDamCoreBridge.shared.fetchNamingTemplateAsync() ?? ""
             } else {
                 namingTemplate = ""

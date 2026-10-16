@@ -18,8 +18,9 @@ public final class CameraRollCursorStore: @unchecked Sendable {
     private let now: () -> Date
     private let lock = NSLock()
 
-    /// How far back the very first scan looks.
-    public static let initialLookback: TimeInterval = 3600
+    /// How far back the very first scan looks: a day, the same window as
+    /// Android's MediaStoreObserver fallback.
+    public static let initialLookback: TimeInterval = 24 * 3600
 
     public init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init) {
         self.defaults = defaults

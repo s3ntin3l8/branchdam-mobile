@@ -20,10 +20,19 @@ public final class ImportNotificationDelegate: NSObject, UNUserNotificationCente
     ) -> Void
 
     private let handler: Handler
+    private let completionDeadline: TimeInterval
+
+    /// How long a response may hold the system's completion handler. iOS
+    /// gives an action response only a short background window, and an
+    /// import of many (or iCloud-only) assets can outlast it; the import
+    /// is resumable (its pending_import rows survive), so the handler is
+    /// released at this deadline even while the import keeps running.
+    public static let defaultCompletionDeadline: TimeInterval = 20
 
     /// - Parameter handler: applies a routed action and calls `done` when
     ///   finished; defaults to `AppleCameraRollImportNotifier.shared`.
-    public init(handler: Handler? = nil) {
+    public init(handler: Handler? = nil, completionDeadline: TimeInterval = ImportNotificationDelegate.defaultCompletionDeadline) {
+        self.completionDeadline = completionDeadline
         self.handler = handler ?? { action, stagedBefore, done in
             AppleCameraRollImportNotifier.shared.handleAction(action, stagedBeforeUnix: stagedBefore) { _ in
                 done()
@@ -50,7 +59,8 @@ public final class ImportNotificationDelegate: NSObject, UNUserNotificationCente
     }
 
     /// Routes one response. Returns false (and does not call [completion])
-    /// when it is not an import action.
+    /// when it is not an import action. [completion] runs once: when the
+    /// handler finishes or at [completionDeadline], whichever is first.
     @discardableResult
     public func handle(
         categoryIdentifier: String,
@@ -61,7 +71,9 @@ public final class ImportNotificationDelegate: NSObject, UNUserNotificationCente
         guard let action = Self.route(categoryIdentifier: categoryIdentifier, actionIdentifier: actionIdentifier) else {
             return false
         }
-        handler(action, Self.stagedBefore(userInfo: userInfo), completion)
+        let once = CompletionBox(completion)
+        handler(action, Self.stagedBefore(userInfo: userInfo)) { once.call() }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + completionDeadline) { once.call() }
         return true
     }
 

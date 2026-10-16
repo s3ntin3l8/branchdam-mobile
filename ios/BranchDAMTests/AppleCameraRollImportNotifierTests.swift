@@ -95,6 +95,28 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
         XCTAssertEqual(afterImport.first?.1, 2)
     }
 
+    func testLivePhotoVideoIsQueuedAndLinkedInConfirmationMode() {
+        let links = LinkRecorder()
+        let notifier = AppleCameraRollImportNotifier(
+            engine: engine,
+            stager: FakeAssetStager(livePhotos: ["A/L0/001"]),
+            afterImport: { _, _ in },
+            linkPairedVideo: { still, video, stillName, videoName in
+                links.record("\(still) -> \(video) (\(stillName), \(videoName))")
+            }
+        )
+        XCTAssertFalse(notifier.autoImportEnabled, "confirmation mode")
+        _ = notifier.stagePendingAsset(asset("A/L0/001"))
+        _ = notifier.stagePendingAsset(asset("B/L0/001"))
+
+        XCTAssertTrue(run(notifier, .importNow))
+
+        let videoID = AppleCameraRollImportNotifier.pairedVideoLocalID(stillLocalID: "A/L0/001")
+        XCTAssertEqual(videoID, "A/L0/001/pairedVideo")
+        XCTAssertEqual(Set(engine.enqueued.map { $0.localID }), ["A/L0/001", "B/L0/001", videoID])
+        XCTAssertEqual(links.entries, ["A/L0/001 -> A/L0/001/pairedVideo (IMG_A/L0.HEIC, IMG_LIVE.MOV)"])
+    }
+
     func testAssetWhoseStagingFailsStaysPending() {
         let notifier = makeNotifier(failing: ["B/L0/001"])
         _ = notifier.stagePendingAsset(asset("A/L0/001"))
@@ -178,6 +200,23 @@ private final class AfterImportRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return _calls
+    }
+}
+
+private final class LinkRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _entries = [String]()
+
+    func record(_ entry: String) {
+        lock.lock()
+        _entries.append(entry)
+        lock.unlock()
+    }
+
+    var entries: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _entries
     }
 }
 

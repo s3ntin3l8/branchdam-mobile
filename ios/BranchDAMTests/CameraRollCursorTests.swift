@@ -21,12 +21,12 @@ final class CameraRollCursorTests: XCTestCase {
         let launch = Date(timeIntervalSince1970: 1_800_000_000)
         let store = CameraRollCursorStore(defaults: defaults, now: { launch })
 
-        XCTAssertEqual(store.lastScannedDate, launch.addingTimeInterval(-3600))
+        XCTAssertEqual(store.lastScannedDate, launch.addingTimeInterval(-CameraRollCursorStore.initialLookback))
 
         // A later launch must resume from the persisted cursor, not
         // reset to "an hour before this launch".
         let nextLaunch = CameraRollCursorStore(defaults: defaults, now: { launch.addingTimeInterval(86_400) })
-        XCTAssertEqual(nextLaunch.lastScannedDate, launch.addingTimeInterval(-3600))
+        XCTAssertEqual(nextLaunch.lastScannedDate, launch.addingTimeInterval(-CameraRollCursorStore.initialLookback))
     }
 
     func testAdvancedCursorSurvivesARelaunch() {

@@ -75,6 +75,17 @@ final class FakePendingImportEngine: PendingImportEngine, @unchecked Sendable {
 /// identifiers in `failing`.
 struct FakeAssetStager: AssetStager {
     var failing: Set<String> = []
+    /// Local IDs that are Live Photos (have a motion track to stage).
+    var livePhotos: Set<String> = []
+
+    func stagePairedVideo(localIdentifier: String, completion: @escaping @Sendable (StagedResource?) -> Void) {
+        guard livePhotos.contains(localIdentifier) else {
+            completion(nil)
+            return
+        }
+        let safe = localIdentifier.replacingOccurrences(of: "/", with: "_")
+        completion(StagedResource(path: "/staged/\(safe)_pairedVideo.mov", filename: "IMG_LIVE.MOV"))
+    }
 
     func stage(localIdentifier: String, filename: String, completion: @escaping @Sendable (String?) -> Void) {
         if failing.contains(localIdentifier) {
