@@ -91,4 +91,73 @@ final class BackgroundSyncManagerTests: XCTestCase {
         // just be readable without blocking.
         _ = BackgroundSyncManager.shared.isOnCellular
     }
+
+    // MARK: - Post-batch staging sweep (Hermes on #210)
+
+    func testImmediateSyncSweepsStagingAfterTheBatch() {
+        let manager = BackgroundSyncManager.shared
+        let savedBatch = manager.runSyncBatch
+        let savedSweep = manager.afterBatchSweep
+        defer {
+            manager.runSyncBatch = savedBatch
+            manager.afterBatchSweep = savedSweep
+        }
+        let calls = SyncCallRecorder()
+        manager.runSyncBatch = { _, _ in
+            calls.record("batch")
+            return (uploaded: 1, eventsSent: 0)
+        }
+        manager.afterBatchSweep = { calls.record("sweep") }
+
+        let finished = expectation(description: "immediate sync finished")
+        manager.triggerImmediateSync(isOnCellular: false) { uploaded in
+            XCTAssertTrue(uploaded)
+            finished.fulfill()
+        }
+        wait(for: [finished], timeout: 2.0)
+
+        XCTAssertEqual(calls.calls, ["batch", "sweep"], "the sweep runs once, after the batch")
+    }
+
+    func testSkippedSyncDoesNotSweep() {
+        let manager = BackgroundSyncManager.shared
+        manager.syncOnMobileData = false
+        let savedBatch = manager.runSyncBatch
+        let savedSweep = manager.afterBatchSweep
+        defer {
+            manager.runSyncBatch = savedBatch
+            manager.afterBatchSweep = savedSweep
+        }
+        let calls = SyncCallRecorder()
+        manager.runSyncBatch = { _, _ in
+            calls.record("batch")
+            return (uploaded: 0, eventsSent: 0)
+        }
+        manager.afterBatchSweep = { calls.record("sweep") }
+
+        let skipped = expectation(description: "sync skipped on cellular")
+        manager.triggerImmediateSync(isOnCellular: true) { _ in skipped.fulfill() }
+        wait(for: [skipped], timeout: 1.0)
+
+        XCTAssertEqual(calls.calls, [])
+    }
+}
+
+/// Records the sync seams' calls in order. A separate Sendable box, because
+/// the seams are @Sendable and the XCTestCase itself is not.
+private final class SyncCallRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _calls: [String] = []
+
+    func record(_ call: String) {
+        lock.lock()
+        _calls.append(call)
+        lock.unlock()
+    }
+
+    var calls: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _calls
+    }
 }

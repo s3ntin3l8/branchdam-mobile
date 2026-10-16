@@ -220,17 +220,17 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     public func registerNotificationCategories() {
         let importAction = UNNotificationAction(
             identifier: Self.actionImportNow,
-            title: "Import now",
+            title: String(localized: "Import now"),
             options: [.foreground]
         )
         let laterAction = UNNotificationAction(
             identifier: Self.actionLater,
-            title: "Later",
+            title: String(localized: "Later"),
             options: []
         )
         let skipAction = UNNotificationAction(
             identifier: Self.actionSkip,
-            title: "Skip",
+            title: String(localized: "Skip"),
             options: [.destructive]
         )
 
@@ -248,8 +248,8 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
         guard count > 0 else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "New Photos Detected"
-        content.body = "\(count) new photo(s) ready to import to branchDAM"
+        content.title = String(localized: "New Photos Detected")
+        content.body = String(localized: "\(count) new photo(s) ready to import to branchDAM")
         content.categoryIdentifier = Self.categoryIdentifier
         content.userInfo = [Self.userInfoStagedBeforeKey: NSNumber(value: stagedBeforeUnix)]
 

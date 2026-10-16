@@ -55,7 +55,7 @@ final class SyncStatusViewModel: ObservableObject {
         guard !isSyncing else { return }
         let syncManager = BackgroundSyncManager.shared
         guard syncManager.shouldAllowImmediateSync(isOnCellular: syncManager.isOnCellular) else {
-            syncResultMessage = "On mobile data. Turn on Sync on Mobile Data in Settings to sync now."
+            syncResultMessage = String(localized: "On mobile data. Turn on Sync on Mobile Data in Settings to sync now.")
             return
         }
         isSyncing = true
@@ -77,11 +77,11 @@ final class SyncStatusViewModel: ObservableObject {
                 await self.reloadQueueMetrics()
                 guard !self.isCancelled, !self.isSyncing else { return }
                 if success {
-                    self.syncResultMessage = "Sync completed"
+                    self.syncResultMessage = String(localized: "Sync completed")
                 } else if self.pendingCount > 0 {
-                    self.syncResultMessage = "Sync attempt failed (check connection or server)"
+                    self.syncResultMessage = String(localized: "Sync attempt failed (check connection or server)")
                 } else {
-                    self.syncResultMessage = "Sync batch completed (no items uploaded)"
+                    self.syncResultMessage = String(localized: "Sync batch completed (no items uploaded)")
                 }
             }
         }
@@ -93,14 +93,14 @@ final class SyncStatusViewModel: ObservableObject {
         stopProgressPolling()
         isSyncing = false
         activeProgress = nil
-        syncResultMessage = "Sync cancelled by user"
+        syncResultMessage = String(localized: "Sync cancelled by user")
         refreshQueueMetrics()
     }
 
     func retryFailedUploads() {
         Task {
             let resetCount = await BranchDamCoreBridge.shared.resetFailedUploadsAsync() ?? 0
-            syncResultMessage = "Reset \(resetCount) failed uploads to pending"
+            syncResultMessage = String(localized: "Reset \(Int(resetCount)) failed uploads to pending")
             await reloadQueueMetrics()
         }
     }
@@ -119,7 +119,7 @@ final class SyncStatusViewModel: ObservableObject {
     /// already 1-based (engine.go passes i+1), so it is shown as is.
     nonisolated static func progressItemLabel(itemIndex: Int, totalItems: Int) -> String? {
         guard totalItems > 0 else { return nil }
-        return "Item \(min(max(itemIndex, 1), totalItems)) of \(totalItems)"
+        return String(localized: "Item \(min(max(itemIndex, 1), totalItems)) of \(totalItems)")
     }
 
     private func startProgressPolling() {
@@ -173,10 +173,12 @@ public struct SyncStatusView: View {
                     // Engine / Connection Status Card
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 8) {
-                            Circle()
-                                .fill(viewModel.isEngineReady ? Color.green : Color.red)
-                                .frame(width: 10, height: 10)
-                            Text(viewModel.isEngineReady ? "Engine Ready" : "Engine Not Initialized")
+                            // Shape as well as colour: the status must not be
+                            // conveyed by colour alone. The text says it too.
+                            Image(systemName: viewModel.isEngineReady ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                                .foregroundColor(viewModel.isEngineReady ? .green : .red)
+                                .accessibilityHidden(true)
+                            Text(viewModel.isEngineReady ? LocalizedStringKey("Engine Ready") : LocalizedStringKey("Engine Not Initialized"))
                                 .font(.body.bold())
                             Spacer()
                             Button {
@@ -358,7 +360,7 @@ public struct SyncStatusView: View {
     }
 
     private var lastSyncLabel: String {
-        guard let date = viewModel.lastSyncTime else { return "Never" }
+        guard let date = viewModel.lastSyncTime else { return String(localized: "Never") }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: date, relativeTo: Date())

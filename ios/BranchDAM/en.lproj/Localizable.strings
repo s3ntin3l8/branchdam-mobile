@@ -1,0 +1,235 @@
+/*
+  Localizable.strings (English, development language)
+
+  SwiftUI looks up every string literal passed to Text, Label, Button,
+  navigationTitle, TextField, Toggle, Section and similar views as a key in
+  this table. Interpolations become format specifiers: an integer is %lld,
+  a String is %@, and a literal percent sign is %%.
+
+  A key that is missing here still renders (as the key itself, which is the
+  English text). A translation adds <lang>.lproj/Localizable.strings with
+  the same keys.
+*/
+
+/* Tabs (ContentView) */
+"Lineage" = "Lineage";
+"Gallery" = "Gallery";
+"Sync" = "Sync";
+"Safe Space" = "Safe Space";
+"Settings" = "Settings";
+
+/* Common */
+"Cancel" = "Cancel";
+"Delete" = "Delete";
+"Done" = "Done";
+"OK" = "OK";
+"Open Settings" = "Open Settings";
+
+/* Welcome */
+"Welcome to branchDAM" = "Welcome to branchDAM";
+"branchDAM preserves your lossless photo masters and manages storage via verified archival to your Tier 3 NAS." = "branchDAM preserves your lossless photo masters and manages storage via verified archival to your Tier 3 NAS.";
+"Reads your camera roll to detect RAW + JPEG pairs" = "Reads your camera roll to detect RAW + JPEG pairs";
+"Uploads lossless masters to your server" = "Uploads lossless masters to your server";
+"Reclaims local storage after verified archival" = "Reclaims local storage after verified archival";
+"Grant Camera Roll Access" = "Grant Camera Roll Access";
+"Set Up Later" = "Set Up Later";
+"branchDAM logo" = "branchDAM logo";
+
+/* Lineage audit */
+"Lineage Audit" = "Lineage Audit";
+"Lineage Triage Complete" = "Lineage Triage Complete";
+"All detected RAW+JPEG pairs and edits verified." = "All detected RAW+JPEG pairs and edits verified.";
+"Candidate %lld of %lld" = "Candidate %1$lld of %2$lld";
+"RAW + JPEG Pair" = "RAW + JPEG Pair";
+"%lld%%" = "%lld%%";
+"via %@" = "via %@";
+"Reject" = "Reject";
+"Confirm" = "Confirm";
+"Lineage Comparison" = "Lineage Comparison";
+"View Mode" = "View Mode";
+"Side by Side" = "Side by Side";
+"Master" = "Master";
+"Derivative" = "Derivative";
+
+/* Gallery */
+"Select" = "Select";
+"Select All" = "Select All";
+"Deselect All" = "Deselect All";
+"Upload (%lld)" = "Upload (%lld)";
+"Reclaim (%lld)" = "Reclaim (%lld)";
+"%lld items" = "%lld items";
+"Could Not Load Gallery" = "Could Not Load Gallery";
+"No Media Found" = "No Media Found";
+"No photos or videos in your library." = "No photos or videos in your library.";
+
+/* Gallery detail */
+"Asset Details" = "Asset Details";
+"Info" = "Info";
+"Compare" = "Compare";
+"Backed Up" = "Backed Up";
+"Upload" = "Upload";
+"Delete Photo?" = "Delete Photo?";
+"Delete Permanently" = "Delete Permanently";
+"This will permanently reclaim or delete this photo from your library and branchDAM." = "This will permanently reclaim or delete this photo from your library and branchDAM.";
+"Unable to load video" = "Unable to load video";
+"File Details" = "File Details";
+"Filename" = "Filename";
+"Captured" = "Captured";
+"Dimensions" = "Dimensions";
+"Lineage Status" = "Lineage Status";
+"Backup Status" = "Backup Status";
+"Camera & Lens" = "Camera & Lens";
+"Camera" = "Camera";
+"Lens" = "Lens";
+"ISO" = "ISO";
+"Shutter" = "Shutter";
+"Aperture" = "Aperture";
+"Focal Length" = "Focal Length";
+"Cryptographic Checksum" = "Cryptographic Checksum";
+"BLAKE3-256" = "BLAKE3-256";
+"Asset Metadata" = "Asset Metadata";
+
+/* Sync status */
+"Sync Status" = "Sync Status";
+"Engine Ready" = "Engine Ready";
+"Engine Not Initialized" = "Engine Not Initialized";
+"Test Connection" = "Test Connection";
+"Configure a server in Settings to initialize the engine." = "Configure a server in Settings to initialize the engine.";
+"Go to Settings" = "Go to Settings";
+"Pending Queue" = "Pending Queue";
+"Last Sync" = "Last Sync";
+"Retry Failed Uploads (%lld)" = "Retry Failed Uploads (%lld)";
+"Active Upload" = "Active Upload";
+"%@ / %@" = "%1$@ / %2$@";
+"Item %lld of %lld" = "Item %1$lld of %2$lld";
+"Abort / Cancel Sync" = "Abort / Cancel Sync";
+"Sync Now" = "Sync Now";
+"Refresh Metrics" = "Refresh Metrics";
+
+/* Safe Space */
+"%lld MB" = "%lld MB";
+"Reclaimable Storage" = "Reclaimable Storage";
+"%lld items safely archived to Tier 3 NAS" = "%lld items safely archived to Tier 3 NAS";
+"Storage Reclaimed" = "Storage Reclaimed";
+"Reclaiming…" = "Reclaiming…";
+"Free Up %lld MB" = "Free Up %lld MB";
+
+/* Settings */
+"Connection" = "Connection";
+"Import" = "Import";
+"Appearance" = "Appearance";
+"Advanced" = "Advanced";
+"Diagnostics" = "Diagnostics";
+"Share Diagnostic Log" = "Share Diagnostic Log";
+"Version" = "Version";
+"Server" = "Server";
+"Server URL" = "Server URL";
+"API Key" = "API Key";
+"Scan QR Code" = "Scan QR Code";
+"Status" = "Status";
+"Connected" = "Connected";
+"Not connected" = "Not connected";
+"Naming Template" = "Naming Template";
+"Save and Connect" = "Save and Connect";
+"Sync on Mobile Data / Cellular" = "Sync on Mobile Data / Cellular";
+"Allow uploads over cellular connection." = "Allow uploads over cellular connection.";
+"Background Sync Interval" = "Background Sync Interval";
+"How often to check for new media." = "How often to check for new media.";
+"15 min" = "15 min";
+"30 min" = "30 min";
+"1 hour" = "1 hour";
+"2 hours" = "2 hours";
+"Sync on Low Battery" = "Sync on Low Battery";
+"Allow background sync even when battery is low." = "Allow background sync even when battery is low.";
+"Auto-import Camera Roll" = "Auto-import Camera Roll";
+"Automatically enqueue new photos for upload." = "Automatically enqueue new photos for upload.";
+"Theme" = "Theme";
+"Color Scheme" = "Color Scheme";
+"Follow System" = "Follow System";
+"Light" = "Light";
+"Dark" = "Dark";
+"Upload Batch Size" = "Upload Batch Size";
+"Items processed per sync cycle." = "Items processed per sync cycle.";
+"5 items" = "5 items";
+"10 items" = "10 items";
+"20 items" = "20 items";
+"50 items" = "50 items";
+"Sync Timeout" = "Sync Timeout";
+"Max seconds to wait for a sync batch." = "Max seconds to wait for a sync batch.";
+"60 s" = "60 s";
+"120 s" = "120 s";
+"300 s" = "300 s";
+"Observer Debounce" = "Observer Debounce";
+"Delay before processing camera roll changes." = "Delay before processing camera roll changes.";
+"250 ms" = "250 ms";
+"500 ms" = "500 ms";
+"1000 ms" = "1000 ms";
+
+/* QR scanner */
+"Scanner Unavailable" = "Scanner Unavailable";
+"QR scanning requires a device with a camera." = "QR scanning requires a device with a camera.";
+
+/* SD card import */
+"USB-C SD Card Detected" = "USB-C SD Card Detected";
+"Found %lld media items (%@):" = "Found %1$lld media items (%2$@):";
+"RAW Photos: %lld" = "RAW Photos: %lld";
+"JPEGs / HEICs: %lld" = "JPEGs / HEICs: %lld";
+"Videos: %lld" = "Videos: %lld";
+"Confirm import to stage full-resolution masters into branchDAM local queue for sync." = "Confirm import to stage full-resolution masters into branchDAM local queue for sync.";
+"Import to branchDAM" = "Import to branchDAM";
+"Skip / Cancel" = "Skip / Cancel";
+"Importing Media (%lld/%lld)" = "Importing Media (%1$lld/%2$lld)";
+"Import Complete" = "Import Complete";
+"Successfully staged %lld items (%@) to branchDAM queue." = "Successfully staged %1$lld items (%2$@) to branchDAM queue.";
+"Import Failed" = "Import Failed";
+"Import from SD Card" = "Import from SD Card";
+"Choose a camera card or its DCIM folder in Files" = "Choose a camera card or its DCIM folder in Files";
+"Import Finished With Errors" = "Import Finished With Errors";
+"%lld item(s) skipped:" = "%lld item(s) skipped:";
+
+/* SD card import: per-file and scan errors (AppleOtgIngestManager) */
+"Skipped a file with invalid size metadata" = "Skipped a file with invalid size metadata";
+"Skipped a file with an unsafe path" = "Skipped a file with an unsafe path";
+"Copy incomplete; the card may be failing (got %@, expected %@)" = "Copy incomplete; the card may be failing (got %1$@, expected %2$@)";
+"Copy failed: %@" = "Copy failed: %@";
+"BLAKE3 mismatch: the card returned different bytes for this file than on an earlier import. It may be failing." = "BLAKE3 mismatch: the card returned different bytes for this file than on an earlier import. It may be failing.";
+"Could not add to the upload queue" = "Could not add to the upload queue";
+"No photos or videos were found in the selected folder. Choose the card's root or its DCIM folder." = "No photos or videos were found in the selected folder. Choose the card's root or its DCIM folder.";
+"Could not prepare storage for the import: %@" = "Could not prepare storage for the import: %@";
+
+/* Settings: connection (QrPairingView) */
+"Agent ID" = "Agent ID";
+"Connecting…" = "Connecting…";
+"Couldn't save the API key to the Keychain. The connection was not changed." = "Couldn't save the API key to the Keychain. The connection was not changed.";
+"Couldn't save the agent ID to the Keychain. The connection was not changed." = "Couldn't save the agent ID to the Keychain. The connection was not changed.";
+
+/* Camera roll access banner (PhotoAuthorizationBanner) */
+"Camera Roll Access Denied" = "Camera Roll Access Denied";
+"Camera Roll Access Restricted" = "Camera Roll Access Restricted";
+"Camera Roll Access Needed" = "Camera Roll Access Needed";
+"Limited Photo Access" = "Limited Photo Access";
+"Select More Photos" = "Select More Photos";
+"Not Now" = "Not Now";
+"branchDAM can only see the photos you selected. Others are not detected or backed up." = "branchDAM can only see the photos you selected. Others are not detected or backed up.";
+"branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters." = "branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters.";
+
+/* Sync status messages (SyncStatusViewModel) */
+"On mobile data. Turn on Sync on Mobile Data in Settings to sync now." = "On mobile data. Turn on Sync on Mobile Data in Settings to sync now.";
+"Sync completed" = "Sync completed";
+"Sync attempt failed (check connection or server)" = "Sync attempt failed (check connection or server)";
+"Sync batch completed (no items uploaded)" = "Sync batch completed (no items uploaded)";
+"Sync cancelled by user" = "Sync cancelled by user";
+"Reset %lld failed uploads to pending" = "Reset %lld failed uploads to pending";
+"Never" = "Never";
+
+/* Lineage review (LineageViewModel) */
+"Failed to confirm lineage pair (engine unavailable)" = "Failed to confirm lineage pair (engine unavailable)";
+"Failed to reject lineage pair (engine unavailable)" = "Failed to reject lineage pair (engine unavailable)";
+"Lineage review is unavailable: the engine is not open." = "Lineage review is unavailable: the engine is not open.";
+
+/* Import confirmation notification (AppleCameraRollImportNotifier) */
+"New Photos Detected" = "New Photos Detected";
+"%lld new photo(s) ready to import to branchDAM" = "%lld new photo(s) ready to import to branchDAM";
+"Import now" = "Import now";
+"Later" = "Later";
+"Skip" = "Skip";

@@ -25,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.branchdam.mobile.R
 import com.branchdam.mobile.ui.components.ExifOrientationHelper
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -75,9 +77,9 @@ fun GalleryDetailScreen(
     if (showDeleteConfirmDialog && galleryItem != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { Text("Delete Photo Permanently?") },
+            title = { Text(stringResource(R.string.gallery_detail_delete_title)) },
             text = {
-                Text("This will permanently delete ${galleryItem.mediaItem.displayName} from branchDAM and your local device. This action cannot be undone.")
+                Text(stringResource(R.string.gallery_detail_delete_body, galleryItem.mediaItem.displayName))
             },
             confirmButton = {
                 Button(
@@ -91,12 +93,12 @@ fun GalleryDetailScreen(
                         containerColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.common_delete))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -112,15 +114,15 @@ fun GalleryDetailScreen(
                     if (galleryItem != null) {
                         if (galleryItem.isBackedUp || galleryItem.isOffloaded) {
                             scope.launch {
-                                snackbarHostState.showSnackbar("Item is backed up to branchDAM")
+                                snackbarHostState.showSnackbar(context.getString(R.string.gallery_detail_already_backed_up))
                             }
                         } else {
                             viewModel.uploadItem(context, galleryItem.mediaItem) { success ->
                                 scope.launch {
                                     if (success) {
-                                        snackbarHostState.showSnackbar("Enqueued for upload")
+                                        snackbarHostState.showSnackbar(context.getString(R.string.gallery_detail_enqueued))
                                     } else {
-                                        snackbarHostState.showSnackbar("Failed to enqueue item for upload")
+                                        snackbarHostState.showSnackbar(context.getString(R.string.gallery_detail_enqueue_failed))
                                     }
                                 }
                             }
@@ -138,25 +140,25 @@ fun GalleryDetailScreen(
                     else -> Icons.Default.CloudUpload
                 }
                 val fabText = when {
-                    galleryItem.isOffloaded -> "Offloaded to branchDAM"
-                    galleryItem.isBackedUp -> "Backed Up to branchDAM"
-                    galleryItem.isPendingUpload -> "Uploading to branchDAM..."
-                    galleryItem.isUploadFailed -> "Retry Upload"
-                    else -> "Upload to branchDAM"
+                    galleryItem.isOffloaded -> stringResource(R.string.gallery_detail_fab_offloaded)
+                    galleryItem.isBackedUp -> stringResource(R.string.gallery_detail_fab_backed_up)
+                    galleryItem.isPendingUpload -> stringResource(R.string.gallery_detail_fab_uploading)
+                    galleryItem.isUploadFailed -> stringResource(R.string.gallery_detail_fab_retry)
+                    else -> stringResource(R.string.gallery_detail_fab_upload)
                 }
                 ExtendedFloatingActionButton(
                     onClick = {
                         if (galleryItem.isBackedUp || galleryItem.isOffloaded) {
                             scope.launch {
-                                snackbarHostState.showSnackbar("Item is backed up to branchDAM")
+                                snackbarHostState.showSnackbar(context.getString(R.string.gallery_detail_already_backed_up))
                             }
                         } else {
                             viewModel.uploadItem(context, galleryItem.mediaItem) { success ->
                                 scope.launch {
                                     if (success) {
-                                        snackbarHostState.showSnackbar("Enqueued for upload")
+                                        snackbarHostState.showSnackbar(context.getString(R.string.gallery_detail_enqueued))
                                     } else {
-                                        snackbarHostState.showSnackbar("Failed to enqueue item for upload")
+                                        snackbarHostState.showSnackbar(context.getString(R.string.gallery_detail_enqueue_failed))
                                     }
                                 }
                             }
@@ -178,7 +180,7 @@ fun GalleryDetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Asset not found",
+                    text = stringResource(R.string.gallery_detail_not_found),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -270,7 +272,7 @@ fun GalleryDetailScreen(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Play Video",
+                                        contentDescription = stringResource(R.string.gallery_detail_play_video),
                                         tint = Color.White,
                                         modifier = Modifier.size(40.dp)
                                     )
@@ -307,12 +309,12 @@ fun GalleryDetailScreen(
                         FilterChip(
                             selected = !showRawPreview,
                             onClick = { showRawPreview = false },
-                            label = { Text("JPEG") }
+                            label = { Text(stringResource(R.string.gallery_detail_chip_jpeg)) }
                         )
                         FilterChip(
                             selected = showRawPreview,
                             onClick = { showRawPreview = true },
-                            label = { Text("RAW (DNG)") }
+                            label = { Text(stringResource(R.string.gallery_detail_chip_raw)) }
                         )
                     }
                 }
@@ -331,7 +333,7 @@ fun GalleryDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "Asset Information",
+                            text = stringResource(R.string.gallery_detail_info_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -349,19 +351,19 @@ fun GalleryDetailScreen(
                                 label = {
                                     Text(
                                         when {
-                                            galleryItem.mediaItem.isVideo -> "Video"
-                                            galleryItem.mediaItem.isDng -> "RAW (DNG)"
-                                            else -> "Image"
+                                            galleryItem.mediaItem.isVideo -> stringResource(R.string.gallery_detail_type_video)
+                                            galleryItem.mediaItem.isDng -> stringResource(R.string.gallery_detail_chip_raw)
+                                            else -> stringResource(R.string.gallery_detail_type_image)
                                         }
                                     )
                                 }
                             )
                             val backupChipText = when {
-                                galleryItem.isOffloaded -> "Offloaded"
-                                galleryItem.isBackedUp -> "Backed Up"
-                                galleryItem.isPendingUpload -> "Pending Upload"
-                                galleryItem.isUploadFailed -> "Upload Failed"
-                                else -> "Local Only"
+                                galleryItem.isOffloaded -> stringResource(R.string.gallery_badge_offloaded)
+                                galleryItem.isBackedUp -> stringResource(R.string.gallery_badge_backed_up)
+                                galleryItem.isPendingUpload -> stringResource(R.string.gallery_badge_pending)
+                                galleryItem.isUploadFailed -> stringResource(R.string.gallery_badge_failed)
+                                else -> stringResource(R.string.gallery_detail_local_only)
                             }
                             SuggestionChip(
                                 onClick = {},
@@ -372,26 +374,26 @@ fun GalleryDetailScreen(
                         HorizontalDivider()
 
                         val backupStatusValue = when {
-                            galleryItem.isOffloaded -> "Offloaded (Stored on branchDAM node)"
-                            galleryItem.isBackedUp -> "Backed up to branchDAM"
-                            galleryItem.isPendingUpload -> "Pending upload to branchDAM"
-                            galleryItem.isUploadFailed -> "Upload failed (Will retry)"
-                            else -> "Not backed up (Local only)"
+                            galleryItem.isOffloaded -> stringResource(R.string.gallery_detail_status_offloaded)
+                            galleryItem.isBackedUp -> stringResource(R.string.gallery_detail_status_backed_up)
+                            galleryItem.isPendingUpload -> stringResource(R.string.gallery_detail_status_pending)
+                            galleryItem.isUploadFailed -> stringResource(R.string.gallery_detail_status_failed)
+                            else -> stringResource(R.string.gallery_detail_status_local)
                         }
-                        DetailRow(label = "Backup Status", value = backupStatusValue)
-                        DetailRow(label = "Primary File Name", value = galleryItem.primaryMediaItem.displayName)
+                        DetailRow(label = stringResource(R.string.gallery_detail_backup_status), value = backupStatusValue)
+                        DetailRow(label = stringResource(R.string.gallery_detail_primary_name), value = galleryItem.primaryMediaItem.displayName)
                         if (galleryItem.companionMediaItem != null) {
-                            DetailRow(label = "RAW Master File Name", value = galleryItem.companionMediaItem.displayName)
-                            DetailRow(label = "RAW Master Size", value = formatFileSize(galleryItem.companionMediaItem.sizeBytes))
+                            DetailRow(label = stringResource(R.string.gallery_detail_raw_name), value = galleryItem.companionMediaItem.displayName)
+                            DetailRow(label = stringResource(R.string.gallery_detail_raw_size), value = formatFileSize(galleryItem.companionMediaItem.sizeBytes))
                         }
-                        DetailRow(label = "Date Taken", value = formatDateTaken(galleryItem.primaryMediaItem.dateTakenUnix))
-                        DetailRow(label = "File Size", value = formatFileSize(galleryItem.primaryMediaItem.sizeBytes))
-                        DetailRow(label = "MIME Type", value = galleryItem.primaryMediaItem.mimeType)
+                        DetailRow(label = stringResource(R.string.gallery_detail_date_taken), value = formatDateTaken(galleryItem.primaryMediaItem.dateTakenUnix))
+                        DetailRow(label = stringResource(R.string.gallery_detail_file_size), value = formatFileSize(galleryItem.primaryMediaItem.sizeBytes))
+                        DetailRow(label = stringResource(R.string.gallery_detail_mime_type), value = galleryItem.primaryMediaItem.mimeType)
                         if (galleryItem.primaryMediaItem.burstId != null) {
-                            DetailRow(label = "Burst ID", value = galleryItem.primaryMediaItem.burstId)
+                            DetailRow(label = stringResource(R.string.gallery_detail_burst_id), value = galleryItem.primaryMediaItem.burstId)
                         }
-                        DetailRow(label = "Local Path", value = galleryItem.primaryMediaItem.filePath.ifEmpty { "N/A" })
-                        DetailRow(label = "Content URI", value = galleryItem.primaryMediaItem.contentUri)
+                        DetailRow(label = stringResource(R.string.gallery_detail_local_path), value = galleryItem.primaryMediaItem.filePath.ifEmpty { stringResource(R.string.gallery_detail_not_available) })
+                        DetailRow(label = stringResource(R.string.gallery_detail_content_uri), value = galleryItem.primaryMediaItem.contentUri)
                     }
                 }
 
@@ -444,7 +446,7 @@ private fun DetailTopBar(
     TopAppBar(
         title = {
             Text(
-                text = galleryItem?.mediaItem?.displayName ?: "Asset Details",
+                text = galleryItem?.mediaItem?.displayName ?: stringResource(R.string.gallery_detail_title),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -453,7 +455,7 @@ private fun DetailTopBar(
             IconButton(onClick = onNavigateBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back"
+                    contentDescription = stringResource(R.string.common_back)
                 )
             }
         },
@@ -462,7 +464,7 @@ private fun DetailTopBar(
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete item",
+                        contentDescription = stringResource(R.string.gallery_detail_delete_item),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -472,10 +474,17 @@ private fun DetailTopBar(
                     galleryItem.isUploadFailed -> Icons.Default.Warning
                     else -> Icons.Default.CloudUpload
                 }
+                val uploadDescription = when {
+                    galleryItem.isOffloaded -> stringResource(R.string.gallery_detail_status_offloaded)
+                    galleryItem.isBackedUp -> stringResource(R.string.gallery_detail_status_backed_up)
+                    galleryItem.isPendingUpload -> stringResource(R.string.gallery_detail_status_pending)
+                    galleryItem.isUploadFailed -> stringResource(R.string.gallery_detail_fab_retry)
+                    else -> stringResource(R.string.gallery_detail_fab_upload)
+                }
                 IconButton(onClick = onUpload) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = "Upload status"
+                        contentDescription = uploadDescription
                     )
                 }
             }

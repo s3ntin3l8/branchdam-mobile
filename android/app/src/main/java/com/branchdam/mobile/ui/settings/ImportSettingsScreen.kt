@@ -3,6 +3,7 @@ package com.branchdam.mobile.ui.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,10 +43,10 @@ fun ImportSettingsScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Import & Folders") },
+                title = { Text(stringResource(R.string.settings_import)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -73,15 +74,19 @@ fun ImportSettingsScreen(
                 shape = MaterialTheme.shapes.large
             ) {
                 ListItem(
-                    headlineContent = { Text("Auto-import Camera Roll") },
-                    supportingContent = { Text("Automatically enqueue new photos for upload") },
+                    headlineContent = { Text(stringResource(R.string.import_auto_import)) },
+                    supportingContent = { Text(stringResource(R.string.import_auto_import_summary)) },
                     trailingContent = {
                         Switch(
                             checked = autoImportEnabled,
-                            onCheckedChange = { viewModel.setAutoImportEnabled(it) },
+                            onCheckedChange = null,
                         )
                     },
-                    modifier = Modifier.clickable { viewModel.setAutoImportEnabled(!autoImportEnabled) },
+                    modifier = Modifier.toggleable(
+                        value = autoImportEnabled,
+                        role = androidx.compose.ui.semantics.Role.Switch,
+                        onValueChange = { viewModel.setAutoImportEnabled(it) },
+                    ),
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
             }
@@ -115,14 +120,14 @@ fun ImportSettingsScreen(
             // Included Gallery Folders Section
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Included Gallery Folders",
+                    text = stringResource(R.string.import_included_folders),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                 )
                 Text(
-                    text = "Select which MediaStore folders appear in your main Gallery view by default.",
+                    text = stringResource(R.string.import_included_folders_summary),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
@@ -142,13 +147,13 @@ fun ImportSettingsScreen(
                     Column {
                         if (discoveredFolders.isEmpty()) {
                             ListItem(
-                                headlineContent = { Text("Camera") },
-                                supportingContent = { Text("Default system camera roll") },
+                                headlineContent = { Text(stringResource(R.string.import_camera_folder)) },
+                                supportingContent = { Text(stringResource(R.string.import_camera_folder_summary)) },
                                 leadingContent = {
                                     Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 },
                                 trailingContent = {
-                                    Switch(checked = true, onCheckedChange = {})
+                                    Switch(checked = true, onCheckedChange = null, enabled = false)
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                             )
@@ -165,15 +170,19 @@ fun ImportSettingsScreen(
                                         )
                                     },
                                     supportingContent = {
-                                        Text(if (isChecked) "Visible in Gallery" else "Hidden from Gallery")
+                                        Text(stringResource(if (isChecked) R.string.import_folder_visible else R.string.import_folder_hidden))
                                     },
                                     trailingContent = {
                                         Switch(
                                             checked = isChecked,
-                                            onCheckedChange = { viewModel.toggleFolderIncluded(folder, discoveredFolders) }
+                                            onCheckedChange = null
                                         )
                                     },
-                                    modifier = Modifier.clickable { viewModel.toggleFolderIncluded(folder, discoveredFolders) },
+                                    modifier = Modifier.toggleable(
+                                        value = isChecked,
+                                        role = androidx.compose.ui.semantics.Role.Switch,
+                                        onValueChange = { viewModel.toggleFolderIncluded(folder, discoveredFolders) },
+                                    ),
                                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                                 )
                                 if (index < discoveredFolders.size - 1) {

@@ -2,8 +2,10 @@ package com.branchdam.mobile.ui.lineage
 
 import android.app.Application
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.branchdam.mobile.R
 import com.branchdam.mobile.lineage.CoreLineageReviewBackend
 import com.branchdam.mobile.lineage.EditCorrelator
 import com.branchdam.mobile.lineage.InPhoneEdit
@@ -80,7 +82,8 @@ class LineageViewModel @JvmOverloads constructor(
             } catch (t: Throwable) {
                 Log.w(TAG, "loadCandidates failed", t)
                 if (_candidates.value.isEmpty()) {
-                    _loadError.value = t.message ?: "Failed to load media"
+                    _loadError.value = t.message
+                        ?: getApplication<Application>().getString(R.string.lineage_load_failed)
                 }
             } finally {
                 _isLoading.value = false
@@ -94,12 +97,14 @@ class LineageViewModel @JvmOverloads constructor(
         // Without the stored decisions a rejected pair would be offered
         // again, so a failed read is an error, not an empty set.
         val decided = review.decidedPairKeys()
-            ?: throw IllegalStateException("Lineage review is unavailable: the engine is not open")
+            ?: throw IllegalStateException(
+                getApplication<Application>().getString(R.string.lineage_review_unavailable),
+            )
         return pendingReview(pairs, edits, decided)
     }
 
     fun confirm(candidate: AuditCandidate) {
-        decide(candidate, "confirm") { parent, child ->
+        decide(candidate, "confirm", R.string.lineage_confirm_failed) { parent, child ->
             // The edge keeps the resolver's confidence: confirming is not
             // new evidence about the files.
             review.confirm(parent, child, RELATIONSHIP, candidate.resolver, candidate.confidence) != null
@@ -107,7 +112,7 @@ class LineageViewModel @JvmOverloads constructor(
     }
 
     fun reject(candidate: AuditCandidate) {
-        decide(candidate, "reject") { parent, child ->
+        decide(candidate, "reject", R.string.lineage_reject_failed) { parent, child ->
             review.reject(parent, child, RELATIONSHIP, candidate.resolver, candidate.confidence)
         }
     }
@@ -117,7 +122,12 @@ class LineageViewModel @JvmOverloads constructor(
      * decision can't be saved the candidate stays, so it is neither lost
      * nor silently offered again on the next launch.
      */
-    private fun decide(candidate: AuditCandidate, what: String, save: (String, String) -> Boolean) {
+    private fun decide(
+        candidate: AuditCandidate,
+        what: String,
+        @StringRes failedMessage: Int,
+        save: (String, String) -> Boolean,
+    ) {
         val (parentUri, childUri) = parseEdgeId(candidate.edgeId)
         if (parentUri == null || childUri == null) {
             Log.w(TAG, "$what: malformed edgeId=${candidate.edgeId}, dropping candidate")
@@ -130,7 +140,7 @@ class LineageViewModel @JvmOverloads constructor(
                 _candidates.update { list -> list.filter { it.edgeId != candidate.edgeId } }
             } else {
                 Log.w(TAG, "$what failed for ${candidate.edgeId}")
-                _actionError.value = "Could not $what ${candidate.childFilename}. Try again."
+                _actionError.value = getApplication<Application>().getString(failedMessage, candidate.childFilename)
             }
         }
     }

@@ -178,9 +178,13 @@ class SyncStatusViewModelTest {
     private fun prefs() = ApplicationProvider.getApplicationContext<android.content.Context>()
         .getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
 
+    /** The app's resources: the status text comes from strings.xml. */
+    private fun resources() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test
     fun testReplayedSucceededStateKeepsThePersistedLastSyncTime() {
         val snapshot = SyncStatusViewModel.workerSnapshot(
+            resources = resources(),
             state = androidx.work.WorkInfo.State.SUCCEEDED,
             runAttemptCount = 0,
             lastSyncTime = 12_345L,
@@ -199,6 +203,7 @@ class SyncStatusViewModelTest {
     @Test
     fun testWifiOnlySyncOnMeteredNetworkIsWaitingNotSyncing() {
         val held = SyncStatusViewModel.workerSnapshot(
+            resources = resources(),
             state = androidx.work.WorkInfo.State.ENQUEUED,
             runAttemptCount = 0,
             lastSyncTime = 0L,
@@ -207,9 +212,10 @@ class SyncStatusViewModelTest {
             waitingForWifi = true,
         )
         assertFalse("nothing can run until Wi-Fi returns", held.isSyncing)
-        assertEquals(com.branchdam.mobile.ui.sync.WAITING_FOR_WIFI_MESSAGE, held.workerState)
+        assertEquals("Waiting for Wi-Fi", held.workerState)
 
         val ready = SyncStatusViewModel.workerSnapshot(
+            resources = resources(),
             state = androidx.work.WorkInfo.State.ENQUEUED,
             runAttemptCount = 0,
             lastSyncTime = 0L,
@@ -237,6 +243,7 @@ class SyncStatusViewModelTest {
     @Test
     fun testAuthFailureShowsRepairInsteadOfAGenericFailure() {
         val snapshot = SyncStatusViewModel.workerSnapshot(
+            resources = resources(),
             state = androidx.work.WorkInfo.State.FAILED,
             runAttemptCount = 1,
             lastSyncTime = 0L,
@@ -244,10 +251,11 @@ class SyncStatusViewModelTest {
             engineReady = true,
         )
         assertTrue(snapshot.needsRepair)
-        assertEquals(com.branchdam.mobile.ui.sync.REPAIR_REQUIRED_MESSAGE, snapshot.workerState)
+        assertEquals("Device not authorised — re-pair it in Settings", snapshot.workerState)
 
         // A sync running after a re-pair shows as running.
         val running = SyncStatusViewModel.workerSnapshot(
+            resources = resources(),
             state = androidx.work.WorkInfo.State.RUNNING,
             runAttemptCount = 0,
             lastSyncTime = 0L,

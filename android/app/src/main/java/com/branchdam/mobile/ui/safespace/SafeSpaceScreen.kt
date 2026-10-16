@@ -11,12 +11,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.branchdam.mobile.R
 import com.branchdam.mobile.ui.components.MediaDeleteConsentEffect
+import com.branchdam.mobile.ui.components.quantityStringResource
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,12 +45,12 @@ fun SafeSpaceScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Safe Space Storage") },
+                title = { Text(stringResource(R.string.safespace_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.common_back),
                         )
                     }
                 },
@@ -84,7 +87,7 @@ fun SafeSpaceScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "$reclaimableMb MB",
+                            text = stringResource(R.string.safespace_megabytes, reclaimableMb),
                             style = MaterialTheme.typography.displayMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary
@@ -92,9 +95,9 @@ fun SafeSpaceScreen(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = if (uiState.isLoading) {
-                                "Checking archive status..."
+                                stringResource(R.string.safespace_checking)
                             } else {
-                                "${uiState.verifiedCount} verified items ready for reclaim"
+                                quantityStringResource(R.plurals.safespace_verified_ready, uiState.verifiedCount, uiState.verifiedCount)
                             },
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -102,7 +105,7 @@ fun SafeSpaceScreen(
                         if (!uiState.isLoading && uiState.notYetVerifiedCount > 0) {
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = "${uiState.notYetVerifiedCount} backed-up items are not yet verified on the archive and stay on this device",
+                                text = quantityStringResource(R.plurals.safespace_not_yet_verified, uiState.notYetVerifiedCount, uiState.notYetVerifiedCount),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -143,7 +146,7 @@ fun SafeSpaceScreen(
                                 strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                             )
                             Text(
-                                text = "Optimizing storage...",
+                                text = stringResource(R.string.safespace_optimizing),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -179,7 +182,7 @@ fun SafeSpaceScreen(
                 Icon(Icons.Default.CleaningServices, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Free Up $reclaimableMb MB",
+                    text = stringResource(R.string.safespace_free_up, reclaimableMb),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )

@@ -86,12 +86,14 @@ public struct PhotoAuthorizationBanner: View {
     /// so the unit test target can verify the title matches the
     /// expected message for each PHAuthorizationStatus case (denied,
     /// restricted, notDetermined, authorized).
+    /// Localized with `String(localized:)`: a String passed to Label or
+    /// Text is shown as is, not looked up in Localizable.strings.
     var bannerTitle: String {
         switch status {
-        case .denied: return "Camera Roll Access Denied"
-        case .restricted: return "Camera Roll Access Restricted"
-        case .limited: return "Limited Photo Access"
-        default: return "Camera Roll Access Needed"
+        case .denied: return String(localized: "Camera Roll Access Denied")
+        case .restricted: return String(localized: "Camera Roll Access Restricted")
+        case .limited: return String(localized: "Limited Photo Access")
+        default: return String(localized: "Camera Roll Access Needed")
         }
     }
 
@@ -101,17 +103,17 @@ public struct PhotoAuthorizationBanner: View {
     /// hierarchy walking (which is fragile across simulator environments).
     var buttonLabel: String {
         switch status {
-        case .notDetermined: return "Grant Camera Roll Access"
-        case .limited: return "Select More Photos"
-        default: return "Open Settings"
+        case .notDetermined: return String(localized: "Grant Camera Roll Access")
+        case .limited: return String(localized: "Select More Photos")
+        default: return String(localized: "Open Settings")
         }
     }
 
     var bannerMessage: String {
         if status == .limited {
-            return "branchDAM can only see the photos you selected. Others are not detected or backed up."
+            return String(localized: "branchDAM can only see the photos you selected. Others are not detected or backed up.")
         }
-        return "branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters."
+        return String(localized: "branchDAM needs camera roll access to detect RAW + JPEG pairs and preserve your lossless masters.")
     }
 
     private func requestAccess() {

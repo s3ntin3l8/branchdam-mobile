@@ -22,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.res.stringResource
+import com.branchdam.mobile.R
 import com.branchdam.mobile.ui.components.ExifOrientationHelper
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -81,7 +83,7 @@ fun AuditQueueScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "All edge lineage candidates reviewed",
+                    stringResource(R.string.audit_all_reviewed),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -127,7 +129,7 @@ private fun AuditCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AssetPreviewCard(
-                        roleLabel = "MASTER",
+                        roleLabel = stringResource(R.string.audit_role_master),
                         filename = candidate.masterFilename,
                         contentUri = candidate.resolvedMasterUri,
                         mimeType = candidate.masterMimeType,
@@ -145,7 +147,7 @@ private fun AuditCard(
                     )
 
                     AssetPreviewCard(
-                        roleLabel = "DERIVATIVE",
+                        roleLabel = stringResource(R.string.audit_role_derivative),
                         filename = candidate.childFilename,
                         contentUri = candidate.resolvedChildUri,
                         mimeType = candidate.childMimeType,
@@ -163,7 +165,7 @@ private fun AuditCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     AssetPreviewCard(
-                        roleLabel = "MASTER",
+                        roleLabel = stringResource(R.string.audit_role_master),
                         filename = candidate.masterFilename,
                         contentUri = candidate.resolvedMasterUri,
                         mimeType = candidate.masterMimeType,
@@ -181,7 +183,7 @@ private fun AuditCard(
                     )
 
                     AssetPreviewCard(
-                        roleLabel = "DERIVATIVE",
+                        roleLabel = stringResource(R.string.audit_role_derivative),
                         filename = candidate.childFilename,
                         contentUri = candidate.resolvedChildUri,
                         mimeType = candidate.childMimeType,
@@ -214,7 +216,7 @@ private fun AuditCard(
             ) {
                 Icon(Icons.Default.Close, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Reject")
+                Text(stringResource(R.string.audit_reject))
             }
 
             Button(
@@ -229,7 +231,7 @@ private fun AuditCard(
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Confirm")
+                Text(stringResource(R.string.audit_confirm))
             }
         }
     }
@@ -402,7 +404,7 @@ private fun AssetPreviewCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.ZoomIn,
-                        contentDescription = "Inspect image",
+                        contentDescription = stringResource(R.string.audit_inspect_image),
                         modifier = Modifier
                             .padding(5.dp)
                             .size(16.dp)
@@ -435,7 +437,7 @@ private fun LineageConnector(
                 shape = MaterialTheme.shapes.small
             ) {
                 Text(
-                    text = "$confidencePct%",
+                    text = stringResource(R.string.audit_confidence_pct, confidencePct),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = if (isHighConfidence) MaterialTheme.colorScheme.onPrimaryContainer
@@ -456,7 +458,7 @@ private fun LineageConnector(
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Lineage direction",
+                    contentDescription = stringResource(R.string.audit_lineage_direction),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -510,7 +512,7 @@ private fun LineageConnector(
                 )
                 Icon(
                     imageVector = Icons.Default.ArrowDownward,
-                    contentDescription = "Lineage direction",
+                    contentDescription = stringResource(R.string.audit_lineage_direction),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -522,7 +524,7 @@ private fun LineageConnector(
                 shape = MaterialTheme.shapes.small
             ) {
                 Text(
-                    text = "$confidencePct% match",
+                    text = stringResource(R.string.audit_confidence_match, confidencePct),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = if (isHighConfidence) MaterialTheme.colorScheme.onPrimaryContainer
@@ -569,12 +571,12 @@ private fun FullImageComparisonDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Visual Asset Comparison",
+                        text = stringResource(R.string.audit_comparison_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.audit_close))
                     }
                 }
 
@@ -585,12 +587,12 @@ private fun FullImageComparisonDialog(
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = { Text("Master: ${candidate.masterFilename}") }
+                        text = { Text(stringResource(R.string.audit_tab_master, candidate.masterFilename)) }
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text("Derivative: ${candidate.childFilename}") }
+                        text = { Text(stringResource(R.string.audit_tab_derivative, candidate.childFilename)) }
                     )
                 }
 
@@ -628,7 +630,7 @@ private fun FullImageComparisonDialog(
                         )
                     } else {
                         Text(
-                            text = "No image preview available for $activeFilename",
+                            text = stringResource(R.string.audit_no_preview, activeFilename),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -638,7 +640,7 @@ private fun FullImageComparisonDialog(
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    text = "Match Confidence: ${(candidate.confidence * 100).toInt()}% (${candidate.resolver})",
+                    text = stringResource(R.string.audit_match_confidence, (candidate.confidence * 100).toInt(), candidate.resolver),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -665,7 +667,7 @@ private fun FullImageComparisonDialog(
                     ) {
                         Icon(Icons.Default.Close, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Reject")
+                        Text(stringResource(R.string.audit_reject))
                     }
 
                     Button(
@@ -683,7 +685,7 @@ private fun FullImageComparisonDialog(
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Confirm")
+                        Text(stringResource(R.string.audit_confirm))
                     }
                 }
             }

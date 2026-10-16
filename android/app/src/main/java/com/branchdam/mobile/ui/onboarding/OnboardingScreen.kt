@@ -17,10 +17,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.branchdam.mobile.R
 import kotlinx.coroutines.launch
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
@@ -64,8 +68,8 @@ fun OnboardingScreen(
 @Composable
 private fun WelcomePage() {
     OnboardingPageContent(
-        title = "Welcome to branchDAM",
-        description = "Your secure, offline-first media companion for professional workflows.",
+        title = stringResource(R.string.onboarding_welcome_title),
+        description = stringResource(R.string.onboarding_welcome_body),
         icon = Icons.Default.CloudUpload
     )
 }
@@ -73,8 +77,8 @@ private fun WelcomePage() {
 @Composable
 private fun SecurityPage() {
     OnboardingPageContent(
-        title = "Security First",
-        description = "Every asset is hashed with BLAKE3. We track lineage and ensure your media is safely archived before you reclaim space.",
+        title = stringResource(R.string.onboarding_security_title),
+        description = stringResource(R.string.onboarding_security_body),
         icon = Icons.Default.Lock
     )
 }
@@ -94,13 +98,13 @@ private fun PermissionsRationalePage(onRequestPermissions: () -> Unit) {
         )
         Spacer(Modifier.height(24.dp))
         Text(
-            "Access Needed",
+            stringResource(R.string.onboarding_access_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            "To pair with your server and sync your media, we need Camera and Media access. We respect your privacy and only access what's necessary.",
+            stringResource(R.string.onboarding_access_body),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -110,7 +114,7 @@ private fun PermissionsRationalePage(onRequestPermissions: () -> Unit) {
             onClick = onRequestPermissions,
             shape = MaterialTheme.shapes.large
         ) {
-            Text("Grant Access")
+            Text(stringResource(R.string.onboarding_grant_access))
         }
     }
 }
@@ -118,8 +122,8 @@ private fun PermissionsRationalePage(onRequestPermissions: () -> Unit) {
 @Composable
 private fun SetupPage(onComplete: () -> Unit) {
     OnboardingPageContent(
-        title = "Ready to Sync",
-        description = "You're all set. The next step is to pair this device with your branchDAM server using a QR code.",
+        title = stringResource(R.string.onboarding_ready_title),
+        description = stringResource(R.string.onboarding_ready_body),
         icon = Icons.AutoMirrored.Filled.ArrowForward,
         cta = {
             Button(
@@ -127,7 +131,7 @@ private fun SetupPage(onComplete: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.large
             ) {
-                Text("Get Started")
+                Text(stringResource(R.string.onboarding_get_started))
             }
         }
     )
@@ -195,10 +199,14 @@ private fun OnboardingBottomBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         TextButton(onClick = onSkip) {
-            Text("Skip")
+            Text(stringResource(R.string.onboarding_skip))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val pagePosition = stringResource(R.string.onboarding_page_position, pagerState.currentPage + 1, 4)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.clearAndSetSemantics { contentDescription = pagePosition },
+        ) {
             repeat(4) { index ->
                 val color = if (pagerState.currentPage == index)
                     MaterialTheme.colorScheme.primary
@@ -219,7 +227,7 @@ private fun OnboardingBottomBar(
                 containerColor = MaterialTheme.colorScheme.primary
             )
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next")
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.onboarding_next))
         }
     }
 }

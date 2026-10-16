@@ -15,11 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.branchdam.mobile.R
 import com.branchdam.mobile.ui.AuditQueueScreen
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
@@ -44,10 +46,10 @@ fun LineageScreen(
         topBar = {
             if (!isExpanded) {
                 CenterAlignedTopAppBar(
-                    title = { Text("Lineage Audit") },
+                    title = { Text(stringResource(R.string.lineage_title)) },
                     actions = {
                         IconButton(onClick = { viewModel.loadCandidates() }) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh candidates")
+                            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.lineage_refresh_candidates))
                         }
                     },
                     scrollBehavior = scrollBehavior
@@ -69,13 +71,13 @@ fun LineageScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        "Lineage Audit",
+                        stringResource(R.string.lineage_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        "Review and verify lineage pairs detected by the engine.",
+                        stringResource(R.string.lineage_subtitle),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -86,7 +88,7 @@ fun LineageScreen(
                     ) {
                         Icon(Icons.Filled.Refresh, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Refresh List")
+                        Text(stringResource(R.string.lineage_refresh_list))
                     }
                     OutlinedButton(
                         onClick = onNavigateToSafeSpace,
@@ -94,7 +96,7 @@ fun LineageScreen(
                     ) {
                         Icon(Icons.Filled.DeleteSweep, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Safe Space")
+                        Text(stringResource(R.string.lineage_safe_space))
                     }
                 }
 
@@ -162,7 +164,7 @@ private fun LineageContent(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No pending lineage candidates",
+                    stringResource(R.string.lineage_empty),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

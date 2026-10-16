@@ -149,10 +149,12 @@ private struct ConnectionSettingsView: View {
 
             Section(header: Text("Status")) {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(isConnected ? Color.green : Color.red)
-                        .frame(width: 8, height: 8)
-                    Text(isConnecting ? "Connecting…" : isConnected ? "Connected" : "Not connected")
+                    // Shape as well as colour: the status must not be
+                    // conveyed by colour alone. The text says it too.
+                    Image(systemName: isConnected ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                        .foregroundColor(isConnected ? .green : .red)
+                        .accessibilityHidden(true)
+                    Text(connectionStatusTitle)
                 }
                 if !namingTemplate.isEmpty {
                     LabeledContent("Naming Template", value: namingTemplate)
@@ -192,6 +194,13 @@ private struct ConnectionSettingsView: View {
                 connectToServer(url: config.serverUrl, key: config.apiKey, agentId: config.agentId)
             }
         }
+    }
+
+    /// A LocalizedStringKey (not a String) so the status is looked up in
+    /// Localizable.strings like the other literals.
+    private var connectionStatusTitle: LocalizedStringKey {
+        if isConnecting { return "Connecting…" }
+        return isConnected ? "Connected" : "Not connected"
     }
 
     // T2-5: persist the API key -- and the agent ID the server bound it

@@ -35,6 +35,9 @@ public struct BrandMonogramView: View {
             context.fill(nodePath, with: .color(brandColor))
         }
         .frame(width: size, height: size)
+        .accessibilityElement()
+        .accessibilityLabel(Text("branchDAM logo"))
+        .accessibilityAddTraits(.isImage)
     }
 }
 

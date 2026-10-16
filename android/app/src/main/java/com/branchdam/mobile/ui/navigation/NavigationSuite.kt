@@ -6,6 +6,7 @@ import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -46,7 +47,7 @@ fun NavigationSuiteScaffold(
                                         contentDescription = null
                                     )
                                 },
-                                label = { Text(item.label) },
+                                label = { Text(stringResource(item.labelRes)) },
                                 selected = isSelected,
                                 onClick = { if (!isSelected) onNavigate(item.route) },
                                 alwaysShowLabel = true
@@ -78,7 +79,7 @@ fun NavigationSuiteScaffold(
                                     contentDescription = null
                                 )
                             },
-                            label = { Text(item.label) },
+                            label = { Text(stringResource(item.labelRes)) },
                             selected = isSelected,
                             onClick = { if (!isSelected) onNavigate(item.route) },
                             alwaysShowLabel = true
@@ -100,7 +101,7 @@ fun NavigationSuiteScaffold(
                         navigationItems.forEach { item ->
                             val isSelected = currentRoute == item.route
                             NavigationDrawerItem(
-                                label = { Text(item.label) },
+                                label = { Text(stringResource(item.labelRes)) },
                                 icon = {
                                     Icon(
                                         imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,

@@ -31,7 +31,7 @@ public struct SafeSpaceView: View {
                 Button(action: {
                     reclaim()
                 }) {
-                    Text(isReclaimed ? "Storage Reclaimed" : isProcessing ? "Reclaiming…" : "Free Up \(reclaimableMB) MB")
+                    Text(reclaimButtonTitle)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -45,6 +45,14 @@ public struct SafeSpaceView: View {
             .navigationTitle("Safe Space")
             .onAppear { loadCandidates() }
         }
+    }
+
+    /// A LocalizedStringKey (not a String) so the title is looked up in
+    /// Localizable.strings like the other literals.
+    private var reclaimButtonTitle: LocalizedStringKey {
+        if isReclaimed { return "Storage Reclaimed" }
+        if isProcessing { return "Reclaiming…" }
+        return "Free Up \(reclaimableMB) MB"
     }
 
     private func reclaim() {
