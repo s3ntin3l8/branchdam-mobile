@@ -1,4 +1,44 @@
 import SwiftUI
+import UniformTypeIdentifiers
+
+/// Entry point for importing from a camera card: opens the Files folder
+/// picker so the user can choose the card (or its DCIM folder) from a
+/// USB-C / Lightning card reader. The scan, confirmation and progress
+/// overlays are hosted by ContentView, which observes the same manager.
+public struct AppleOtgCardImportButton: View {
+    @State private var isPickerPresented = false
+
+    public init() {}
+
+    public var body: some View {
+        Button {
+            isPickerPresented = true
+        } label: {
+            Label("Import from SD Card", systemImage: "sdcard")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .foregroundColor(.primary)
+                .cornerRadius(12)
+        }
+        .accessibilityHint(Text("Choose a camera card or its DCIM folder in Files"))
+        .fileImporter(
+            isPresented: $isPickerPresented,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    AppleOtgIngestManager.shared.onCardFolderPicked(url)
+                }
+            case .failure(let error):
+                AppleOtgIngestManager.shared.onCardFolderPickerFailed(error.localizedDescription)
+            }
+        }
+    }
+}
 
 public struct AppleOtgImportConfirmationView: View {
     public let scanResult: AppleOtgScanResult
@@ -133,14 +173,16 @@ public struct AppleOtgCompletedView: View {
     public let importedCount: Int
     public let totalBytes: Int64
     public let onDismiss: () -> Void
+    public var failures: [AppleOtgFileFailure] = []
 
     public var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: failures.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 44))
-                .foregroundColor(.green)
+                .foregroundColor(failures.isEmpty ? .green : .orange)
+                .accessibilityHidden(true)
 
-            Text("Import Complete")
+            Text(failures.isEmpty ? "Import Complete" : "Import Finished With Errors")
                 .font(.title3)
                 .fontWeight(.bold)
 
@@ -149,6 +191,33 @@ public struct AppleOtgCompletedView: View {
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
+
+            if !failures.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(failures.count) item(s) skipped:")
+                        .font(.subheadline.bold())
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(failures.enumerated()), id: \.offset) { _, failure in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(failure.relativePath)
+                                        .font(.caption.bold())
+                                    Text(failure.message)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .accessibilityElement(children: .combine)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 200)
+                }
+                .padding()
+                .background(Color(UIColor.secondarySystemBackground))
+                .cornerRadius(12)
+                .padding(.horizontal)
+            }
 
             Button(action: onDismiss) {
                 Text("Done")

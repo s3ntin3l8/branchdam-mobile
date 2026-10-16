@@ -10,6 +10,7 @@ import android.os.Environment
 import com.branchdam.mobile.otg.OtgIngestManager
 import androidx.core.content.IntentCompat
 import java.io.File
+import java.io.IOException
 
 class UsbOtgReceiver : BroadcastReceiver() {
 
@@ -21,9 +22,17 @@ class UsbOtgReceiver : BroadcastReceiver() {
                 val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
                 if (device != null && isMassStorageDevice(device)) {
                     val label = getDeviceLabel(device)
-                    // Check external storage or fallback to standard OTG / SD mount paths
-                    val otgMount = findOtgMountDirectory() ?: File(Environment.getExternalStorageDirectory(), "DCIM")
-                    OtgIngestManager.getInstance(context).onCardDetected(label, otgMount)
+                    val manager = OtgIngestManager.getInstance(context)
+                    // Use the card's own mount when it is readable. Since
+                    // scoped storage it usually is not; then the user picks
+                    // the card in the system folder picker. Never fall back
+                    // to the phone's own storage.
+                    val otgMount = findOtgMountDirectory()
+                    if (otgMount != null) {
+                        manager.onCardDetected(label, otgMount)
+                    } else {
+                        manager.onCardNeedsAccess(label)
+                    }
                 }
             }
 
@@ -61,22 +70,50 @@ class UsbOtgReceiver : BroadcastReceiver() {
             }
         }
 
-        fun findOtgMountDirectory(): File? {
-            val possiblePaths = listOf(
-                "/mnt/media_rw",
-                "/storage",
-                "/mnt/usbhost"
-            )
-            for (path in possiblePaths) {
-                val dir = File(path)
-                if (dir.exists() && dir.isDirectory) {
-                    val subDirs = dir.listFiles()?.filter { it.isDirectory && !it.name.startsWith("emulated") && !it.name.startsWith("self") }
-                    if (!subDirs.isNullOrEmpty()) {
-                        return subDirs.first()
+        private val DEFAULT_MOUNT_PARENTS = listOf(
+            "/mnt/media_rw",
+            "/storage",
+            "/mnt/usbhost",
+        )
+
+        /**
+         * Finds a readable camera-card volume under [mountParents]: a
+         * directory with a readable `DCIM` folder that is not the phone's
+         * own shared storage ([primaryStorage], `/storage/emulated/...`,
+         * `/storage/self/...`). Returns the volume root so non-DCIM camera
+         * folders (e.g. `PRIVATE/M4ROOT` video) are scanned too, or null
+         * when no such volume is readable.
+         */
+        fun findOtgMountDirectory(
+            mountParents: List<File> = DEFAULT_MOUNT_PARENTS.map(::File),
+            primaryStorage: File? = primaryStorageOrNull(),
+        ): File? {
+            val primary = primaryStorage?.let(::canonicalPathOrNull)
+            for (parent in mountParents) {
+                val volumes = parent.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: continue
+                for (volume in volumes) {
+                    if (volume.name.startsWith("emulated") || volume.name.startsWith("self")) continue
+                    val path = canonicalPathOrNull(volume) ?: continue
+                    if (primary != null && (path == primary || primary.startsWith("$path/") || path.startsWith("$primary/"))) {
+                        continue
                     }
+                    val dcim = File(volume, "DCIM")
+                    if (dcim.isDirectory && dcim.listFiles() != null) return volume
                 }
             }
             return null
+        }
+
+        private fun primaryStorageOrNull(): File? = try {
+            Environment.getExternalStorageDirectory()
+        } catch (e: RuntimeException) {
+            null
+        }
+
+        private fun canonicalPathOrNull(file: File): String? = try {
+            file.canonicalPath
+        } catch (e: IOException) {
+            null
         }
     }
 }

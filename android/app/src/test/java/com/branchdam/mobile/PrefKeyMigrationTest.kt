@@ -1,7 +1,9 @@
 package com.branchdam.mobile
 
 import android.content.SharedPreferences
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -39,8 +41,13 @@ class PrefKeyMigrationTest {
     private lateinit var securePrefs: SharedPreferences
     private lateinit var secureEditor: SharedPreferences.Editor
 
+    private val warnings = mutableListOf<String>()
+    private lateinit var originalWarn: (String) -> Unit
+
     @Before
     fun setUp() {
+        originalWarn = PrefKeyMigration.warn
+        PrefKeyMigration.warn = { warnings += it }
         prefs = mock()
         editor = mock()
         whenever(prefs.edit()).thenReturn(editor)
@@ -189,6 +196,11 @@ class PrefKeyMigrationTest {
         verify(editor).remove(BranchDamApplication.KEY_SERVER_URL)
     }
 
+    @After
+    fun tearDown() {
+        PrefKeyMigration.warn = originalWarn
+    }
+
     @Test
     fun testSecretMigrationSkippedWhenEncryptedPrefsNull() {
         // Keystore failure: encryptedPrefs is null — migration
@@ -219,6 +231,27 @@ class PrefKeyMigrationTest {
         verify(editor).remove(BranchDamApplication.KEY_API_KEY)
         verify(editor, never()).remove(BranchDamApplication.KEY_SERVER_URL)
         verify(editor).apply()
+        // The irreversible delete is logged, so a vanished key is diagnosable.
+        assertEquals(1, warnings.size)
+        assertTrue(warnings.single().contains("plaintext API key"))
+    }
+
+    @Test
+    fun testNoWarningWhenNoPlaintextApiKeyToDelete() {
+        PrefKeyMigration.migrate(prefs, null)
+        assertTrue(warnings.isEmpty())
+    }
+
+    @Test
+    fun testNoWarningWhenApiKeyMovesToEncryptedPrefs() {
+        whenever(prefs.contains(BranchDamApplication.KEY_API_KEY)).thenReturn(true)
+        whenever(prefs.getString(BranchDamApplication.KEY_API_KEY, null)).thenReturn("legacy") // pragma: allowlist secret
+        whenever(editor.remove(any())).thenReturn(editor)
+        whenever(secureEditor.putString(any(), any())).thenReturn(secureEditor)
+
+        PrefKeyMigration.migrate(prefs, securePrefs)
+
+        assertTrue(warnings.isEmpty())
     }
 
     @Test

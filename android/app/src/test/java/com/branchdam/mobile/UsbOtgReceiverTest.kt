@@ -5,8 +5,12 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbInterface
 import com.branchdam.mobile.receiver.UsbOtgReceiver
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 /**
@@ -18,6 +22,9 @@ import org.mockito.kotlin.whenever
  * Requires mockito-kotlin on the test classpath (added by PR-2).
  */
 class UsbOtgReceiverTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     @Test
     fun testIsMassStorageDevice_TrueForMassStorageClass() {
@@ -75,5 +82,41 @@ class UsbOtgReceiverTest {
         whenever(device.productName).thenReturn("  ")
         whenever(device.manufacturerName).thenReturn("SanDisk")
         assertEquals("SanDisk Card Reader", UsbOtgReceiver.getDeviceLabel(device))
+    }
+
+    @Test
+    fun findOtgMountDirectory_ReturnsTheCardVolumeRoot() {
+        val storage = tempFolder.newFolder("storage")
+        val primary = File(storage, "emulated/0").apply { File(this, "DCIM/Camera").mkdirs() }
+        File(storage, "self/primary/DCIM").mkdirs()
+        val card = File(storage, "3A2B-1C0D").apply { File(this, "DCIM/100CANON").mkdirs() }
+
+        assertEquals(
+            card.canonicalFile,
+            UsbOtgReceiver.findOtgMountDirectory(listOf(storage), primary)?.canonicalFile,
+        )
+    }
+
+    @Test
+    fun findOtgMountDirectory_NeverReturnsThePhonesOwnStorage() {
+        // Only the phone's shared storage is visible (the card volume is
+        // not readable): the result must be null, not the phone's DCIM.
+        val storage = tempFolder.newFolder("storage")
+        val primary = File(storage, "emulated/0").apply { File(this, "DCIM/Camera").mkdirs() }
+        File(storage, "self/primary/DCIM").mkdirs()
+        assertNull(UsbOtgReceiver.findOtgMountDirectory(listOf(storage), primary))
+
+        // Even when the primary volume is mounted under another name.
+        val mediaRw = tempFolder.newFolder("media_rw")
+        val alias = File(mediaRw, "primary").apply { File(this, "DCIM").mkdirs() }
+        assertNull(UsbOtgReceiver.findOtgMountDirectory(listOf(mediaRw), alias))
+    }
+
+    @Test
+    fun findOtgMountDirectory_SkipsVolumesWithoutDcim() {
+        val storage = tempFolder.newFolder("storage")
+        File(storage, "USB_DRIVE/Documents").mkdirs()
+        assertNull(UsbOtgReceiver.findOtgMountDirectory(listOf(storage), null))
+        assertNull(UsbOtgReceiver.findOtgMountDirectory(listOf(File(tempFolder.root, "missing")), null))
     }
 }

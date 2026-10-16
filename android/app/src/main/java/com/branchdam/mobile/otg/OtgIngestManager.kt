@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +46,13 @@ data class OtgIngestFileError(
 sealed class OtgState {
     object Idle : OtgState()
     data class Scanning(val deviceLabel: String) : OtgState()
+
+    /**
+     * A card reader was attached but its volume is not readable through
+     * the filesystem (the norm since scoped storage). The user has to
+     * pick the card's folder through the Storage Access Framework.
+     */
+    data class NeedsCardAccess(val deviceLabel: String) : OtgState()
     data class AwaitingConfirmation(val scanResult: OtgScanResult) : OtgState()
     data class Ingesting(val progress: OtgIngestProgress) : OtgState()
     data class Completed(
@@ -85,11 +93,43 @@ fun interface OtgHashProvider {
 
 class DefaultOtgHashProvider : OtgHashProvider {
     override fun lookup(localID: String, stagedFile: File): Pair<String?, String> {
+        // In a cold process the engine opens on a background thread; wait
+        // for that first attempt so the verify step isn't skipped.
+        EngineHolder.awaitInitialized(ENGINE_WAIT_MS)
         val fresh = EngineHolder.computeBlake3Hex(stagedFile.absolutePath)
         val prior = EngineHolder.lookupBlake3ForLocalID(localID)
         return Pair(fresh, prior)
     }
 }
+
+/**
+ * Adds a verified staged copy to the engine's upload queue. Returns the
+ * queue ID (> 0), or 0 when the engine refused it; the staged copy is
+ * then deleted and the file reported as skipped.
+ */
+fun interface OtgEnqueuer {
+    fun enqueue(stagedFile: File, candidate: OtgMediaCandidate): Long
+}
+
+class DefaultOtgEnqueuer : OtgEnqueuer {
+    override fun enqueue(stagedFile: File, candidate: OtgMediaCandidate): Long {
+        // enqueueMedia refuses (returns 0) until the engine is open.
+        EngineHolder.awaitInitialized(ENGINE_WAIT_MS)
+        return EngineHolder.enqueueMedia(
+            localPath = stagedFile.absolutePath,
+            filename = candidate.fileName,
+            capturedAtUnix = candidate.lastModifiedUnix,
+            localId = candidate.localId,
+        )
+    }
+}
+
+/**
+ * How long the default hash provider and enqueuer wait for the engine's
+ * first open attempt (see [EngineHolder.awaitInitialized]). Once that
+ * attempt has finished, the wait returns at once.
+ */
+private const val ENGINE_WAIT_MS = 30_000L
 
 class OtgIngestManager(
     private val context: Context? = null,
@@ -97,6 +137,7 @@ class OtgIngestManager(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val hashObserver: OtgHashObserver? = null,
     private val hashProvider: OtgHashProvider = DefaultOtgHashProvider(),
+    private val enqueuer: OtgEnqueuer = DefaultOtgEnqueuer(),
 ) {
     private val _state = MutableStateFlow<OtgState>(OtgState.Idle)
     val state: StateFlow<OtgState> = _state.asStateFlow()
@@ -123,6 +164,19 @@ class OtgIngestManager(
     }
 
     /**
+     * Called when a card reader is attached but no readable mount was
+     * found. Asks the user to pick the card through the system folder
+     * picker instead of guessing a path (the phone's own DCIM is never a
+     * fallback: importing it would re-upload the camera roll as if it
+     * came from the card).
+     */
+    fun onCardNeedsAccess(deviceLabel: String) {
+        inFlightJob?.cancel()
+        inFlightJob = null
+        _state.value = OtgState.NeedsCardAccess(deviceLabel)
+    }
+
+    /**
      * Called when a SAF DocumentTree URI is provided by the user.
      */
     fun onDocumentTreeSelected(treeUri: Uri, deviceLabel: String = "SD Card") {
@@ -136,27 +190,37 @@ class OtgIngestManager(
                     OtgScanResult(deviceLabel, treeUri.toString(), emptyList())
                 }
             }
-            if (result.candidates.isNotEmpty()) {
-                _state.value = OtgState.AwaitingConfirmation(result)
+            // The user picked this folder on purpose: say so when it holds
+            // nothing importable instead of silently closing.
+            _state.value = if (result.candidates.isNotEmpty()) {
+                OtgState.AwaitingConfirmation(result)
             } else {
-                _state.value = OtgState.Idle
+                OtgState.Error(NO_MEDIA_IN_FOLDER)
             }
         }
     }
 
     /**
-     * Human confirmation hook to proceed with the ingest.
+     * Human confirmation hook to proceed with the ingest. Each candidate
+     * is copied into [destinationDir] (a fresh session directory under
+     * [OtgStaging.root] by default), verified, and enqueued through
+     * [enqueuer]. A file that fails any step is skipped and reported in
+     * [OtgState.Completed.fileErrors]; the rest of the card still imports.
+     * [onFileStaged] runs after a successful enqueue.
      */
     fun confirmImport(
         scanResult: OtgScanResult,
-        destinationDir: File = context?.filesDir?.let { File(it, "otg_stage") } ?: File(System.getProperty("java.io.tmpdir"), "otg_stage"),
+        destinationDir: File = defaultSessionDir(),
         onFileStaged: (file: File, candidate: OtgMediaCandidate) -> Unit = { _, _ -> }
     ) {
         inFlightJob?.cancel()
         inFlightJob = scope.launch {
             val candidates = scanResult.candidates
             val totalBytes = scanResult.totalSizeBytes
+            // bytesProcessed drives the progress bar and also counts
+            // skipped files; importedBytes is what actually got queued.
             var bytesProcessed = 0L
+            var importedBytes = 0L
             var importedCount = 0
             val fileErrors = mutableListOf<OtgIngestFileError>()
 
@@ -181,29 +245,47 @@ class OtgIngestManager(
                     val stageResult = withContext(ioDispatcher) {
                         copyCandidateToStage(candidate, destinationDir)
                     }
+                    bytesProcessed += candidate.sizeBytes.coerceAtLeast(0L)
 
-                    when (stageResult) {
-                        is StageResult.Success -> {
-                            bytesProcessed += candidate.sizeBytes
-                            importedCount++
-                            onFileStaged(stageResult.stagedFile, candidate)
-                        }
+                    val stagedFile = when (stageResult) {
+                        is StageResult.Success -> stageResult.stagedFile
                         is StageResult.Failure -> {
                             fileErrors += OtgIngestFileError(candidate, stageResult.message)
+                            continue
                         }
+                    }
+                    val enqueueFailure = withContext(ioDispatcher) { enqueueStaged(stagedFile, candidate) }
+                    if (enqueueFailure != null) {
+                        fileErrors += OtgIngestFileError(candidate, enqueueFailure)
+                        continue
+                    }
+                    importedBytes += candidate.sizeBytes
+                    importedCount++
+                    try {
+                        onFileStaged(stagedFile, candidate)
+                    } catch (ce: CancellationException) {
+                        throw ce
+                    } catch (e: Exception) {
+                        // The file is already queued; a failing observer
+                        // must not abort the rest of the card.
+                        Log.w(TAG, "onFileStaged failed for ${candidate.fileName}", e)
                     }
                 }
 
                 if (isActive) {
                     _state.value = OtgState.Completed(
                         importedCount = importedCount,
-                        totalBytes = bytesProcessed,
+                        totalBytes = importedBytes,
                         fileErrors = fileErrors,
                     )
                 }
             } catch (ce: CancellationException) {
-                // Job was cancelled by user
-                _state.value = OtgState.Idle
+                // Cancelled: by the user (cancelImport already set Idle) or
+                // by a newer card event that has already published its own
+                // state, such as NeedsCardAccess. Only clear a state this run
+                // still owns, so a late cancellation can't dismiss the
+                // newer one.
+                _state.update { if (it is OtgState.Ingesting) OtgState.Idle else it }
             } catch (e: Exception) {
                 _state.value = OtgState.Error("Failed to import SD card media: ${e.message ?: "Unknown error"}")
             }
@@ -226,6 +308,32 @@ class OtgIngestManager(
         inFlightJob?.cancel()
         inFlightJob = null
         _state.value = OtgState.Idle
+    }
+
+    /**
+     * Enqueues a verified staged copy. Returns null on success, or the
+     * user-facing reason it was skipped; the staged copy is then deleted
+     * so nothing unqueued lingers in staging.
+     */
+    private fun enqueueStaged(stagedFile: File, candidate: OtgMediaCandidate): String? {
+        val id = try {
+            enqueuer.enqueue(stagedFile, candidate)
+        } catch (ce: CancellationException) {
+            stagedFile.delete()
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "enqueue failed for ${candidate.fileName}", e)
+            0L
+        }
+        if (id > 0L) return null
+        stagedFile.delete()
+        return "Could not add to the upload queue"
+    }
+
+    private fun defaultSessionDir(): File {
+        val root = context?.let { OtgStaging.root(it) }
+            ?: File(System.getProperty("java.io.tmpdir"), "otg_staging")
+        return OtgStaging.newSessionDir(root)
     }
 
     /**
@@ -259,44 +367,38 @@ class OtgIngestManager(
             return StageResult.Failure("Skipped file with invalid size metadata")
         }
 
-        val targetFile = File(stageDir, candidate.relativePath)
+        val targetFile = OtgStaging.stagedFile(stageDir, candidate.relativePath)
+            ?: return StageResult.Failure("Skipped file with an unsafe path: ${candidate.relativePath}")
+        val partFile = OtgStaging.partFileFor(targetFile)
         targetFile.parentFile?.mkdirs()
 
         try {
-            val copiedBytes = when {
-                candidate.uri.startsWith("content://") && context != null -> {
-                    val uri = Uri.parse(candidate.uri)
-                    val input = context.contentResolver.openInputStream(uri)
+            val input = when {
+                candidate.uri.startsWith("content://") && context != null ->
+                    context.contentResolver.openInputStream(Uri.parse(candidate.uri))
                         ?: return StageResult.Failure("Could not open stream for content URI: ${candidate.uri}")
-                    input.use { stream ->
-                        FileOutputStream(targetFile).use { output ->
-                            stream.copyTo(output)
-                        }
-                    }
-                }
-                candidate.uri.startsWith("file:/") -> {
-                    val sourceFile = File(java.net.URI(candidate.uri))
-                    sourceFile.inputStream().use { input ->
-                        FileOutputStream(targetFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
-                else -> {
-                    val sourceFile = File(candidate.uri)
-                    sourceFile.inputStream().use { input ->
-                        FileOutputStream(targetFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    }
+                candidate.uri.startsWith("file:/") -> File(java.net.URI(candidate.uri)).inputStream()
+                else -> File(candidate.uri).inputStream()
+            }
+            // Copy to a .part file, flush it to disk, then rename: a crash
+            // mid-copy never leaves a truncated file under the final name.
+            val copiedBytes = input.use { stream ->
+                FileOutputStream(partFile).use { output ->
+                    val n = stream.copyTo(output, COPY_BUFFER)
+                    output.fd.sync()
+                    n
                 }
             }
 
             if (copiedBytes != candidate.sizeBytes) {
-                targetFile.delete()
+                partFile.delete()
                 return StageResult.Failure(
                     "Copy failed mid-stream; SD card may be failing (got ${OtgMediaCandidate.formatBytes(copiedBytes)}, expected ${OtgMediaCandidate.formatBytes(candidate.sizeBytes)})"
                 )
+            }
+            if (!partFile.renameTo(targetFile)) {
+                partFile.delete()
+                return StageResult.Failure("Could not finish the staged copy")
             }
             if (targetFile.length() != candidate.sizeBytes) {
                 targetFile.delete()
@@ -305,7 +407,7 @@ class OtgIngestManager(
                 )
             }
 
-            val (freshHash, priorHash) = hashProvider.lookup(candidate.uri, targetFile)
+            val (freshHash, priorHash) = hashProvider.lookup(candidate.localId, targetFile)
             if (freshHash == null) {
                 // Engine unavailable / hash skipped — fall through; the
                 // upload side will compute the canonical hash later.
@@ -318,7 +420,7 @@ class OtgIngestManager(
             if (priorHash.isNotEmpty() && priorHash != freshHash) {
                 Log.w(
                     TAG,
-                    "BLAKE3 mismatch for ${candidate.fileName} (localID=${candidate.uri}): " +
+                    "BLAKE3 mismatch for ${candidate.fileName} (localID=${candidate.localId}): " +
                         "prior=$priorHash fresh=$freshHash — SD card may be returning inconsistent bytes"
                 )
                 // T2-7b: the audit's whole point was that a corrupt SD
@@ -330,7 +432,7 @@ class OtgIngestManager(
                 // the staged file was still handed to the uploader.)
                 targetFile.delete()
                 return StageResult.Failure(
-                    "BLAKE3 mismatch: $candidate.fileName re-hashed to $freshHash " +
+                    "BLAKE3 mismatch: ${candidate.fileName} re-hashed to $freshHash " +
                         "but the queue has $priorHash for the same localID — " +
                         "SD card may be returning inconsistent bytes"
                 )
@@ -338,9 +440,11 @@ class OtgIngestManager(
 
             return StageResult.Success(targetFile)
         } catch (ce: CancellationException) {
+            partFile.delete()
             targetFile.delete()
             throw ce
         } catch (e: Exception) {
+            partFile.delete()
             targetFile.delete()
             return StageResult.Failure(
                 "Copy failed: ${e.message ?: e.javaClass.simpleName}"
@@ -350,6 +454,10 @@ class OtgIngestManager(
 
     companion object {
         private const val TAG = "OtgIngestManager"
+        private const val COPY_BUFFER = 64 * 1024
+
+        internal const val NO_MEDIA_IN_FOLDER =
+            "No photos or videos were found in the selected folder. Choose the card's root or its DCIM folder."
 
         /**
          * Per-file size cap for staged copies. Chosen to comfortably

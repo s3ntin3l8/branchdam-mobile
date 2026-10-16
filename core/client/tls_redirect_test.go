@@ -79,6 +79,21 @@ func TestRefuseUnsafeRedirect(t *testing.T) {
 	if err := refuseUnsafeRedirect(req("http://a.example/x"), []*http.Request{req("https://a.example/x")}); err == nil {
 		t.Error("https->http allowed")
 	}
+	// An explicit default port is the same host as an omitted one.
+	if err := refuseUnsafeRedirect(req("https://h/x"), []*http.Request{req("https://h:443/x")}); err != nil {
+		t.Errorf("https :443 -> no port refused: %v", err)
+	}
+	// A downgrade to the default http port is still a downgrade.
+	if err := refuseUnsafeRedirect(req("http://a.example:80/x"), []*http.Request{req("https://a.example/x")}); err == nil {
+		t.Error("https->http :80 allowed")
+	}
+	// A port that is the default only for the other scheme is a real port.
+	if err := refuseUnsafeRedirect(req("https://a.example:80/x"), []*http.Request{req("https://a.example/x")}); err == nil {
+		t.Error("https -> https :80 allowed")
+	}
+	if err := refuseUnsafeRedirect(req("http://a.example:443/x"), []*http.Request{req("http://a.example/x")}); err == nil {
+		t.Error("http -> http :443 allowed")
+	}
 	// A downgrade anywhere in the chain counts.
 	via := []*http.Request{req("https://a.example/1"), req("https://a.example/2")}
 	if err := refuseUnsafeRedirect(req("http://a.example/3"), via); err == nil {
@@ -94,5 +109,47 @@ func TestRefuseUnsafeRedirect(t *testing.T) {
 	}
 	if err := refuseUnsafeRedirect(req("https://a.example/"), long); err == nil {
 		t.Error("redirect loop not stopped")
+	}
+}
+
+// TestRefuseUnsafeRedirectDefaultPorts: an explicit default port (443 for
+// https, 80 for http) compares equal to an omitted one, in either direction
+// and case-insensitively, while any other port is still another host.
+func TestRefuseUnsafeRedirectDefaultPorts(t *testing.T) {
+	req := func(u string) *http.Request {
+		r, err := http.NewRequest(http.MethodGet, u, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	same := []struct{ from, to string }{
+		{"https://h/x", "https://h:443/x"},
+		{"https://h:443/x", "https://h/x"},
+		{"http://h/x", "http://h:80/x"},
+		{"http://h:80/x", "http://h/x"},
+		{"https://A.Example/x", "https://a.example:443/x"},
+		{"HTTPS://a.example:443/x", "https://A.EXAMPLE/x"},
+		{"https://[::1]/x", "https://[::1]:443/x"},
+		{"https://h:8443/x", "https://H:8443/y"},
+	}
+	for _, c := range same {
+		if err := refuseUnsafeRedirect(req(c.to), []*http.Request{req(c.from)}); err != nil {
+			t.Errorf("%s -> %s refused: %v", c.from, c.to, err)
+		}
+	}
+	other := []struct{ from, to string }{
+		{"https://h/x", "https://h:8443/x"},
+		{"https://h:443/x", "https://h:444/x"},
+		{"https://h/x", "https://h:80/x"},
+		{"http://h/x", "http://h:443/x"},
+		{"https://[::1]/x", "https://[::1]:8443/x"},
+		{"https://[::1]:443/x", "https://[::2]/x"},
+		{"https://h:443/x", "https://other:443/x"},
+	}
+	for _, c := range other {
+		if err := refuseUnsafeRedirect(req(c.to), []*http.Request{req(c.from)}); err == nil {
+			t.Errorf("%s -> %s allowed", c.from, c.to)
+		}
 	}
 }

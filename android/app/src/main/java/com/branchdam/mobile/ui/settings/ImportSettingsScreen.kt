@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,10 +15,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.branchdam.mobile.R
 import com.branchdam.mobile.observer.MediaScanner
+import com.branchdam.mobile.otg.OtgIngestManager
+import com.branchdam.mobile.ui.rememberOtgCardFolderPicker
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +82,32 @@ fun ImportSettingsScreen(
                         )
                     },
                     modifier = Modifier.clickable { viewModel.setAutoImportEnabled(!autoImportEnabled) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+            }
+
+            // Manual card import: opens the system folder picker. The
+            // scan, confirmation and progress dialogs are hosted by
+            // MainActivity, which observes the same OtgIngestManager.
+            val pickCardFolder = rememberOtgCardFolderPicker { uri ->
+                OtgIngestManager.getInstance(context).onDocumentTreeSelected(uri)
+            }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                shape = MaterialTheme.shapes.large
+            ) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.otg_import_from_card_title)) },
+                    supportingContent = { Text(stringResource(R.string.otg_import_from_card_summary)) },
+                    leadingContent = {
+                        Icon(Icons.Default.SdCard, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    modifier = Modifier.clickable(onClick = pickCardFolder),
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
             }

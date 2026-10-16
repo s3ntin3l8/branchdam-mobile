@@ -27,6 +27,15 @@ public struct AppleOtgCandidate: Equatable, Sendable {
         self.isVideo = isVideo
     }
 
+    /// The engine's local ID for this card file: its URL plus size and
+    /// modification time. A reformatted card reuses names like
+    /// DCIM/100CANON/IMG_0001.CR3 for new shots; folding size and mtime in
+    /// keeps those from being compared against the old file's hash, while
+    /// a re-read of the same file that yields different bytes still is.
+    public var localID: String {
+        "\(url.absoluteURL.absoluteString)#\(sizeBytes)-\(lastModifiedUnix)"
+    }
+
     public static let rawExtensions: Set<String> = [
         "dng", "cr3", "cr2", "arw", "nef", "nrw", "orf", "rw2", "pef", "raf", "3fr"
     ]
