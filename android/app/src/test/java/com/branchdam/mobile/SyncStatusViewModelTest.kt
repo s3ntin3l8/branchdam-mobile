@@ -1,15 +1,18 @@
 package com.branchdam.mobile
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.branchdam.mobile.ui.sync.SyncStatusViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -249,11 +252,18 @@ class SyncStatusViewModelTest {
         advanceUntilIdle()
 
         viewModel.triggerSync()
-        advanceUntilIdle()
+        // runCurrent, not advanceUntilIdle: the enqueued sync stays
+        // ENQUEUED (the test WorkManager never meets its network
+        // constraint), which the screen shows as syncing, so its
+        // upload-progress poll re-arms every 500 ms for as long as the
+        // view model lives and virtual time would never go idle.
+        runCurrent()
 
         val infos = androidx.work.WorkManager.getInstance(app)
             .getWorkInfosForUniqueWork(com.branchdam.mobile.service.SyncScheduler.IMMEDIATE_WORK_TAG)
             .get(5, java.util.concurrent.TimeUnit.SECONDS)
+        // Stop the poll before runTest finishes, as onCleared would.
+        viewModel.viewModelScope.cancel()
         assertEquals("Sync Now must enqueue exactly one immediate sync", 1, infos.size)
         return infos.single().constraints.requiredNetworkType
     }
