@@ -24,8 +24,14 @@ endif
 BRANCHDAM ?= ../branchdam
 # Refresh core/client/testdata/contract from branchDAM's generated
 # agent-API fixtures, then run the conformance tests against them.
+# contract-sync copies the fixtures of a clean branchDAM checkout, records
+# its commit in SOURCE and runs the conformance tests. If `make lint` then
+# flags a fixture value as a secret (detect-secrets), refresh the baseline:
+# detect-secrets scan --baseline .secrets.baseline
 contract-sync:
 	@test -d "$(BRANCHDAM)/docs/contract/fixtures" || { echo "no $(BRANCHDAM)/docs/contract/fixtures -- set BRANCHDAM=<branchdam checkout>"; exit 1; }
+	@git -C "$(BRANCHDAM)" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "$(BRANCHDAM) is not a git checkout; SOURCE needs its commit -- use a clone"; exit 1; }
+	@test -z "$$(git -C "$(BRANCHDAM)" status --porcelain -- docs/contract/fixtures)" || { echo "$(BRANCHDAM)/docs/contract/fixtures has uncommitted changes; SOURCE would name a commit without them -- commit first"; exit 1; }
 	rm -f core/client/testdata/contract/*.json
 	cp "$(BRANCHDAM)"/docs/contract/fixtures/*.json core/client/testdata/contract/
 	git -C "$(BRANCHDAM)" log -1 --format='branchdam %H %s' -- docs/contract/fixtures > core/client/testdata/contract/SOURCE

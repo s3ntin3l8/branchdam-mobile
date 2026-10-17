@@ -128,7 +128,7 @@ func TestContractCheckContentQuery(t *testing.T) {
 	defer srv.Close()
 
 	c := New(Config{BaseURL: srv.URL, APIKey: "k", AgentID: "pixel"})
-	if _, err := c.CheckContent(context.Background(), fx["fastHash"].(string), fx["fullHash"].(string)); err != nil {
+	if _, err := c.CheckContent(context.Background(), mustString(t, fx, "fastHash"), mustString(t, fx, "fullHash")); err != nil {
 		t.Fatal(err)
 	}
 	for name := range got {
@@ -197,4 +197,15 @@ func TestContractUploadHeaders(t *testing.T) {
 			t.Errorf("UploadStream sends %s, which the server does not read (drift, or list it in clientOnly with a reason)", name)
 		}
 	}
+}
+
+// mustString returns fx[key] as a string, failing the test (not panicking)
+// when a fixture changes shape.
+func mustString(t *testing.T, fx map[string]any, key string) string {
+	t.Helper()
+	v, ok := fx[key].(string)
+	if !ok {
+		t.Fatalf("fixture field %s = %#v, want a string", key, fx[key])
+	}
+	return v
 }

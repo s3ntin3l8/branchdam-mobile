@@ -3,7 +3,9 @@
 // copied from the server's docs/contract/fixtures by `make contract-sync`).
 // Each server fixture sets every field the server reads or writes, so a
 // DTO that drops, renames, retypes or invents a field shows up here
-// instead of in production. Imported by tests only.
+// instead of in production. A retype between JSON number types (an int64
+// field made float64, or back) does not show: both decode and re-encode
+// the fixture's number the same way. Imported by tests only.
 package contracttest
 
 import (
@@ -73,6 +75,9 @@ func RoundTrip(t *testing.T, name string, c Case) {
 		t.Fatal(err)
 	}
 	for path := range c.NotModelled {
+		if !hasPath(want, strings.Split(path, ".")) {
+			t.Errorf("%s: NotModelled %q matches no field of the server fixture (stale entry: remove it)", name, path)
+		}
 		dropPath(want, strings.Split(path, "."))
 	}
 	stripped, err := json.Marshal(want)
@@ -100,7 +105,17 @@ func RoundTrip(t *testing.T, name string, c Case) {
 	if err := json.Unmarshal(Read(t, name), &full); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range declaredPaths(reflect.TypeOf(c.DTO), "") {
+	declared := declaredPaths(reflect.TypeOf(c.DTO), "")
+	declaredSet := make(map[string]bool, len(declared))
+	for _, path := range declared {
+		declaredSet[path] = true
+	}
+	for path := range c.ClientOnly {
+		if !declaredSet[path] {
+			t.Errorf("%s: ClientOnly %q matches no field %T declares (stale entry: remove it)", name, path, c.DTO)
+		}
+	}
+	for _, path := range declared {
 		if _, ok := c.ClientOnly[path]; ok {
 			continue
 		}
@@ -167,9 +182,16 @@ func hasPath(v any, path []string) bool {
 	}
 	if isList {
 		list, ok := next.([]any)
-		if !ok || len(list) == 0 {
+		if !ok {
 			return false
 		}
+		if len(list) == 0 {
+			// The list is present but its element shape can't be checked,
+			// so this answers "not drift", not "the field exists": a
+			// NotModelled or declared list[].field path passes vacuously.
+			return true
+		}
+		// Shape check on the first element only.
 		return hasPath(list[0], path[1:])
 	}
 	return hasPath(next, path[1:])
