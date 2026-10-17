@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.branchdam.mobile.ui.PairingConfig
+import com.branchdam.mobile.ui.settings.GalleryFolderPrefs
 import com.branchdam.mobile.ui.settings.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -322,13 +323,15 @@ class SettingsViewModelRecheckTest {
     }
 
     @Test
-    fun testLegacyNoneSentinelMigratesToNoFoldersSelected() = runTest(testDispatcher) {
+    fun testLegacyNoneSentinelMigratedAtStartIsNoFoldersSelected() = runTest(testDispatcher) {
         SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
         SettingsViewModel.testConnectionFn = { true }
 
         val prefs = ApplicationProvider.getApplicationContext<android.content.Context>()
             .getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
         prefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, setOf("__NONE__")).commit()
+        // What BranchDamApplication.onCreate does before any screen loads.
+        GalleryFolderPrefs.migrateLegacy(prefs)
 
         val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
         advanceUntilIdle()

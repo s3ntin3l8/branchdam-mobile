@@ -131,7 +131,7 @@ func TestReclaimSafeSpace_NotVerified(t *testing.T) {
 	if err := e.queue.RecordLocalMedia("ph://unverified-1", "unverified-node", "b3-unv-1", "ACTIVE"); err != nil {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
-	verdict, err := e.ReclaimSafeSpace("ph://unverified-1")
+	verdict, err := e.ReclaimSafeSpace("ph://unverified-1", 0, 0)
 	if err == nil {
 		t.Fatalf("expected error for unverified node")
 	}
@@ -165,7 +165,7 @@ func TestReclaimSafeSpace_TierIneligible(t *testing.T) {
 	if err := e.queue.RecordLocalMedia("ph://tier1-1", "tier1-node", "b3-tier1-1", "ACTIVE"); err != nil {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
-	verdict, err := e.ReclaimSafeSpace("ph://tier1-1")
+	verdict, err := e.ReclaimSafeSpace("ph://tier1-1", 0, 0)
 	if err == nil {
 		t.Fatalf("expected error for tier-ineligible node")
 	}
@@ -229,7 +229,7 @@ func TestReclaimSafeSpace_TransientNetworkError(t *testing.T) {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
 
-	v, err := e.ReclaimSafeSpace("ph://transient-1")
+	v, err := e.ReclaimSafeSpace("ph://transient-1", 0, 0)
 	if v.Eligible {
 		t.Fatalf("expected Eligible=false on server error, got %+v", v)
 	}
@@ -307,7 +307,7 @@ func TestReclaimSafeSpace_NoRecordOnServer(t *testing.T) {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
 
-	v, err := e.ReclaimSafeSpace("ph://unknown-1")
+	v, err := e.ReclaimSafeSpace("ph://unknown-1", 0, 0)
 	if v.Eligible {
 		t.Fatalf("expected Eligible=false on empty server response, got %+v", v)
 	}
@@ -341,7 +341,7 @@ func TestReclaimSafeSpace_LocalDBError(t *testing.T) {
 	})
 
 	// Record local media so the engine has a row to update.
-	if err := e.queue.RecordLocalMedia("ph://dbfail-1", "dbfail-node", "b3-dbfail-1", "ACTIVE"); err != nil {
+	if err := e.queue.RecordLocalMediaWithBaseline("ph://dbfail-1", "dbfail-node", "b3-dbfail-1", "ACTIVE", 4096, 1700000000); err != nil {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
 
@@ -359,7 +359,7 @@ func TestReclaimSafeSpace_LocalDBError(t *testing.T) {
 		t.Fatalf("CREATE TRIGGER: %v", err)
 	}
 
-	v, err := e.ReclaimSafeSpace("ph://dbfail-1")
+	v, err := e.ReclaimSafeSpace("ph://dbfail-1", 4096, 1700000000)
 	if v.Eligible {
 		t.Fatalf("expected Eligible=false on DB error, got %+v", v)
 	}
@@ -546,7 +546,7 @@ func TestReclaimSafeSpace_TrashedMasterIneligible(t *testing.T) {
 	if err := e.queue.RecordLocalMedia("ph://trashed-1", "trashed-node", "b3-trashed-1", "ACTIVE"); err != nil {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
-	verdict, err := e.ReclaimSafeSpace("ph://trashed-1")
+	verdict, err := e.ReclaimSafeSpace("ph://trashed-1", 0, 0)
 	if err == nil || verdict.Eligible {
 		t.Fatalf("expected ineligible verdict, got %+v, err %v", verdict, err)
 	}

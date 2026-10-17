@@ -392,3 +392,64 @@ func TestPendingImportSurvivesReopen(t *testing.T) {
 		t.Fatal("suppression lost on reopen")
 	}
 }
+
+// TestOpen_MigratesLocalMediaStateWithoutBaseline: a local_media_state from
+// before the reclaim baseline (#229) opens, gains size_bytes and
+// modified_unix, and its rows read back with a zero (unknown) baseline.
+func TestOpen_MigratesLocalMediaStateWithoutBaseline(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "old-media.db")
+	old, err := sql.Open("sqlite", "file:"+dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	if _, err := old.Exec(`
+	CREATE TABLE local_media_state (
+	    local_id TEXT PRIMARY KEY, node_uuid TEXT NOT NULL DEFAULT '',
+	    blake3_hash TEXT NOT NULL DEFAULT '', lifecycle_state TEXT NOT NULL DEFAULT 'ACTIVE',
+	    is_offloaded INTEGER NOT NULL DEFAULT 0, created_at_unix INTEGER NOT NULL,
+	    updated_at_unix INTEGER NOT NULL);
+	INSERT INTO local_media_state (local_id, node_uuid, blake3_hash, created_at_unix, updated_at_unix)
+	VALUES ('content://media/1', 'node-1', 'b3-old', 1, 1);`); err != nil {
+		t.Fatalf("create old schema: %v", err)
+	}
+	_ = old.Close()
+
+	q, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open old db: %v", err)
+	}
+	t.Cleanup(func() { _ = q.Close() })
+	m, err := q.GetMediaByLocalID("content://media/1")
+	if err != nil {
+		t.Fatalf("GetMediaByLocalID: %v", err)
+	}
+	if m.Blake3Hash != "b3-old" || m.SizeBytes != 0 || m.ModifiedUnix != 0 {
+		t.Fatalf("migrated row = %+v", m)
+	}
+}
+
+// TestRecordLocalMediaWithBaseline: the baseline round-trips, and every
+// re-record overwrites it together with the hash -- a plain RecordLocalMedia
+// clears it rather than leaving a baseline that described other bytes.
+func TestRecordLocalMediaWithBaseline(t *testing.T) {
+	q := newTestQueue(t)
+	if err := q.RecordLocalMediaWithBaseline("c://1", "node-1", "b3", "ACTIVE", 4096, 1700000000); err != nil {
+		t.Fatal(err)
+	}
+	m, err := q.GetMediaByLocalID("c://1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.SizeBytes != 4096 || m.ModifiedUnix != 1700000000 {
+		t.Fatalf("baseline = (%d, %d), want (4096, 1700000000)", m.SizeBytes, m.ModifiedUnix)
+	}
+	if byNode, err := q.GetMediaByNodeUUID("node-1"); err != nil || byNode.SizeBytes != 4096 || byNode.ModifiedUnix != 1700000000 {
+		t.Fatalf("GetMediaByNodeUUID = %+v, %v", byNode, err)
+	}
+	if err := q.RecordLocalMedia("c://1", "node-1", "b3-new", "ACTIVE"); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := q.GetMediaByLocalID("c://1"); m.SizeBytes != 0 || m.ModifiedUnix != 0 || m.Blake3Hash != "b3-new" {
+		t.Fatalf("after re-record without baseline = %+v", m)
+	}
+}

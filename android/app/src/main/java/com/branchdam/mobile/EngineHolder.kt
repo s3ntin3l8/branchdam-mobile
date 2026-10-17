@@ -96,17 +96,27 @@ object EngineHolder {
 
     fun isInitialized(): Boolean = isInitialized
 
+    /**
+     * Enqueues [localPath] for upload under [localId]. [baseline] is the
+     * original item's MediaStore size and modification time, read before
+     * the bytes were staged; the engine records it with the BLAKE3 and
+     * re-verifies it before a Safe-Space reclaim deletes the item (#229).
+     */
     fun enqueueMedia(
         localPath: String,
         filename: String,
         capturedAtUnix: Long,
         localId: String,
+        baseline: com.branchdam.mobile.triage.LocalFileState = com.branchdam.mobile.triage.LocalFileState.UNKNOWN,
     ): Long {
         if (nativeAvailable.get() && !isInitialized) return 0L
         if (!nativeAvailable.get()) return 1L
         return try {
             queryExecutor.submit(Callable {
-                Branchdam.bindingEnqueueMedia(localPath, filename, localId, "", capturedAtUnix, 0L)
+                Branchdam.bindingEnqueueMediaWithBaseline(
+                    localPath, filename, localId, "", "", capturedAtUnix,
+                    baseline.sizeBytes, baseline.modifiedUnix,
+                )
             }).get()
         } catch (t: Throwable) {
             Log.w(TAG, "enqueueMedia failed: $t")
@@ -339,11 +349,17 @@ object EngineHolder {
         }
     }
 
-    fun reclaimSafeSpace(localID: String): Boolean {
+    /**
+     * Runs the engine's reclaim gate for [localID]. [current] is the
+     * item's MediaStore size and modification time read immediately
+     * before this call; the engine refuses (`local-changed`) unless it
+     * matches the baseline recorded at enqueue (#229).
+     */
+    fun reclaimSafeSpace(localID: String, current: com.branchdam.mobile.triage.LocalFileState): Boolean {
         if (!nativeAvailable.get()) return false
         return try {
             queryExecutor.submit(Callable {
-                Branchdam.bindingReclaimSafeSpace(localID)
+                Branchdam.bindingReclaimSafeSpace(localID, current.sizeBytes, current.modifiedUnix)
                 true
             }).get()
         } catch (t: Throwable) {

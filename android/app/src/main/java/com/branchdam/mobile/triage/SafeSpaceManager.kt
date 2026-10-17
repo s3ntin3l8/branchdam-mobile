@@ -1,5 +1,6 @@
 package com.branchdam.mobile.triage
 
+import android.content.Context
 import com.branchdam.mobile.EngineHolder
 
 data class SafeSpaceResult(
@@ -33,18 +34,29 @@ object SafeSpaceManager {
      * offloaded flag only when the node is safe to reclaim. Only the
      * candidates it approves may be deleted locally.
      *
-     * @param engineReclaim test seam; defaults to
-     *   [EngineHolder.reclaimSafeSpace].
+     * @param engineReclaim the gate for one item. In the app it reads the
+     *   item's current MediaStore size and modification time right before
+     *   calling [EngineHolder.reclaimSafeSpace], so the engine can refuse
+     *   an item whose bytes changed since upload (#229); see
+     *   [reclaimWithCurrentState]. Tests inject a fake.
      */
     fun planReclaim(
         candidates: List<ReclaimCandidate>,
-        engineReclaim: (uri: String) -> Boolean = { EngineHolder.reclaimSafeSpace(it) },
+        engineReclaim: (uri: String) -> Boolean,
     ): ReclaimPlan {
         val approved = candidates
             .distinctBy { it.uri }
             .filter { engineReclaim(it.uri) }
         return ReclaimPlan(totalChecked = candidates.size, approved = approved)
     }
+
+    /**
+     * The production [planReclaim] gate: reads [uri]'s current MediaStore
+     * state immediately before the engine's reclaim call, which compares
+     * it with the baseline recorded at enqueue.
+     */
+    fun reclaimWithCurrentState(context: Context, uri: String): Boolean =
+        EngineHolder.reclaimSafeSpace(uri, queryLocalFileState(context, uri))
 
     /**
      * Phase 2 of a reclaim, after the MediaStore delete (and the user's

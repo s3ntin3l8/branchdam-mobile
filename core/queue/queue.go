@@ -85,6 +85,13 @@ var addedColumns = []struct{ table, name, ddl string }{
 	// mtime_unix_nano is the file's modification time when it was hashed;
 	// 0 on rows queued before it existed (only size is compared for those).
 	{"upload_queue", "mtime_unix_nano", "INTEGER NOT NULL DEFAULT 0"},
+	// size_bytes and modified_unix are the reclaim baseline: the original
+	// media item's size and modification time (as the platform's media
+	// store reports them) when its BLAKE3 was recorded. 0 on rows recorded
+	// before they existed, or by a shell that supplied none -- such rows
+	// are never reclaimed (see engine.ReasonNoLocalBaseline).
+	{"local_media_state", "size_bytes", "INTEGER NOT NULL DEFAULT 0"},
+	{"local_media_state", "modified_unix", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 // ensureColumn adds column name to table unless it already exists.

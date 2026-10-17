@@ -66,4 +66,10 @@ type LocalMediaState struct {
 	IsOffloaded    bool   `json:"isOffloaded"`
 	CreatedAtUnix  int64  `json:"createdAtUnix"`
 	UpdatedAtUnix  int64  `json:"updatedAtUnix"`
+	// SizeBytes and ModifiedUnix are the reclaim baseline: the original
+	// item's size and modification time (unix seconds) as the shell read
+	// them from the platform media store when Blake3Hash was recorded. 0
+	// means unknown.
+	SizeBytes    int64 `json:"sizeBytes"`
+	ModifiedUnix int64 `json:"modifiedUnix"`
 }

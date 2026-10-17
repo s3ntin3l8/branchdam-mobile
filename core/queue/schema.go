@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS local_media_state (
     lifecycle_state     TEXT    NOT NULL DEFAULT 'ACTIVE',
     is_offloaded        INTEGER NOT NULL DEFAULT 0,
     created_at_unix     INTEGER NOT NULL,
-    updated_at_unix     INTEGER NOT NULL
+    updated_at_unix     INTEGER NOT NULL,
+    size_bytes          INTEGER NOT NULL DEFAULT 0,
+    modified_unix       INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_local_media_node_uuid

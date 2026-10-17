@@ -90,7 +90,7 @@ func TestFFI_AuthRejectionMapsToAuthFailed(t *testing.T) {
 			if err := e.queue.RecordLocalMedia("ph://x", "node-x", "b3-x", "ACTIVE"); err != nil {
 				t.Fatal(err)
 			}
-			_, err = e.ReclaimSafeSpace("ph://x")
+			_, err = e.ReclaimSafeSpace("ph://x", 0, 0)
 			want := c.code
 			if c.code == CodeNetworkError {
 				want = "INTERNAL" // reclaim's transient code, unchanged

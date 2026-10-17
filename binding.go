@@ -89,6 +89,18 @@ func BindingEnqueueMedia(localPath, filename, localID, cameraModel string,
 // Returns the upload ID (>= 1) on success or 0 on error.
 func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel, sourcePathHash string,
 	capturedAtUnix, sizeBytes int64) (int64, error) {
+	return BindingEnqueueMediaWithBaseline(localPath, filename, localID, cameraModel, sourcePathHash, capturedAtUnix, sizeBytes, 0)
+}
+
+// BindingEnqueueMediaWithBaseline enqueues a local media file for upload and
+// records its reclaim baseline: sizeBytes and modifiedUnix (unix seconds) are
+// the original item's size and modification time as the shell read them from
+// the platform media store (Android MediaStore SIZE / DATE_MODIFIED, iOS
+// PHAsset modificationDate) before staging localPath. BindingReclaimSafeSpace
+// re-verifies them before a delete (#229); 0 means not reported.
+// Returns the upload ID (>= 1) on success or 0 on error.
+func BindingEnqueueMediaWithBaseline(localPath, filename, localID, cameraModel, sourcePathHash string,
+	capturedAtUnix, sizeBytes, modifiedUnix int64) (int64, error) {
 
 	e, err := getBindingEngine()
 	if err != nil {
@@ -102,6 +114,7 @@ func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel
 		SourcePathHash: sourcePathHash,
 		CapturedAtUnix: capturedAtUnix,
 		SizeBytes:      sizeBytes,
+		ModifiedUnix:   modifiedUnix,
 	})
 }
 
@@ -236,12 +249,12 @@ func BindingFetchNamingTemplate() (string, error) {
 }
 
 // BindingReclaimSafeSpace runs the atomic reclaim for a single local ID.
-func BindingReclaimSafeSpace(localID string) error {
+func BindingReclaimSafeSpace(localID string, sizeBytes, modifiedUnix int64) error {
 	e, err := getBindingEngine()
 	if err != nil {
 		return err
 	}
-	_, reclaimErr := e.ReclaimSafeSpace(localID)
+	_, reclaimErr := e.ReclaimSafeSpace(localID, sizeBytes, modifiedUnix)
 	return reclaimErr
 }
 

@@ -247,7 +247,13 @@ type EnqueueMediaOptions struct {
 	CameraModel    string
 	SourcePathHash string
 	CapturedAtUnix int64
-	SizeBytes      int64
+	// SizeBytes and ModifiedUnix (unix seconds) are the original item's
+	// size and modification time as the shell read them from the platform
+	// media store before staging LocalPath. They are recorded with the
+	// BLAKE3 as the reclaim baseline that ReclaimSafeSpace re-verifies
+	// (#229); 0 means the platform does not report that field.
+	SizeBytes    int64
+	ModifiedUnix int64
 }
 
 // EnqueueMedia opens LocalPath, computes BLAKE3, dedups against the queue,
@@ -275,8 +281,9 @@ func (e *Engine) EnqueueMedia(opts EnqueueMediaOptions) (int64, error) {
 	}
 
 	eng := e.engine
-	item, err := eng.EnqueueLocalCapture(
+	item, err := eng.EnqueueLocalCaptureWithBaseline(
 		opts.LocalPath, opts.Filename, opts.CapturedAtUnix, opts.LocalID, opts.CameraModel, opts.SourcePathHash,
+		engine.LocalFileState{SizeBytes: opts.SizeBytes, ModifiedUnix: opts.ModifiedUnix},
 	)
 	if err != nil {
 		var ce *client.ClientError
@@ -786,18 +793,22 @@ func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]Sa
 }
 
 // ReclaimSafeSpace marks LocalID as offloaded after re-checking the server
-// and only if the node is currently verified, on the Tier-3 master archive
-// and live (ACTIVE or HIDDEN). The local file
+// and only if the node is currently verified, on the Tier-3 master archive,
+// live (ACTIVE or HIDDEN) and holding the recorded BLAKE3, and only if
+// sizeBytes and modifiedUnix -- the item's media-store size and
+// modification time, read by the shell immediately before this call --
+// match the baseline recorded at enqueue (#229). The local file
 // deletion is the shell's responsibility and should only happen after
 // this returns Eligible=true.
-func (e *Engine) ReclaimSafeSpace(localID string) (SafeSpaceVerdict, error) {
+func (e *Engine) ReclaimSafeSpace(localID string, sizeBytes, modifiedUnix int64) (SafeSpaceVerdict, error) {
 	if err := e.requireOpen(); err != nil {
 		return SafeSpaceVerdict{}, err
 	}
 	if localID == "" {
 		return SafeSpaceVerdict{}, newError(CodeInvalidInput, "LocalID is required")
 	}
-	verdict, err := e.engine.SafeSpaceReclaim(context.Background(), localID)
+	verdict, err := e.engine.SafeSpaceReclaim(context.Background(), localID,
+		engine.LocalFileState{SizeBytes: sizeBytes, ModifiedUnix: modifiedUnix})
 	if err != nil {
 		// Distinguish transient infrastructure failures (network, DB)
 		// from genuine ineligible verdicts. The shell should retry on
