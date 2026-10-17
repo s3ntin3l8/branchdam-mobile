@@ -26,6 +26,9 @@ require (
 
 replace github.com/s3ntin3l8/branchdam-mobile/core => ./core
 
+// x86_64 Android seccomp fix (#211): overlays modernc.org/libc v1.77.1 to use modern *at syscalls
+replace modernc.org/libc => ./third_party/modernc.org/libc
+
 tool (
 	golang.org/x/mobile/cmd/gobind
 	golang.org/x/mobile/cmd/gomobile

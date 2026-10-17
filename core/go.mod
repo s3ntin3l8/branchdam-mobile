@@ -9,6 +9,9 @@ require (
 	modernc.org/sqlite v1.60.1
 )
 
+// x86_64 Android seccomp fix (#211): overlays modernc.org/libc v1.77.1 to use modern *at syscalls
+replace modernc.org/libc => ../third_party/modernc.org/libc
+
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
