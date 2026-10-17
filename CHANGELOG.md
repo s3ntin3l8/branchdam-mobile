@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.7.12](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.11...branchdam-mobile-v0.7.12) (2026-10-17)
+
+
+### Features
+
+* **core:** adopt rotated API keys from the handshake ([#216](https://github.com/s3ntin3l8/branchdam-mobile/issues/216)) ([740bee3](https://github.com/s3ntin3l8/branchdam-mobile/commit/740bee3749808b8e124aff3c3732a6b2cb4c6578))
+* prompt a re-pair before an undeliverable key rotation's grace window ends ([#234](https://github.com/s3ntin3l8/branchdam-mobile/issues/234)) ([860f640](https://github.com/s3ntin3l8/branchdam-mobile/commit/860f640842cb875a648107be0cad016a99f252b5))
+* reproducible emulator screenshot pipeline ([#214](https://github.com/s3ntin3l8/branchdam-mobile/issues/214)) ([6ec49fb](https://github.com/s3ntin3l8/branchdam-mobile/commit/6ec49fb523adc57091cb77830ea4a19c81e426e0))
+
+
+### Bug Fixes
+
+* **android:** persist pending imports and honour sync settings ([#204](https://github.com/s3ntin3l8/branchdam-mobile/issues/204)) ([4899ae6](https://github.com/s3ntin3l8/branchdam-mobile/commit/4899ae6577274af51c959da407c22039cfe29f1f))
+* **android:** request originals and delete reclaimed media through MediaStore ([#199](https://github.com/s3ntin3l8/branchdam-mobile/issues/199)) ([f5f1e3f](https://github.com/s3ntin3l8/branchdam-mobile/commit/f5f1e3f9acd8a02a36c7265d7c8310e8c74f5e04))
+* **android:** store "no folders selected" as its own preference ([#230](https://github.com/s3ntin3l8/branchdam-mobile/issues/230)) ([95214c9](https://github.com/s3ntin3l8/branchdam-mobile/commit/95214c9f448428f738812eddd456078abaf1115e))
+* **core:** emit the server's event schema for delete and lineage events ([#194](https://github.com/s3ntin3l8/branchdam-mobile/issues/194)) ([157e793](https://github.com/s3ntin3l8/branchdam-mobile/commit/157e7935d6d4fc6b527e6fdae1d280f22a6fb623))
+* **core:** make the sync queue recover from cancellation and large uploads ([#198](https://github.com/s3ntin3l8/branchdam-mobile/issues/198)) ([35ed9ad](https://github.com/s3ntin3l8/branchdam-mobile/commit/35ed9ad5c3f8819b9014c696631a4d0175dc5bd0))
+* **core:** re-verify the local file before reclaim deletes it ([#231](https://github.com/s3ntin3l8/branchdam-mobile/issues/231)) ([515fbc2](https://github.com/s3ntin3l8/branchdam-mobile/commit/515fbc2a5149bcc917c85771562fc54783ece2d8))
+* **core:** require node-status fullHash to match the local hash before reclaim ([#228](https://github.com/s3ntin3l8/branchdam-mobile/issues/228)) ([d7dd3aa](https://github.com/s3ntin3l8/branchdam-mobile/commit/d7dd3aa1001f74ded488f0f164ed5298abc29d9c))
+* **engine:** require a live Tier-3 master before reclaiming local media ([#191](https://github.com/s3ntin3l8/branchdam-mobile/issues/191)) ([a11ac72](https://github.com/s3ntin3l8/branchdam-mobile/commit/a11ac72b1171bc2346edbd0aeb5418d29f995f54))
+* **hasher:** match the server's sampled FastHash ([#196](https://github.com/s3ntin3l8/branchdam-mobile/issues/196)) ([59df105](https://github.com/s3ntin3l8/branchdam-mobile/commit/59df1054a58cbf8c8a689f34c93f5dc96a36a459))
+* **ios:** baseline reclaim on creationDate when modificationDate is nil ([#233](https://github.com/s3ntin3l8/branchdam-mobile/issues/233)) ([648dcb2](https://github.com/s3ntin3l8/branchdam-mobile/commit/648dcb2994f1f34a0fb477964b5610acf3128718)), closes [#232](https://github.com/s3ntin3l8/branchdam-mobile/issues/232)
+* **ios:** persist the agent ID and keep the bridge off the main thread ([#200](https://github.com/s3ntin3l8/branchdam-mobile/issues/200)) ([2eb17dd](https://github.com/s3ntin3l8/branchdam-mobile/commit/2eb17dd886bad3e3549b94ecc973e85623112c35))
+* **ios:** reliable camera-roll ingest and background sync ([#202](https://github.com/s3ntin3l8/branchdam-mobile/issues/202)) ([955d683](https://github.com/s3ntin3l8/branchdam-mobile/commit/955d683555a934cddfad5a4e3a015b038099df48))
+* **lineage:** human review decides sub-1.00 edges ([#206](https://github.com/s3ntin3l8/branchdam-mobile/issues/206)) ([1a4aa48](https://github.com/s3ntin3l8/branchdam-mobile/commit/1a4aa48f0c1b91333d20b0aeb5e305143f45fdde))
+* **otg:** safe card ingest on both platforms ([#210](https://github.com/s3ntin3l8/branchdam-mobile/issues/210)) ([679421e](https://github.com/s3ntin3l8/branchdam-mobile/commit/679421e7bbb5f817e9fc14a47bd76bc8f585b24a))
+* **screenshots:** wait for a completed sync before capturing sync status ([#225](https://github.com/s3ntin3l8/branchdam-mobile/issues/225)) ([cc8c513](https://github.com/s3ntin3l8/branchdam-mobile/commit/cc8c51310abaa5cf168343a9a57c3cb09979d631))
+* **security:** no plaintext key fallback; clear TLS story ([#208](https://github.com/s3ntin3l8/branchdam-mobile/issues/208)) ([8619357](https://github.com/s3ntin3l8/branchdam-mobile/commit/86193570fce349fc9c0e6148b33aa9a09776367f))
+
 ## [0.7.11](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.10...branchdam-mobile-v0.7.11) (2026-09-20)
 
 
