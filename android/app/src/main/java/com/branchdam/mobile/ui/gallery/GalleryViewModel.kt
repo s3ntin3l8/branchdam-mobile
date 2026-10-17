@@ -20,7 +20,7 @@ import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.triage.MediaDeleteCoordinator
 import com.branchdam.mobile.triage.MediaStoreDeleter
 import com.branchdam.mobile.triage.PendingDeleteConsent
-import com.branchdam.mobile.ui.settings.SettingsViewModel
+import com.branchdam.mobile.ui.settings.GalleryFolderPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -86,14 +87,21 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private val prefs = application.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _includedFolders = MutableStateFlow<Set<String>>(
-        prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
-    )
-    val includedFolders: StateFlow<Set<String>> = _includedFolders.asStateFlow()
+    private val _folderSelection = MutableStateFlow(GalleryFolderPrefs.read(prefs))
+
+    /** Folders shown under "All folders"; empty means all, unless [noFoldersSelected]. */
+    val includedFolders: StateFlow<Set<String>> = _folderSelection
+        .map { it.folders }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _folderSelection.value.folders)
+
+    /** True when the user has unchecked every folder in Settings. */
+    val noFoldersSelected: StateFlow<Boolean> = _folderSelection
+        .map { it.noneSelected }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _folderSelection.value.noneSelected)
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == BranchDamKeys.INCLUDED_GALLERY_FOLDERS) {
-            _includedFolders.value = prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
+        if (key == BranchDamKeys.INCLUDED_GALLERY_FOLDERS || key == BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED) {
+            _folderSelection.value = GalleryFolderPrefs.read(prefs)
         }
     }
 
@@ -117,8 +125,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     val displayedItems: StateFlow<List<GalleryItem>> = combine(
         combine(_items, _selectedFilter, _selectedFolder) { items, filter, folder -> Triple(items, filter, folder) },
-        combine(_selectedSortProperty, _selectedSortDirection, _includedFolders) { sortProp, sortDir, folders -> Triple(sortProp, sortDir, folders) }
-    ) { (rawItems, filter, folder), (sortProp, sortDir, configuredIncludedFolders) ->
+        combine(_selectedSortProperty, _selectedSortDirection, _folderSelection) { sortProp, sortDir, folders -> Triple(sortProp, sortDir, folders) }
+    ) { (rawItems, filter, folder), (sortProp, sortDir, folderSelection) ->
+        val configuredIncludedFolders = folderSelection.folders
         var filtered = rawItems.filter { item ->
             val passesFilter = when (filter) {
                 GalleryFilter.ALL -> true
@@ -129,7 +138,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
 
             val passesFolder = if (folder == ALL_FOLDERS) {
-                if (configuredIncludedFolders.contains(SettingsViewModel.NO_FOLDERS_SENTINEL)) false
+                if (folderSelection.noneSelected) false
                 else if (configuredIncludedFolders.isEmpty()) true
                 else configuredIncludedFolders.contains(item.primaryMediaItem.folderName) ||
                         (item.companionMediaItem != null && configuredIncludedFolders.contains(item.companionMediaItem.folderName))

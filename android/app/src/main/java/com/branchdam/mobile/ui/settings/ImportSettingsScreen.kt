@@ -34,6 +34,7 @@ fun ImportSettingsScreen(
 ) {
     val autoImportEnabled by viewModel.autoImportEnabled.collectAsStateWithLifecycle()
     val includedFolders by viewModel.includedFolders.collectAsStateWithLifecycle()
+    val noFoldersSelected by viewModel.noFoldersSelected.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val discoveredFolders = remember(context) {
@@ -159,7 +160,7 @@ fun ImportSettingsScreen(
                             )
                         } else {
                             discoveredFolders.forEachIndexed { index, folder ->
-                                val isChecked = includedFolders.isEmpty() || includedFolders.contains(folder)
+                                val isChecked = !noFoldersSelected && (includedFolders.isEmpty() || includedFolders.contains(folder))
                                 ListItem(
                                     headlineContent = { Text(folder, fontWeight = FontWeight.Medium) },
                                     leadingContent = {

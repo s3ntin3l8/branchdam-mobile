@@ -133,6 +133,13 @@ object BranchDamKeys {
     const val INCLUDED_GALLERY_FOLDERS = "branchdam_included_gallery_folders"
 
     /**
+     * True when the user has unchecked every folder, so Gallery shows
+     * nothing. Kept apart from [INCLUDED_GALLERY_FOLDERS] (which is then
+     * empty) so no folder name, however spelled, can mean "none".
+     */
+    const val NO_GALLERY_FOLDERS_SELECTED = "branchdam_no_gallery_folders_selected"
+
+    /**
      * Whether the user has completed the onboarding flow.
      */
     const val ONBOARDING_COMPLETED = "branchdam_onboarding_completed"
