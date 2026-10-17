@@ -212,7 +212,7 @@ const (
 
 // LocalFileState is a local media item's size and modification time (unix
 // seconds) as the shell reads them from the platform media store (Android
-// MediaStore SIZE / DATE_MODIFIED, iOS PHAsset modificationDate). The core
+// MediaStore SIZE / DATE_MODIFIED, iOS PHAsset modificationDate, else creationDate). The core
 // cannot open the original on either platform -- it only ever sees a staged
 // copy -- so the shell supplies it: at enqueue, recorded as the reclaim
 // baseline next to the BLAKE3, and again immediately before a reclaim

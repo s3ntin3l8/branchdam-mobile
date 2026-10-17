@@ -1,10 +1,12 @@
 package com.branchdam.mobile
 
 import com.branchdam.mobile.triage.ReclaimCandidate
+import com.branchdam.mobile.triage.ReclaimGateResult
 import com.branchdam.mobile.triage.ReclaimPlan
 import com.branchdam.mobile.triage.SafeSpaceManager
 import com.branchdam.mobile.triage.SafeSpaceResult
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -44,13 +46,14 @@ class SafeSpaceManagerTest {
             ),
             engineReclaim = { uri ->
                 gated += uri
-                uri != "u2"
+                if (uri == "u2") ReclaimGateResult(false, "hash-mismatch") else ReclaimGateResult(true)
             },
         )
 
         assertEquals("every candidate goes through the gate", listOf("u1", "u2", "u3"), gated)
         assertEquals(3, plan.totalChecked)
         assertEquals(listOf("u1", "u3"), plan.approved.map { it.uri })
+        assertEquals("a refused item's reason is kept", listOf("hash-mismatch"), plan.keptReasons)
     }
 
     @Test
@@ -112,7 +115,7 @@ class SafeSpaceManagerTest {
                 ReclaimCandidate("u2", 2_000_000L),
                 ReclaimCandidate("u3", 3_000_000L),
             ),
-            engineReclaim = { uri -> uri != "u3" },
+            engineReclaim = { uri -> ReclaimGateResult(uri != "u3") },
         )
 
         val result = SafeSpaceManager.completeReclaim(
@@ -135,8 +138,46 @@ class SafeSpaceManagerTest {
     fun testNothingApprovedMeansNothingToDelete() {
         val plan = SafeSpaceManager.planReclaim(
             candidates = listOf(ReclaimCandidate("u1", 1L)),
-            engineReclaim = { false },
+            engineReclaim = { ReclaimGateResult(false) },
         )
         assertTrue(plan.approved.isEmpty())
+    }
+
+    // Core error messages as the binding surfaces them (branchdam.go's
+    // reclaimErrorToBranchdamError wraps the engine's reason).
+    private val serverRefusal = "branchdam: VERIFIED_REQUIRED: reclaim ineligible: no-server-hash"
+    private val localChanged =
+        "branchdam: VERIFIED_REQUIRED: reclaim ineligible: local-changed: modification time 2 differs from 1 recorded at enqueue"
+    private val noBaseline =
+        "branchdam: VERIFIED_REQUIRED: reclaim ineligible: no-local-baseline: no size or modification time recorded locally"
+
+    @Test
+    fun testNothingApprovedMessageBlamesTheServerOnlyForServerRefusals() {
+        val message = SafeSpaceManager.nothingApprovedMessage(listOf(serverRefusal, "engine unavailable"))
+        assertTrue(message, message.contains("server could not confirm any item"))
+    }
+
+    @Test
+    fun testNothingApprovedMessageNamesLocalGates() {
+        // #232: items kept by the local gates must not be blamed on the server.
+        val message = SafeSpaceManager.nothingApprovedMessage(listOf(localChanged, noBaseline))
+        assertFalse(message, message.contains("server"))
+        assertTrue(message, message.contains("changed on this device"))
+    }
+
+    @Test
+    fun testNothingApprovedMessageForMixedReasons() {
+        val message = SafeSpaceManager.nothingApprovedMessage(listOf(serverRefusal, localChanged))
+        assertTrue(message, message.contains("server could not confirm some items"))
+        assertTrue(message, message.contains("changed on this device"))
+    }
+
+    @Test
+    fun testIsLocalGateReason() {
+        assertTrue(SafeSpaceManager.isLocalGateReason(localChanged))
+        assertTrue(SafeSpaceManager.isLocalGateReason(noBaseline))
+        assertTrue("a bare reason matches", SafeSpaceManager.isLocalGateReason("local-changed: size 1 differs from 2"))
+        assertFalse(SafeSpaceManager.isLocalGateReason(serverRefusal))
+        assertFalse(SafeSpaceManager.isLocalGateReason("branchdam: INTERNAL: reclaim transient: dial tcp: no-local-baseline"))
     }
 }

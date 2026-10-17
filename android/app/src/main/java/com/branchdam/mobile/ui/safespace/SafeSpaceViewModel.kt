@@ -111,7 +111,7 @@ class SafeSpaceViewModel(application: Application) : AndroidViewModel(applicatio
                 toReclaim.map { ReclaimCandidate(it.contentUri, it.sizeBytes) },
             ) { uri -> SafeSpaceManager.reclaimWithCurrentState(context, uri) }
             if (plan.approved.isEmpty()) {
-                finishReclaim("The server could not confirm any item is safely archived; nothing was removed.")
+                finishReclaim(SafeSpaceManager.nothingApprovedMessage(plan.keptReasons))
                 return@launch
             }
 

@@ -353,18 +353,26 @@ object EngineHolder {
      * Runs the engine's reclaim gate for [localID]. [current] is the
      * item's MediaStore size and modification time read immediately
      * before this call; the engine refuses (`local-changed`) unless it
-     * matches the baseline recorded at enqueue (#229).
+     * matches the baseline recorded at enqueue (#229). A refusal carries
+     * the core's error message as its reason, so the caller can tell a
+     * local gate from a server-side one.
      */
-    fun reclaimSafeSpace(localID: String, current: com.branchdam.mobile.triage.LocalFileState): Boolean {
-        if (!nativeAvailable.get()) return false
+    fun reclaimSafeSpace(
+        localID: String,
+        current: com.branchdam.mobile.triage.LocalFileState,
+    ): com.branchdam.mobile.triage.ReclaimGateResult {
+        if (!nativeAvailable.get()) {
+            return com.branchdam.mobile.triage.ReclaimGateResult(approved = false, reason = "engine unavailable")
+        }
         return try {
             queryExecutor.submit(Callable {
                 Branchdam.bindingReclaimSafeSpace(localID, current.sizeBytes, current.modifiedUnix)
-                true
             }).get()
+            com.branchdam.mobile.triage.ReclaimGateResult(approved = true)
         } catch (t: Throwable) {
-            Log.w(TAG, "reclaimSafeSpace failed: $t")
-            false
+            val cause = (t as? java.util.concurrent.ExecutionException)?.cause ?: t
+            Log.w(TAG, "reclaimSafeSpace failed: $cause")
+            com.branchdam.mobile.triage.ReclaimGateResult(approved = false, reason = cause.message ?: cause.toString())
         }
     }
 
