@@ -15,6 +15,7 @@ import com.branchdam.mobile.ui.gallery.GalleryItem
 import com.branchdam.mobile.ui.gallery.GalleryViewModel
 import com.branchdam.mobile.ui.gallery.formatDateTaken
 import com.branchdam.mobile.ui.gallery.formatFileSize
+import com.branchdam.mobile.ui.settings.GalleryFolderPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -323,9 +324,11 @@ class GalleryViewModelTest {
     }
 
     @Test
-    fun testLegacyNoneSentinelMigratesOnLoad() = runTest(testDispatcher) {
+    fun testLegacyNoneSentinelMigratedAtStartIsNoFolders() = runTest(testDispatcher) {
         val prefs = galleryPrefs()
         prefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, setOf("__NONE__")).commit()
+        // What BranchDamApplication.onCreate does before any screen loads.
+        assertTrue(GalleryFolderPrefs.migrateLegacy(prefs))
 
         val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
         advanceUntilIdle()
@@ -337,6 +340,24 @@ class GalleryViewModelTest {
         assertTrue(viewModel.displayedItems.value.isEmpty())
         assertTrue(prefs.getBoolean(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED, false))
         assertEquals(emptySet<String>(), prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, null))
+    }
+
+    @Test
+    fun testFolderPrefsReadAloneDoesNotWrite() {
+        val prefs = galleryPrefs()
+        prefs.edit()
+            .remove(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED)
+            .putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, setOf("__NONE__"))
+            .commit()
+
+        GalleryFolderPrefs.read(prefs)
+
+        // The legacy value is left for migrateLegacy: read() is a pure getter.
+        assertFalse(prefs.contains(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED))
+        assertEquals(setOf("__NONE__"), prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, null))
+        // The one-shot migration then acts exactly once.
+        assertTrue(GalleryFolderPrefs.migrateLegacy(prefs))
+        assertFalse(GalleryFolderPrefs.migrateLegacy(prefs))
     }
 
     @Test

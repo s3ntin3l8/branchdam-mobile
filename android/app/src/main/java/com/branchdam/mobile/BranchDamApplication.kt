@@ -10,6 +10,7 @@ import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncNotificationHelper
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.ui.components.RawPreviewFetcher
+import com.branchdam.mobile.ui.settings.GalleryFolderPrefs
 import java.io.File
 
 open class BranchDamApplication : Application(), ImageLoaderFactory {
@@ -38,6 +39,9 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
         val nonSecretPrefs = getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
         val securePrefs = EncryptedPrefs.get(this)
         PrefKeyMigration.migrate(nonSecretPrefs, securePrefs)
+        // Once, before any screen reads the Gallery folder filter: the
+        // getter (GalleryFolderPrefs.read) never writes.
+        GalleryFolderPrefs.migrateLegacy(nonSecretPrefs)
 
         // Initialize the gomobile-bound Go engine off the main thread
         // to avoid startup lag. The holder fallbacks to mock values when

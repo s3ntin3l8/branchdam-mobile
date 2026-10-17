@@ -81,6 +81,7 @@ fun GalleryScreen(
 
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
+    val noFoldersSelected by viewModel.noFoldersSelected.collectAsStateWithLifecycle()
     val availableFolders by viewModel.availableFolders.collectAsStateWithLifecycle()
     val selectedSortProperty by viewModel.selectedSortProperty.collectAsStateWithLifecycle()
     val selectedSortDirection by viewModel.selectedSortDirection.collectAsStateWithLifecycle()
@@ -417,7 +418,16 @@ fun GalleryScreen(
                         }
                     }
                     displayedItems.isEmpty() -> {
-                        EmptyGalleryState()
+                        // "All folders" with every folder unchecked in
+                        // Settings is empty by choice, not for want of media.
+                        if (noFoldersSelected && selectedFolder == ALL_FOLDERS) {
+                            EmptyGalleryState(
+                                title = stringResource(R.string.gallery_no_folders_title),
+                                body = stringResource(R.string.gallery_no_folders_body),
+                            )
+                        } else {
+                            EmptyGalleryState()
+                        }
                     }
                     else -> {
                         val gridState = rememberLazyGridState()
@@ -662,7 +672,10 @@ fun EmptyGalleryPreview() {
 }
 
 @Composable
-private fun EmptyGalleryState() {
+private fun EmptyGalleryState(
+    title: String = stringResource(R.string.gallery_empty_title),
+    body: String = stringResource(R.string.gallery_empty_body),
+) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -676,13 +689,13 @@ private fun EmptyGalleryState() {
         )
         Spacer(Modifier.height(24.dp))
         Text(
-            stringResource(R.string.gallery_empty_title),
+            title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            stringResource(R.string.gallery_empty_body),
+            body,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
