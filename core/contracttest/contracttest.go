@@ -3,7 +3,9 @@
 // copied from the server's docs/contract/fixtures by `make contract-sync`).
 // Each server fixture sets every field the server reads or writes, so a
 // DTO that drops, renames, retypes or invents a field shows up here
-// instead of in production. Imported by tests only.
+// instead of in production. A retype between JSON number types (an int64
+// field made float64, or back) does not show: both decode and re-encode
+// the fixture's number the same way. Imported by tests only.
 package contracttest
 
 import (
@@ -73,6 +75,9 @@ func RoundTrip(t *testing.T, name string, c Case) {
 		t.Fatal(err)
 	}
 	for path := range c.NotModelled {
+		if !hasPath(want, strings.Split(path, ".")) {
+			t.Errorf("%s: NotModelled %q matches no field of the server fixture (stale entry: remove it)", name, path)
+		}
 		dropPath(want, strings.Split(path, "."))
 	}
 	stripped, err := json.Marshal(want)
@@ -167,8 +172,12 @@ func hasPath(v any, path []string) bool {
 	}
 	if isList {
 		list, ok := next.([]any)
-		if !ok || len(list) == 0 {
+		if !ok {
 			return false
+		}
+		if len(list) == 0 {
+			// The list is present but its element shape can't be checked.
+			return true
 		}
 		return hasPath(list[0], path[1:])
 	}
