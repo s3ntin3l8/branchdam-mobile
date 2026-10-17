@@ -26,9 +26,13 @@ set -euo pipefail
 #   5. Pushes a few of the demo's sample photos into /sdcard/DCIM/Camera
 #      (camera JPEGs plus graded "_edited" copies, so the lineage audit
 #      queue has candidates) and rescans media.
-#   6. Dark theme, demo-mode status bar (10:00, full battery, wifi),
-#      animations off; then captures the audit queue, gallery and sync
-#      status screens with `adb exec-out screencap -p`.
+#   6. Dark theme, animations off, Wi-Fi preferred (the app's "sync on
+#      mobile data" setting is on, so the sync also runs if the emulator's
+#      Wi-Fi never connects), demo-mode status bar (10:00, full battery,
+#      Wi-Fi only); then captures the audit queue, gallery and sync status
+#      screens with `adb exec-out screencap -p`. The sync status is
+#      captured only once a sync has finished ("Last sync succeeded", a
+#      "Last Sync" time).
 #   7. On any exit: kills the emulator and the demo, removes scratch dirs.
 #
 # Environment (all optional):
@@ -286,21 +290,91 @@ prepare_device() {
     locale="$(adb_s shell getprop persist.sys.locale | tr -d '\r')"
     [[ -n "${locale}" ]] || locale="$(adb_s shell getprop ro.product.locale | tr -d '\r')"
     [[ "${locale}" == en-US ]] || die "device locale is '${locale}', expected en-US"
-    log "dark theme, demo-mode status bar, animations off"
+    log "dark theme, animations off"
     adb_s shell cmd uimode night yes >/dev/null
     local s
     for s in window_animation_scale transition_animation_scale animator_duration_scale; do
         adb_s shell settings put global "${s}" 0
     done
     adb_s shell settings put global sysui_demo_allowed 1
-    demo_cmd() { adb_s shell am broadcast -a com.android.systemui.demo -e command "$@" >/dev/null; }
-    demo_cmd enter
-    demo_cmd clock -e hhmm 1000
-    demo_cmd battery -e level 100 -e plugged false -e powersave false
-    demo_cmd network -e wifi show -e level 4 -e fully true
-    demo_cmd network -e mobile hide
-    demo_cmd network -e airplane hide
-    demo_cmd notifications -e visible false
+}
+
+# Prints "<transport> <netId>" for the default network, e.g. "WIFI 101".
+# The transport is "?" when its agent line did not parse, and the netId
+# "none" when there is no default network.
+default_network() {
+    local conn def transport
+    conn="$(adb_s shell dumpsys connectivity 2>/dev/null | tr -d '\r' || true)"
+    def="$(sed -n 's/^Active default network: //p' <<<"${conn}" | head -n 1)"
+    transport="$(grep -F "NetworkAgentInfo{network{${def}}" <<<"${conn}" |
+        grep -oE 'Transports: [A-Z|]+' | head -n 1 | sed 's/^Transports: //' || true)"
+    printf '%s %s\n' "${transport:-?}" "${def:-none}"
+}
+
+# Best effort: give the emulator's virtual AndroidWifi 90 seconds to
+# become the default network (one Wi-Fi off/on toggle half-way). It boots
+# on metered cellular until Wi-Fi associates, and on a loaded host Wi-Fi
+# can fail to associate for many minutes, so this never fails the run:
+# pair_app turns on the app's "sync on mobile data" setting, so the sync
+# does not depend on Wi-Fi (see there).
+prefer_wifi() {
+    log "waiting for Wi-Fi to become the default network"
+    adb_s shell svc wifi enable
+    local start="${SECONDS}" toggled="" transport="" net=""
+    while ((SECONDS - start < 90)); do
+        read -r transport net <<<"$(default_network)"
+        if [[ "${transport}" == WIFI ]]; then
+            log "default network: Wi-Fi (net ${net})"
+            return 0
+        fi
+        if [[ -z "${toggled}" ]] && ((SECONDS - start >= 45)); then
+            toggled=1
+            log "no Wi-Fi yet; toggling it"
+            adb_s shell svc wifi disable
+            sleep 2
+            adb_s shell svc wifi enable
+        fi
+        sleep 3
+    done
+    log "Wi-Fi did not connect; default network: ${transport:-?} (net ${net:-none}); syncing over mobile data"
+}
+
+demo_cmd() { adb_s shell am broadcast -a com.android.systemui.demo -e command "$@" >/dev/null; }
+
+sysui_dump() { adb_s shell dumpsys activity service com.android.systemui/.SystemUIService 2>/dev/null || true; }
+
+# True while System UI is in demo mode and shows no real (SIM) signal
+# icon. A SystemUI restart (it can ANR on a loaded host) drops demo mode,
+# and a subscription that registers after "demo enter" adds a real
+# mobile icon next to the demo Wi-Fi one.
+demo_ok() {
+    local sysui
+    sysui="$(sysui_dump)"
+    grep -q 'DemoStatusIcons{' <<<"${sysui}" &&
+        ! grep -Eq "ModernStatusBarMobileView\(slot='mobile'[^)]*visibleState=ICON" <<<"${sysui}"
+}
+
+# Demo-mode status bar: 10:00, full battery, full Wi-Fi and nothing else.
+demo_status_bar() {
+    local try
+    # A just-restarted SystemUI can take a while to accept demo commands,
+    # so back off a little more on each try before giving up.
+    for ((try = 0; try < 4; try++)); do
+        [[ "${try}" -gt 0 ]] && demo_cmd exit
+        demo_cmd enter
+        demo_cmd clock -e hhmm 1000
+        demo_cmd battery -e level 100 -e plugged false -e powersave false
+        demo_cmd network -e wifi show -e level 4 -e fully true
+        demo_cmd network -e mobile hide
+        demo_cmd network -e nosim hide
+        demo_cmd network -e airplane hide
+        demo_cmd notifications -e visible false
+        sleep 2
+        demo_ok && return 0
+        log "status bar is not in the demo state yet; re-entering demo mode"
+        sleep $((3 + try * 5))
+    done
+    die "could not put the status bar into demo mode"
 }
 
 push_media() {
@@ -373,6 +447,11 @@ pair_app() {
 
     # Same keys the QR flow persists. The app's PrefKeyMigration moves them
     # from the plain prefs file into EncryptedSharedPreferences on start.
+    # The app's own "sync on mobile data" setting is on: "Sync Now" is
+    # Wi-Fi only (WorkManager NetworkType.UNMETERED) by default, and with
+    # the emulator's Wi-Fi not associated the run stays ENQUEUED and the
+    # Sync screen shows "Waiting for Wi-Fi" / "Never synced". With it on,
+    # the sync runs on any connected network (NetworkType.CONNECTED).
     local prefs="${SCRATCH}/branchdam_prefs.xml"
     {
         printf "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n"
@@ -380,6 +459,7 @@ pair_app() {
         printf '    <string name="api_key">%s</string>\n' "$(xml_escape <<<"${key}")" # pragma: allowlist secret
         printf '    <string name="agent_id">%s</string>\n' "$(xml_escape <<<"${agent}")"
         printf '    <boolean name="branchdam_onboarding_completed" value="true" />\n'
+        printf '    <boolean name="branchdam_sync_on_mobile_data" value="true" />\n'
         printf '</map>\n'
     } >"${prefs}"
     adb_s shell "run-as ${PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/branchdam_prefs.xml'" <"${prefs}"
@@ -460,6 +540,10 @@ settle() {
 # committed PNG.
 capture() {
     local tmp="${SCRATCH}/$1.png"
+    demo_ok || {
+        log "System UI left demo mode; re-applying it"
+        demo_status_bar
+    }
     sleep 2
     adb_s exec-out screencap -p >"${tmp}" || die "screencap failed for $1"
     # Bytes 2-4 of the PNG signature spell "PNG".
@@ -484,10 +568,34 @@ capture_screens() {
     tap_text "Sync" || die "cannot open the Sync tab"
     wait_text 'text="Sync Status"' 30 || die "the Sync tab did not open"
     tap_text "Sync Now" || die "no Sync Now button"
-    wait_text 'All backed up' 300 || die "uploads still pending after 5 minutes"
-    # Re-read the status so "Last Sync" reflects the finished run.
+    wait_synced 300
+    # Re-read the status, then check the finished run is still what shows.
     tap_text "Refresh Status" || true
+    wait_synced 30
     capture sync-status
+}
+
+# Waits up to $1 polls until one UI dump shows a finished sync: the worker
+# succeeded, nothing is pending and "Last Sync" has a time. "All backed
+# up" alone can show before the worker has run at all.
+wait_synced() {
+    local i xml wifi_wait=0
+    for ((i = 0; i < $1; i++)); do
+        xml="$(ui_dump)"
+        if grep -q 'Last sync succeeded' <<<"${xml}" && grep -q 'All backed up' <<<"${xml}" &&
+            ! grep -q 'Never synced' <<<"${xml}"; then
+            return 0
+        fi
+        if grep -q 'Waiting for Wi-Fi' <<<"${xml}"; then
+            wifi_wait=$((wifi_wait + 1))
+            [[ "${wifi_wait}" -lt 60 ]] ||
+                die "the Sync screen still shows 'Waiting for Wi-Fi' after a minute (is sync on mobile data set?)"
+        else
+            wifi_wait=0
+        fi
+        sleep 1
+    done
+    die "no completed sync on the Sync screen after ${1} polls"
 }
 
 # --- main --------------------------------------------------------------
@@ -502,7 +610,9 @@ start_emulator
 wait_for_boot
 settle
 prepare_device
+prefer_wifi
 push_media
 pair_app
+demo_status_bar
 capture_screens
 log "screenshots in ${OUT}"
