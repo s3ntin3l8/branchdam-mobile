@@ -31,7 +31,6 @@ func clientContractCases() map[string]contracttest.Case {
 			DTO: &NodeStatusResponse{},
 			NotModelled: map[string]string{
 				"statuses[].canonicalNodeUuid": "informational alias target; reclaim keys on the queue row's own nodeUuid",
-				"statuses[].fullHash":          "reclaim gates on verified alone today (invariant 3); comparing fullHash is #217",
 			},
 		},
 		"telemetry_request": {

@@ -31,6 +31,9 @@ func TestEngineFullLifecycle(t *testing.T) {
 	// Mock server
 	var uploadedFiles []string
 	var submittedEvents []string
+	// serverFullHash is what node-status reports as the stored BLAKE3;
+	// set once the item is hashed, as the real server echoes the upload's.
+	var serverFullHash string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -60,6 +63,7 @@ func TestEngineFullLifecycle(t *testing.T) {
 						Tier:           "TIER3_MASTER_ARCHIVE",
 						LifecycleState: "ACTIVE",
 						Verified:       true,
+						FullHash:       serverFullHash,
 					},
 				},
 			})
@@ -92,6 +96,7 @@ func TestEngineFullLifecycle(t *testing.T) {
 	if item.Blake3Hash == "" || item.FastHash == "" {
 		t.Fatalf("missing hashes in item: %+v", item)
 	}
+	serverFullHash = item.Blake3Hash
 
 	// 2. Sync uploads
 	uploadedCount, err := eng.SyncUploads(context.Background(), 10)
@@ -157,6 +162,7 @@ func TestCheckSafeSpaceCandidates_MultipleLocalIDsSharingNodeUUID(t *testing.T) 
 						Verified:       true,
 						Tier:           "TIER3_MASTER_ARCHIVE",
 						LifecycleState: "ACTIVE",
+						FullHash:       "hash-a",
 					},
 				},
 			})
@@ -889,28 +895,41 @@ func newNodeStatusServer(t *testing.T, known map[string]client.NodeStatusItem) (
 
 // TestReclaimGate_RequiresLiveTier3Master: a local original may only be
 // reclaimed when the server's copy is a found, hash-verified Tier-3 master
-// in a live lifecycle state. Both reclaim-eligibility paths
+// in a live lifecycle state whose stored fullHash equals (case-insensitively)
+// the BLAKE3 recorded locally (#217). Both reclaim-eligibility paths
 // (CheckSafeSpaceCandidates and SafeSpaceReclaim) must agree, and a
 // rejected reclaim must never set the offloaded flag.
 func TestReclaimGate_RequiresLiveTier3Master(t *testing.T) {
+	// localB3 is the BLAKE3 recorded in queue.db for the candidate unless a
+	// case sets noLocalHash.
+	const localB3 = "a3ce4343025b0f98877e30d01847e2a882607401dd97d5f173fbec1d2f9fffa4" // pragma: allowlist secret
+	const otherB3 = "abababababababababababababababababababababababababababababababab"
 	cases := []struct {
-		name       string
-		status     client.NodeStatusItem
-		eligible   bool
-		reasonPart string
+		name        string
+		status      client.NodeStatusItem
+		eligible    bool
+		reasonPart  string
+		noLocalHash bool
 	}{
-		{"active tier3 verified", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"}, true, ""},
-		{"hidden tier3 verified", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "HIDDEN"}, true, ""},
-		{"trashed master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "TRASHED"}, false, "lifecycle ineligible: TRASHED"},
-		{"missing master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "MISSING"}, false, "lifecycle ineligible: MISSING"},
-		{"archived (superseded) master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ARCHIVED"}, false, "lifecycle ineligible: ARCHIVED"},
-		{"lifecycle absent", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE"}, false, "lifecycle ineligible: <none>"},
-		{"legacy non-server tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER2_DERIVATIVE_CACHE", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER2_DERIVATIVE_CACHE"},
-		{"exports tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER2_EXPORTS", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER2_EXPORTS"},
-		{"scratch tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER1_LOCAL_SCRATCH", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER1_LOCAL_SCRATCH"},
-		{"tier absent", client.NodeStatusItem{Found: true, Verified: true, LifecycleState: "ACTIVE"}, false, "tier ineligible: <none>"},
-		{"not verified", client.NodeStatusItem{Found: true, Verified: false, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"}, false, "not verified on server"},
-		{"not found", client.NodeStatusItem{Found: false}, false, "node not found on server"},
+		{"active tier3 verified", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: localB3}, true, "", false},
+		{"hidden tier3 verified", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "HIDDEN", FullHash: localB3}, true, "", false},
+		{"fullHash matches case-insensitively", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: strings.ToUpper(localB3)}, true, "", false},
+		{"fullHash omitted by server", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"}, false, ReasonNoServerHash, false},
+		{"fullHash mismatch", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: otherB3}, false, ReasonHashMismatch, false},
+		{"no local hash recorded", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: localB3}, false, ReasonNoLocalHash, true},
+		// An earlier failing gate is still the reason shown even when the
+		// hash would also fail.
+		{"not verified and hash mismatch", client.NodeStatusItem{Found: true, Verified: false, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: otherB3}, false, "not verified on server", false},
+		{"trashed master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "TRASHED"}, false, "lifecycle ineligible: TRASHED", false},
+		{"missing master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "MISSING"}, false, "lifecycle ineligible: MISSING", false},
+		{"archived (superseded) master", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ARCHIVED"}, false, "lifecycle ineligible: ARCHIVED", false},
+		{"lifecycle absent", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE"}, false, "lifecycle ineligible: <none>", false},
+		{"legacy non-server tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER2_DERIVATIVE_CACHE", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER2_DERIVATIVE_CACHE", false},
+		{"exports tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER2_EXPORTS", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER2_EXPORTS", false},
+		{"scratch tier", client.NodeStatusItem{Found: true, Verified: true, Tier: "TIER1_LOCAL_SCRATCH", LifecycleState: "ACTIVE"}, false, "tier ineligible: TIER1_LOCAL_SCRATCH", false},
+		{"tier absent", client.NodeStatusItem{Found: true, Verified: true, LifecycleState: "ACTIVE"}, false, "tier ineligible: <none>", false},
+		{"not verified", client.NodeStatusItem{Found: true, Verified: false, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"}, false, "not verified on server", false},
+		{"not found", client.NodeStatusItem{Found: false}, false, "node not found on server", false},
 	}
 
 	for _, tc := range cases {
@@ -927,7 +946,11 @@ func TestReclaimGate_RequiresLiveTier3Master(t *testing.T) {
 			}
 			defer q.Close()
 			eng := New(q, client.New(client.Config{BaseURL: srv.URL, APIKey: "k", AgentID: "a"}))
-			if err := q.RecordLocalMedia(localID, nodeUUID, "b3", "ACTIVE"); err != nil {
+			localHash := localB3
+			if tc.noLocalHash {
+				localHash = ""
+			}
+			if err := q.RecordLocalMedia(localID, nodeUUID, localHash, "ACTIVE"); err != nil {
 				t.Fatalf("RecordLocalMedia: %v", err)
 			}
 
@@ -1029,7 +1052,7 @@ func TestCheckSafeSpaceCandidates_BatchesNodeStatusAt400(t *testing.T) {
 		localID := fmt.Sprintf("local-%04d", i)
 		known[nodeUUID] = client.NodeStatusItem{
 			NodeUUID: nodeUUID, Found: true, Verified: true,
-			Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE",
+			Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: "b3",
 		}
 		if err := q.RecordLocalMedia(localID, nodeUUID, "b3", "ACTIVE"); err != nil {
 			t.Fatalf("RecordLocalMedia: %v", err)
@@ -1064,7 +1087,7 @@ func TestCheckSafeSpaceCandidates_BatchesNodeStatusAt400(t *testing.T) {
 // distinct nodes only.
 func TestCheckSafeSpaceCandidates_DedupesSharedNodeUUIDs(t *testing.T) {
 	srv, sizes := newNodeStatusServer(t, map[string]client.NodeStatusItem{
-		"shared": {NodeUUID: "shared", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"},
+		"shared": {NodeUUID: "shared", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: "b3"},
 	})
 	q, err := queue.Open(filepath.Join(t.TempDir(), "dedupe.db"))
 	if err != nil {

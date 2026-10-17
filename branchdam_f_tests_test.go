@@ -336,7 +336,9 @@ func TestReclaimSafeSpace_NoRecordOnServer(t *testing.T) {
 // GetMediaByLocalID (a SELECT) succeeds, but the subsequent
 // SetMediaOffloaded UPDATE fires the trigger and fails.
 func TestReclaimSafeSpace_LocalDBError(t *testing.T) {
-	e, _ := newTestEngineWithServer(t)
+	e, _ := newTestEngineWithNodeStatus(t, map[string]client.NodeStatusItem{
+		"dbfail-node": {NodeUUID: "dbfail-node", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: "b3-dbfail-1"},
+	})
 
 	// Record local media so the engine has a row to update.
 	if err := e.queue.RecordLocalMedia("ph://dbfail-1", "dbfail-node", "b3-dbfail-1", "ACTIVE"); err != nil {
@@ -565,7 +567,7 @@ func TestReclaimSafeSpace_TrashedMasterIneligible(t *testing.T) {
 // names the gate that failed; an eligible candidate has no reason.
 func TestCheckSafeSpaceCandidates_ReasonNamesFailingGate(t *testing.T) {
 	e, _ := newTestEngineWithNodeStatus(t, map[string]client.NodeStatusItem{
-		"live":    {NodeUUID: "live", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE"},
+		"live":    {NodeUUID: "live", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: "b3-live"},
 		"missing": {NodeUUID: "missing", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "MISSING"},
 		"export":  {NodeUUID: "export", Found: true, Verified: true, Tier: "TIER2_EXPORTS", LifecycleState: "ACTIVE"},
 	})

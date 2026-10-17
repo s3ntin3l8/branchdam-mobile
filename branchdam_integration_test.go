@@ -23,6 +23,9 @@ func newTestEngineWithServer(t *testing.T) (*Engine, string) {
 	var uploads int
 	var events int
 	var statuses int
+	// nodeHashes is the BLAKE3 each uploaded node was stored under; the
+	// node-status mock reports it as fullHash, as the real server does.
+	nodeHashes := map[string]string{}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -44,13 +47,15 @@ func newTestEngineWithServer(t *testing.T) (*Engine, string) {
 				Status:       "UPLOADED",
 				RelativePath: "test/path",
 			})
+			nodeHashes["test-node-1"] = r.Header.Get("X-Blake3-Hash")
 		case "/api/v1/agent/events":
 			events++
 			_ = json.NewEncoder(w).Encode(client.AgentEventResponse{EventID: "evt-1"})
 		case "/api/v1/agent/node-status":
 			statuses++
 			// Mirror the real server: one entry per requested UUID,
-			// echoing its nodeUuid, here always a live verified master.
+			// echoing its nodeUuid, here always a live verified master
+			// carrying the hash it was uploaded under (if any).
 			var req client.NodeStatusRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
@@ -64,6 +69,7 @@ func newTestEngineWithServer(t *testing.T) (*Engine, string) {
 					Verified:       true,
 					Tier:           "TIER3_MASTER_ARCHIVE",
 					LifecycleState: "ACTIVE",
+					FullHash:       nodeHashes[id],
 				})
 			}
 			_ = json.NewEncoder(w).Encode(client.NodeStatusResponse{Statuses: out})
@@ -343,7 +349,9 @@ func TestSetCancelFlag_BreakSync(t *testing.T) {
 // re-queries the server, finds the node verified+TIER3, and marks
 // the local flag. (B.2.7)
 func TestReclaimSafeSpace_HappyPath(t *testing.T) {
-	e, _ := newTestEngineWithServer(t)
+	e, _ := newTestEngineWithNodeStatus(t, map[string]client.NodeStatusItem{
+		"test-node-1": {NodeUUID: "test-node-1", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: "b3-happy"},
+	})
 	if err := e.queue.RecordLocalMedia("ph://happy-1", "test-node-1", "b3-happy", "ACTIVE"); err != nil {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
