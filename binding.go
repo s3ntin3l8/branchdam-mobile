@@ -401,6 +401,22 @@ func BindingCountPendingUploads() (int64, error) {
 	return e.CountPendingUploads()
 }
 
+// BindingRepairDeadlineUnix returns the Unix time (seconds) before which
+// this device must be paired again because the server rotated its API key
+// but could not deliver the new one (pendingRotation with an empty
+// sealedApiKey), or 0 when no such rotation is pending. Set by a handshake
+// (BindingFetchNamingTemplate, the pre-sync check in BindingSyncBatch);
+// cleared by a handshake without pendingRotation or by adopting a rotated
+// key. The shells' Settings screens show a re-pair prompt while it is set
+// and in the future. See Engine.RepairDeadlineUnix.
+func BindingRepairDeadlineUnix() (int64, error) {
+	e, err := getBindingEngine()
+	if err != nil {
+		return 0, err
+	}
+	return e.RepairDeadlineUnix()
+}
+
 // BindingResetFailedUploads resets all FAILED upload items back to PENDING.
 func BindingResetFailedUploads() (int64, error) {
 	e, err := getBindingEngine()

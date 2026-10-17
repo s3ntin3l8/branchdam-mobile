@@ -540,6 +540,28 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
+    /// Unix seconds before which this device must be paired again because
+    /// the server rotated its API key but could not deliver the new one
+    /// (`bindingRepairDeadlineUnix`, #218), 0 when no such rotation is
+    /// pending, or nil when the engine is not open. The engine learns it
+    /// on a handshake.
+    public func repairDeadlineUnix() -> Int64? {
+        #if canImport(branchdam)
+        guard isInitialized else { return nil }
+        var deadline: Int64? = nil
+        queryQueue.sync {
+            do {
+                deadline = try branchdam.bindingRepairDeadlineUnix()
+            } catch {
+                NSLog("repairDeadlineUnix failed: %@", String(describing: error))
+            }
+        }
+        return deadline
+        #else
+        return isInitialized ? 0 : nil
+        #endif
+    }
+
     public func resetFailedUploads() -> Int64? {
         #if canImport(branchdam)
         guard isInitialized else { return nil }
@@ -710,6 +732,10 @@ public class BranchDamCoreBridge: @unchecked Sendable {
 
     public func getAllMediaStatusesAsync() async -> [String: String] {
         await offMainActor { self.getAllMediaStatuses() }
+    }
+
+    public func repairDeadlineUnixAsync() async -> Int64? {
+        await offMainActor { self.repairDeadlineUnix() }
     }
 
     public func resetFailedUploadsAsync() async -> Int64? {

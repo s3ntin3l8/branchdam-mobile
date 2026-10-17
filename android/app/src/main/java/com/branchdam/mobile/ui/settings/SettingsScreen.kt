@@ -64,6 +64,7 @@ fun SettingsScreen(
         SettingsPage.Categories -> {
             val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
             val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
+            val repairDeadlineUnix by viewModel.repairDeadlineUnix.collectAsStateWithLifecycle()
             val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
             Scaffold(
@@ -125,6 +126,13 @@ fun SettingsScreen(
                                 )
                             },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                    }
+
+                    if (SettingsViewModel.shouldShowRepairPrompt(repairDeadlineUnix, System.currentTimeMillis())) {
+                        RepairPromptCard(
+                            deadlineUnix = repairDeadlineUnix,
+                            onClick = { currentPage = SettingsPage.Connection },
                         )
                     }
 
@@ -253,6 +261,56 @@ fun SettingsScreen(
                 viewModel = viewModel,
             )
         }
+    }
+}
+
+/**
+ * The server rotated this device's API key but cannot deliver the new one
+ * (#218): the user has to pair again before [deadlineUnix] (Unix seconds),
+ * shown in the locale's medium date style. Tapping opens Connection, where
+ * the QR scan is.
+ */
+@Composable
+private fun RepairPromptCard(deadlineUnix: Long, onClick: () -> Unit) {
+    val deadline = remember(deadlineUnix) {
+        java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, java.util.Locale.getDefault())
+            .format(java.util.Date(deadlineUnix * 1_000L))
+    }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        ListItem(
+            headlineContent = {
+                Text(
+                    text = stringResource(R.string.settings_repair_before, deadline),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            supportingContent = {
+                Text(
+                    text = stringResource(R.string.settings_repair_before_detail),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            },
+            leadingContent = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            modifier = Modifier.clickable(onClick = onClick),
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        )
     }
 }
 

@@ -48,6 +48,9 @@ typealias EngineInit = (
 typealias TestConnectionFn = suspend () -> Boolean
 typealias TestConnectionDetailedFn = suspend () -> String?
 
+/** Test seam for [SettingsViewModel.repairDeadlineUnix]; see [EngineHolder.repairDeadlineUnix]. */
+typealias RepairDeadlineFn = suspend () -> Long
+
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
@@ -132,6 +135,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _connectionError = MutableStateFlow<String?>(null)
     val connectionError: StateFlow<String?> = _connectionError.asStateFlow()
 
+    /**
+     * Unix seconds before which the user must pair this device again: the
+     * server rotated its API key but could not deliver the new one (#218).
+     * 0 when no such rotation is pending. Refreshed after every handshake
+     * this screen makes; the Settings screen shows a re-pair prompt while
+     * [shouldShowRepairPrompt] holds.
+     */
+    private val _repairDeadlineUnix = MutableStateFlow(0L)
+    val repairDeadlineUnix: StateFlow<Long> = _repairDeadlineUnix.asStateFlow()
+
     private val _urlError = MutableStateFlow<String?>(null)
     val urlError: StateFlow<String?> = _urlError.asStateFlow()
 
@@ -170,6 +183,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 } ?: false
             }
             _isConnected.value = isReachable
+            _repairDeadlineUnix.value = withContext(testIoDispatcher) { repairDeadlineFn() }
             _connectionError.value = if (!isReachable) {
                 val rawError = withContext(testIoDispatcher) {
                     withTimeoutOrNull(reachabilityTimeoutMs) {
@@ -325,6 +339,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
                 _isConnected.value = isReachable
                 _isConnecting.value = false
+                _repairDeadlineUnix.value = repairDeadlineFn()
                 if (isReachable) {
                     _connectionError.value = null
                     EngineHolder.resetFailedUploads()
@@ -425,6 +440,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
         @androidx.annotation.VisibleForTesting
         var testConnectionDetailedFn: TestConnectionDetailedFn = { EngineHolder.testConnectionDetailed() }
+
+        /**
+         * Test seam for [repairDeadlineUnix]. Defaults to the production
+         * [EngineHolder.repairDeadlineUnix] call.
+         */
+        @androidx.annotation.VisibleForTesting
+        var repairDeadlineFn: RepairDeadlineFn = { EngineHolder.repairDeadlineUnix() }
+
+        /**
+         * True while [deadlineUnix] (Unix seconds, 0 = none) is set and
+         * still ahead of [nowMillis]: the Settings screen then asks the
+         * user to pair this device again before that date.
+         */
+        fun shouldShowRepairPrompt(deadlineUnix: Long, nowMillis: Long): Boolean =
+            deadlineUnix > 0L && deadlineUnix * 1_000L > nowMillis
 
         /**
          * Test seam for the dispatcher used inside `checkConnection`.

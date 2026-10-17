@@ -168,3 +168,48 @@ func TestSyncBatchRotationCheckWithinBatchTimeout(t *testing.T) {
 		t.Fatalf("SyncBatch(TimeoutSecs=1) took %v, want the rotation check bounded by the batch timeout", elapsed)
 	}
 }
+
+// TestBindingRepairDeadlineUnix (#218): the binding getter the shells'
+// Settings screens poll carries an undeliverable rotation's
+// previousKeyExpiresAtUnix, and 0 once a handshake has no pendingRotation.
+func TestBindingRepairDeadlineUnix(t *testing.T) {
+	if _, err := BindingRepairDeadlineUnix(); err == nil {
+		t.Fatal("BindingRepairDeadlineUnix without an open engine should fail")
+	}
+
+	var mu sync.Mutex
+	pending := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		out := map[string]any{"ok": true, "serverVersion": "test", "currentKeyId": 1, "namingTemplate": "{original_name}"}
+		mu.Lock()
+		if pending {
+			// No BRANCHDAM_SECRET_KEY on the server: sealedApiKey omitted.
+			out["pendingRotation"] = map[string]any{"keyId": 2, "apiKey": "", "previousKeyExpiresAtUnix": 1900000000}
+		}
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(out)
+	}))
+	t.Cleanup(srv.Close)
+	openRotationEngine(t, srv.URL, &fakeShellStore{})
+
+	if got, err := BindingRepairDeadlineUnix(); err != nil || got != 0 {
+		t.Fatalf("before any handshake = (%d, %v), want (0, nil)", got, err)
+	}
+	if _, err := BindingFetchNamingTemplate(); err != nil {
+		t.Fatalf("BindingFetchNamingTemplate: %v", err)
+	}
+	if got, err := BindingRepairDeadlineUnix(); err != nil || got != 1900000000 {
+		t.Fatalf("after an undeliverable rotation = (%d, %v), want (1900000000, nil)", got, err)
+	}
+
+	mu.Lock()
+	pending = false
+	mu.Unlock()
+	if _, err := BindingFetchNamingTemplate(); err != nil {
+		t.Fatalf("BindingFetchNamingTemplate: %v", err)
+	}
+	if got, err := BindingRepairDeadlineUnix(); err != nil || got != 0 {
+		t.Fatalf("after a handshake without pendingRotation = (%d, %v), want (0, nil)", got, err)
+	}
+}
