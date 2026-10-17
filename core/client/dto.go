@@ -61,6 +61,10 @@ type NodeStatusItem struct {
 	LifecycleState string `json:"lifecycleState,omitempty"`
 	Tier           string `json:"tier,omitempty"`
 	Verified       bool   `json:"verified"`
+	// FullHash is the server's stored BLAKE3-256 for the node. Reclaim
+	// requires it to equal (case-insensitively) the hash recorded in
+	// queue.db at ingest; an absent value keeps the local file (#217).
+	FullHash string `json:"fullHash,omitempty"`
 }
 
 type NodeStatusResponse struct {

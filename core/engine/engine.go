@@ -185,12 +185,32 @@ var reclaimLiveLifecycleStates = map[string]bool{
 	"HIDDEN": true,
 }
 
+// Reclaim reason codes for the content-identity gate (#217). Each is the
+// leading token of the Reason string the shells display verbatim, matching
+// the "<gate>: <detail>" shape of the other reclaim reasons.
+const (
+	// ReasonNoServerHash: node-status returned no fullHash, so the
+	// server's copy cannot be proven to be these bytes.
+	ReasonNoServerHash = "no-server-hash"
+	// ReasonHashMismatch: node-status returned a fullHash that differs
+	// from the BLAKE3 recorded locally at ingest.
+	ReasonHashMismatch = "hash-mismatch"
+	// ReasonNoLocalHash: queue.db holds no BLAKE3 for this item, so there
+	// is nothing to compare the server's fullHash against.
+	ReasonNoLocalHash = "no-local-hash"
+)
+
 // reclaimIneligibleReason evaluates one node-status entry against every
 // reclaim gate and returns "" when the local original may be deleted, or a
 // reason naming the first gate that failed otherwise. Gates, in order:
-// found on the server, hash-verified, on the Tier-3 master archive, and in
-// a live lifecycle state (ACTIVE or HIDDEN).
-func reclaimIneligibleReason(st client.NodeStatusItem) string {
+// found on the server, hash-verified, on the Tier-3 master archive, in a
+// live lifecycle state (ACTIVE or HIDDEN), and -- last -- the server's
+// stored BLAKE3 fullHash equal (case-insensitively) to localHash, the
+// BLAKE3 recorded in queue.db at ingest. A missing hash on either side
+// keeps the file: verified alone never authorises a delete.
+func reclaimIneligibleReason(st client.NodeStatusItem, localHash string) string {
+	serverHash := strings.TrimSpace(st.FullHash)
+	localHash = strings.TrimSpace(localHash)
 	switch {
 	case !st.Found:
 		return "node not found on server"
@@ -200,6 +220,12 @@ func reclaimIneligibleReason(st client.NodeStatusItem) string {
 		return "tier ineligible: " + orNone(st.Tier)
 	case !reclaimLiveLifecycleStates[st.LifecycleState]:
 		return "lifecycle ineligible: " + orNone(st.LifecycleState)
+	case serverHash == "":
+		return ReasonNoServerHash + ": server returned no fullHash"
+	case localHash == "":
+		return ReasonNoLocalHash + ": no BLAKE3 hash recorded locally"
+	case !strings.EqualFold(serverHash, localHash):
+		return ReasonHashMismatch + ": server fullHash differs from local hash"
 	}
 	return ""
 }
@@ -932,8 +958,11 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 				continue
 			}
 
-			reason := reclaimIneligibleReason(st)
 			for _, localID := range localIDsForNode {
+				// Per localID: rows sharing a node may still carry
+				// different recorded hashes, and each is checked
+				// against its own.
+				reason := reclaimIneligibleReason(st, candidateMap[localID].Blake3Hash)
 				candidateMap[localID] = SafeSpaceCandidate{
 					LocalID:        localID,
 					NodeUUID:       st.NodeUUID,
@@ -960,10 +989,11 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 // SafeSpaceReclaim marks an asset as intentionally offloaded to suppress
 // trashing deletion events. B.2.7: this is the engine-owned atomic
 // reclaim — the server is re-queried to confirm the node is found,
-// hash-verified, on the Tier-3 master archive and live (ACTIVE or
-// HIDDEN), and the local flag is set only inside the same logical
-// operation. If the server says "not eligible", the flag is not set
-// and the verdict's Reason explains why.
+// hash-verified, on the Tier-3 master archive, live (ACTIVE or HIDDEN)
+// and holding a fullHash equal to the locally recorded BLAKE3, and the
+// local flag is set only inside the same logical operation. If the server
+// says "not eligible", the flag is not set and the verdict's Reason
+// explains why.
 //
 // Returns SafeSpaceVerdict with Eligible=true on success; callers
 // (the branchdam FFI surface) should only delete the local file
@@ -1018,7 +1048,7 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 		return SafeSpaceVerdict{LocalID: localID, Reason: "server has no record of node"},
 			errors.New("server has no record of node")
 	}
-	if reason := reclaimIneligibleReason(*st); reason != "" {
+	if reason := reclaimIneligibleReason(*st, state.Blake3Hash); reason != "" {
 		return SafeSpaceVerdict{LocalID: localID, Reason: reason}, errors.New(reason)
 	}
 

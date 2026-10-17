@@ -74,10 +74,14 @@ func RoundTrip(t *testing.T, name string, c Case) {
 	if err := json.Unmarshal(Read(t, name), &want); err != nil {
 		t.Fatal(err)
 	}
+	// Check every NotModelled path against the untouched fixture first,
+	// so one entry's drop can't make another look stale (or present).
 	for path := range c.NotModelled {
 		if !hasPath(want, strings.Split(path, ".")) {
 			t.Errorf("%s: NotModelled %q matches no field of the server fixture (stale entry: remove it)", name, path)
 		}
+	}
+	for path := range c.NotModelled {
 		dropPath(want, strings.Split(path, "."))
 	}
 	stripped, err := json.Marshal(want)
@@ -191,7 +195,8 @@ func hasPath(v any, path []string) bool {
 			// NotModelled or declared list[].field path passes vacuously.
 			return true
 		}
-		// Shape check on the first element only.
+		// Shape check on the first element only: a list whose elements
+		// differ in shape is judged by element 0.
 		return hasPath(list[0], path[1:])
 	}
 	return hasPath(next, path[1:])

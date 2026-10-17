@@ -35,6 +35,7 @@ contract-sync:
 	rm -f core/client/testdata/contract/*.json
 	cp "$(BRANCHDAM)"/docs/contract/fixtures/*.json core/client/testdata/contract/
 	git -C "$(BRANCHDAM)" log -1 --format='branchdam %H %s' -- docs/contract/fixtures > core/client/testdata/contract/SOURCE
+	@test -s core/client/testdata/contract/SOURCE || { echo "no commit touches $(BRANCHDAM)/docs/contract/fixtures; SOURCE is empty"; exit 1; }
 	cd core && go test ./client/ ./engine/ -run Contract -count=1
 
 lint:
