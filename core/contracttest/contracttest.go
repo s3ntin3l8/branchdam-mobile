@@ -105,7 +105,17 @@ func RoundTrip(t *testing.T, name string, c Case) {
 	if err := json.Unmarshal(Read(t, name), &full); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range declaredPaths(reflect.TypeOf(c.DTO), "") {
+	declared := declaredPaths(reflect.TypeOf(c.DTO), "")
+	declaredSet := make(map[string]bool, len(declared))
+	for _, path := range declared {
+		declaredSet[path] = true
+	}
+	for path := range c.ClientOnly {
+		if !declaredSet[path] {
+			t.Errorf("%s: ClientOnly %q matches no field %T declares (stale entry: remove it)", name, path, c.DTO)
+		}
+	}
+	for _, path := range declared {
 		if _, ok := c.ClientOnly[path]; ok {
 			continue
 		}
@@ -176,9 +186,12 @@ func hasPath(v any, path []string) bool {
 			return false
 		}
 		if len(list) == 0 {
-			// The list is present but its element shape can't be checked.
+			// The list is present but its element shape can't be checked,
+			// so this answers "not drift", not "the field exists": a
+			// NotModelled or declared list[].field path passes vacuously.
 			return true
 		}
+		// Shape check on the first element only.
 		return hasPath(list[0], path[1:])
 	}
 	return hasPath(next, path[1:])
