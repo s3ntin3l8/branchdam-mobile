@@ -284,13 +284,59 @@ class SettingsViewModelRecheckTest {
         viewModel.toggleFolderIncluded("Download", availableFolders)
         assertEquals(setOf("Pictures"), viewModel.includedFolders.value)
 
-        // Unchecking the last remaining checked folder sets NO_FOLDERS_SENTINEL to suppress all folders
+        // Unchecking the last remaining checked folder sets the "none" flag and empties the set
         viewModel.toggleFolderIncluded("Pictures", availableFolders)
-        assertEquals(setOf(SettingsViewModel.NO_FOLDERS_SENTINEL), viewModel.includedFolders.value)
+        assertTrue(viewModel.noFoldersSelected.value)
+        assertEquals(emptySet<String>(), viewModel.includedFolders.value)
+        val prefs = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        assertTrue(prefs.getBoolean(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED, false))
+        assertEquals(emptySet<String>(), prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, null))
 
-        // Re-checking a folder after all were unchecked strips sentinel and includes only the re-checked folder
+        // Re-checking a folder after all were unchecked clears the flag and includes only the re-checked folder
         viewModel.toggleFolderIncluded("Camera", availableFolders)
+        assertFalse(viewModel.noFoldersSelected.value)
         assertEquals(setOf("Camera"), viewModel.includedFolders.value)
+    }
+
+    @Test
+    fun testToggleFolderIncluded_folderNamedNoneIsAnOrdinaryFolder() = runTest(testDispatcher) {
+        SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
+        SettingsViewModel.testConnectionFn = { true }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        val availableFolders = listOf("Camera", "__NONE__")
+
+        // Leave only the real "__NONE__" folder checked.
+        viewModel.toggleFolderIncluded("Camera", availableFolders)
+        assertEquals(setOf("__NONE__"), viewModel.includedFolders.value)
+        assertFalse(viewModel.noFoldersSelected.value)
+
+        // A fresh load must not mistake it for the legacy "no folders" marker.
+        val reloaded = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        assertEquals(setOf("__NONE__"), reloaded.includedFolders.value)
+        assertFalse(reloaded.noFoldersSelected.value)
+    }
+
+    @Test
+    fun testLegacyNoneSentinelMigratesToNoFoldersSelected() = runTest(testDispatcher) {
+        SettingsViewModel.engineInit = { _, _, _, _, _, _ -> true }
+        SettingsViewModel.testConnectionFn = { true }
+
+        val prefs = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        prefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, setOf("__NONE__")).commit()
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        assertTrue(viewModel.noFoldersSelected.value)
+        assertEquals(emptySet<String>(), viewModel.includedFolders.value)
+        assertTrue(prefs.getBoolean(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED, false))
+        assertEquals(emptySet<String>(), prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, null))
     }
 
     @Test

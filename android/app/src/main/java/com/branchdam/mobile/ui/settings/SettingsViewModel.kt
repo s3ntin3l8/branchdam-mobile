@@ -75,10 +75,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _autoImportEnabled = MutableStateFlow(ImportConfirmationNotifier.getAutoImportEnabled(application))
     val autoImportEnabled: StateFlow<Boolean> = _autoImportEnabled.asStateFlow()
 
-    private val _includedFolders = MutableStateFlow<Set<String>>(
-        nonSecretPrefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet()) ?: emptySet()
-    )
+    private val initialFolderSelection = GalleryFolderPrefs.read(nonSecretPrefs)
+
+    /** Folders shown in Gallery; empty means all, unless [noFoldersSelected]. */
+    private val _includedFolders = MutableStateFlow<Set<String>>(initialFolderSelection.folders)
     val includedFolders: StateFlow<Set<String>> = _includedFolders.asStateFlow()
+
+    /** True when the user has unchecked every folder (Gallery shows nothing). */
+    private val _noFoldersSelected = MutableStateFlow(initialFolderSelection.noneSelected)
+    val noFoldersSelected: StateFlow<Boolean> = _noFoldersSelected.asStateFlow()
 
     private val _namingTemplate = MutableStateFlow("{yyyy}/{yyyy}-{mm}-{dd}_{camera_model}/{original_name}")
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
@@ -215,15 +220,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleFolderIncluded(folder: String, availableFolders: List<String> = emptyList()) {
-        val currentStored = _includedFolders.value - NO_FOLDERS_SENTINEL
-        val hasSentinel = _includedFolders.value.contains(NO_FOLDERS_SENTINEL)
+        val currentStored = _includedFolders.value
+        val noneSelected = _noFoldersSelected.value
         val effectiveAvailable = if (availableFolders.isNotEmpty()) {
             availableFolders
         } else {
             listOf(folder)
         }
 
-        val currentlySelected = if (currentStored.isEmpty() && !hasSentinel) {
+        val currentlySelected = if (currentStored.isEmpty() && !noneSelected) {
             effectiveAvailable.toSet()
         } else {
             currentStored
@@ -236,13 +241,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
 
         val normalized = when {
-            updated.isEmpty() -> setOf(NO_FOLDERS_SENTINEL)
-            updated.containsAll(effectiveAvailable) -> emptySet()
-            else -> updated
+            updated.isEmpty() -> GalleryFolderSelection(folders = emptySet(), noneSelected = true)
+            updated.containsAll(effectiveAvailable) -> GalleryFolderSelection(folders = emptySet(), noneSelected = false)
+            else -> GalleryFolderSelection(folders = updated, noneSelected = false)
         }
 
-        nonSecretPrefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, normalized).apply()
-        _includedFolders.value = normalized
+        GalleryFolderPrefs.write(nonSecretPrefs, normalized)
+        _includedFolders.value = normalized.folders
+        _noFoldersSelected.value = normalized.noneSelected
     }
 
     fun setSyncIntervalMinutes(minutes: Int) {
@@ -390,8 +396,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         )
 
     companion object {
-        const val NO_FOLDERS_SENTINEL = "__NONE__"
-
         /**
          * Test seam for the Keystore-backed prefs. Defaults to
          * [EncryptedPrefs.get]; Robolectric has no Android Keystore, so

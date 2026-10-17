@@ -8,6 +8,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.triage.MediaStoreDeleter
 import com.branchdam.mobile.ui.gallery.GalleryItem
@@ -275,6 +276,67 @@ class GalleryViewModelTest {
         viewModel.setFolder(com.branchdam.mobile.ui.gallery.ALL_FOLDERS)
         advanceUntilIdle()
         assertEquals(2, viewModel.displayedItems.value.size)
+    }
+
+    private fun folderItem(id: Long, folder: String) = GalleryItem(
+        primaryMediaItem = MediaItem(
+            id = id, contentUri = "content://images/$id",
+            filePath = "/sdcard/$folder/IMG_$id.jpg", displayName = "IMG_$id.jpg",
+            mimeType = "image/jpeg", sizeBytes = 1_000L,
+            dateTakenUnix = id, isRaw = false, folderName = folder
+        )
+    )
+
+    private fun galleryPrefs() = ApplicationProvider.getApplicationContext<Context>()
+        .getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
+
+    @Test
+    fun testFolderNamedNoneIsShownWhenIncluded() = runTest(testDispatcher) {
+        galleryPrefs().edit()
+            .putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, setOf("__NONE__"))
+            .putBoolean(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED, false)
+            .commit()
+
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.setItemsForTesting(listOf(folderItem(1L, "__NONE__"), folderItem(2L, "Camera")))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.noFoldersSelected.value)
+        assertEquals(listOf("IMG_1.jpg"), viewModel.displayedItems.value.map { it.mediaItem.displayName })
+    }
+
+    @Test
+    fun testNoFoldersSelectedShowsNothing() = runTest(testDispatcher) {
+        galleryPrefs().edit()
+            .putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, emptySet())
+            .putBoolean(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED, true)
+            .commit()
+
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.setItemsForTesting(listOf(folderItem(1L, "__NONE__"), folderItem(2L, "Camera")))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.noFoldersSelected.value)
+        assertTrue(viewModel.displayedItems.value.isEmpty())
+    }
+
+    @Test
+    fun testLegacyNoneSentinelMigratesOnLoad() = runTest(testDispatcher) {
+        val prefs = galleryPrefs()
+        prefs.edit().putStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, setOf("__NONE__")).commit()
+
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.setItemsForTesting(listOf(folderItem(1L, "__NONE__"), folderItem(2L, "Camera")))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.noFoldersSelected.value)
+        assertEquals(emptySet<String>(), viewModel.includedFolders.value)
+        assertTrue(viewModel.displayedItems.value.isEmpty())
+        assertTrue(prefs.getBoolean(BranchDamKeys.NO_GALLERY_FOLDERS_SELECTED, false))
+        assertEquals(emptySet<String>(), prefs.getStringSet(BranchDamKeys.INCLUDED_GALLERY_FOLDERS, null))
     }
 
     @Test
