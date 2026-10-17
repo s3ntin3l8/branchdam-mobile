@@ -9,6 +9,8 @@ require (
 	modernc.org/sqlite v1.60.1
 )
 
+replace modernc.org/libc => ../third_party/modernc.org/libc
+
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect

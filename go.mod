@@ -26,6 +26,8 @@ require (
 
 replace github.com/s3ntin3l8/branchdam-mobile/core => ./core
 
+replace modernc.org/libc => ./third_party/modernc.org/libc
+
 tool (
 	golang.org/x/mobile/cmd/gobind
 	golang.org/x/mobile/cmd/gomobile

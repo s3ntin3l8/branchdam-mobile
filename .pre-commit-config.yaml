@@ -5,12 +5,15 @@ repos:
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
+        exclude: ^third_party/
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^third_party/
       - id: end-of-file-fixer
+        exclude: ^third_party/
       - id: check-yaml
       - id: check-json
       - id: check-merge-conflict
@@ -21,8 +24,8 @@ repos:
     rev: v0.10.0.1
     hooks:
       - id: shellcheck
-        # Generated Gradle wrapper; not ours to lint.
-        exclude: ^android/gradlew$
+        # Generated Gradle wrapper and vendored third_party code; not ours to lint.
+        exclude: ^(android/gradlew|third_party/.*)$
 
   - repo: local
     hooks:
