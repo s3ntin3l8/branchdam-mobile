@@ -24,6 +24,10 @@ func translateSyscallAmd64(n, a1, a2, a3, a4, a5, a6 long) (sysno, p1, p2, p3, p
 		return 262, long(unix.AT_FDCWD), a1, a2, long(unix.AT_SYMLINK_NOFOLLOW), 0, 0
 	case 21: // SYS_access: access(path, mode) -> faccessat(AT_FDCWD, path, mode, 0)
 		return 269, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
+	case 22: // SYS_pipe: pipe(pipefd) -> pipe2(pipefd, 0)
+		return 293, a1, 0, 0, 0, 0, 0
+	case 33: // SYS_dup2: dup2(oldfd, newfd) -> dup3(oldfd, newfd, 0)
+		return 292, a1, a2, 0, 0, 0, 0
 	case 82: // SYS_rename: rename(old, new) -> renameat(AT_FDCWD, old, AT_FDCWD, new)
 		return 264, long(unix.AT_FDCWD), a1, long(unix.AT_FDCWD), a2, 0, 0
 	case 83: // SYS_mkdir: mkdir(path, mode) -> mkdirat(AT_FDCWD, path, mode)
