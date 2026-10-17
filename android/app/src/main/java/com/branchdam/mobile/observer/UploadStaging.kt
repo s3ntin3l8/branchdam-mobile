@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.otg.OtgStaging
+import com.branchdam.mobile.triage.queryLocalFileState
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -79,12 +80,17 @@ object UploadStaging {
      * platform allows. Returns the queue ID (> 0) or 0 on failure.
      */
     fun enqueue(context: Context, item: MediaItem): Long {
+        // Read the reclaim baseline before the bytes are copied: a change
+        // in between leaves it describing the older bytes, so the reclaim
+        // sees a mismatch and keeps the item (fail-safe, #229).
+        val baseline = queryLocalFileState(context, item.contentUri)
         val path = pathForUpload(context, item) ?: return 0L
         val id = EngineHolder.enqueueMedia(
             localPath = path,
             filename = item.displayName,
             capturedAtUnix = item.dateTakenUnix,
             localId = item.contentUri,
+            baseline = baseline,
         )
         if (id <= 0L) discardIfStaged(context, path)
         return id

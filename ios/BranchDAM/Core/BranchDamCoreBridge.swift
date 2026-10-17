@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Photos
 #if canImport(branchdam)
 import branchdam
 #endif
@@ -241,6 +242,42 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
+    /// The reclaim baseline the core records with an item's BLAKE3 and
+    /// re-verifies before a Safe-Space reclaim deletes it (#229): the
+    /// PHAsset's modificationDate as unix seconds. PhotoKit exposes no
+    /// public file size, so sizeBytes is always 0 (the core then compares
+    /// the modification time only). Anything that is not a PHAsset in the
+    /// library (an OTG card file, a synthetic "<id>/pairedVideo" child, no
+    /// photo access) yields (0, 0), which the core never reclaims.
+    static func photoLibraryFileState(localID: String) -> (sizeBytes: Int64, modifiedUnix: Int64) {
+        let cleanId = localID.hasPrefix("ph://") ? String(localID.dropFirst(5)) : localID
+        guard !cleanId.isEmpty else { return (0, 0) }
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
+        guard let asset = assets.firstObject, let modified = asset.modificationDate else { return (0, 0) }
+        return (0, Int64(modified.timeIntervalSince1970))
+    }
+
+    /// The baseline to record for a copy already staged at stagedPath. The
+    /// stager copied the bytes before this runs, so an asset modified after
+    /// the copy began would pair the old bytes' hash with the new
+    /// modificationDate -- and a later reclaim would then delete the new
+    /// bytes. When modificationDate is not older than the staged file's
+    /// creation date the baseline is dropped to (0, 0) instead, which the
+    /// core never reclaims (fail-safe; a re-import records a fresh one).
+    static func enqueueBaseline(localID: String, stagedPath: String) -> (sizeBytes: Int64, modifiedUnix: Int64) {
+        let state = photoLibraryFileState(localID: localID)
+        guard state.modifiedUnix > 0 else { return state }
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: stagedPath),
+              let stagedAt = (attrs[.creationDate] as? Date) ?? (attrs[.modificationDate] as? Date) else {
+            return (0, 0)
+        }
+        // Whole seconds on both sides, matching what is recorded.
+        return state.modifiedUnix < Int64(stagedAt.timeIntervalSince1970) ? state : (0, 0)
+    }
+
+    /// `sizeBytes` is kept for source compatibility but not recorded: the
+    /// reclaim side cannot read a PHAsset's size, so a recorded size could
+    /// only ever mismatch (see photoLibraryFileState).
     public func enqueueMedia(
         localPath: String,
         filename: String,
@@ -251,16 +288,19 @@ public class BranchDamCoreBridge: @unchecked Sendable {
     ) -> Int64 {
         #if canImport(branchdam)
         guard isInitialized else { return 0 }
+        let baseline = Self.enqueueBaseline(localID: localID, stagedPath: localPath)
         var uploadId: Int64 = 0
         queryQueue.sync {
             do {
-                uploadId = try branchdam.bindingEnqueueMedia(
+                uploadId = try branchdam.bindingEnqueueMediaWithBaseline(
                     localPath,
                     filename,
                     localID,
                     cameraModel,
+                    "",
                     capturedAtUnix,
-                    sizeBytes
+                    baseline.sizeBytes,
+                    baseline.modifiedUnix
                 )
             } catch {
                 NSLog("enqueueMedia failed: %@", String(describing: error))
@@ -399,11 +439,14 @@ public class BranchDamCoreBridge: @unchecked Sendable {
     public func reclaimSafeSpace(localID: String) -> (eligible: Bool, reason: String) {
         #if canImport(branchdam)
         guard isInitialized else { return (false, "Engine not initialized") }
+        // Read immediately before the gate: the core keeps the asset
+        // (local-changed) unless this matches the enqueue baseline (#229).
+        let current = Self.photoLibraryFileState(localID: localID)
         var eligible = false
         var reason = ""
         queryQueue.sync {
             do {
-                try branchdam.bindingReclaimSafeSpace(localID)
+                try branchdam.bindingReclaimSafeSpace(localID, current.sizeBytes, current.modifiedUnix)
                 eligible = true
             } catch {
                 reason = String(describing: error)

@@ -123,7 +123,7 @@ func TestEngineFullLifecycle(t *testing.T) {
 	}
 
 	// 4. Check Safe Space candidates
-	_ = q.RecordLocalMedia("local_uri_1", "018f-test-node-1", item.Blake3Hash, "ACTIVE")
+	_ = q.RecordLocalMediaWithBaseline("local_uri_1", "018f-test-node-1", item.Blake3Hash, "ACTIVE", 1234, 1700000000)
 	candidates, err := eng.CheckSafeSpaceCandidates(context.Background(), []string{"local_uri_1"})
 	if err != nil {
 		t.Fatalf("CheckSafeSpaceCandidates failed: %v", err)
@@ -133,7 +133,7 @@ func TestEngineFullLifecycle(t *testing.T) {
 	}
 
 	// 5. Reclaim safe space
-	if _, err := eng.SafeSpaceReclaim(context.Background(), "local_uri_1"); err != nil {
+	if _, err := eng.SafeSpaceReclaim(context.Background(), "local_uri_1", LocalFileState{SizeBytes: 1234, ModifiedUnix: 1700000000}); err != nil {
 		t.Fatalf("SafeSpaceReclaim failed: %v", err)
 	}
 
@@ -596,7 +596,7 @@ func TestSafeSpaceReclaim_Ineligible(t *testing.T) {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
 
-	verdict, err := eng.SafeSpaceReclaim(context.Background(), "local_uri_ineligible")
+	verdict, err := eng.SafeSpaceReclaim(context.Background(), "local_uri_ineligible", LocalFileState{})
 	if err == nil {
 		t.Fatalf("expected error for ineligible reclaim, got nil")
 	}
@@ -904,6 +904,9 @@ func TestReclaimGate_RequiresLiveTier3Master(t *testing.T) {
 	// case sets noLocalHash.
 	const localB3 = "a3ce4343025b0f98877e30d01847e2a882607401dd97d5f173fbec1d2f9fffa4" // pragma: allowlist secret
 	const otherB3 = "abababababababababababababababababababababababababababababababab"
+	// The local item is unchanged since enqueue in every case here; the
+	// baseline gate has its own test (TestSafeSpaceReclaim_LocalChanged).
+	const gateSize, gateMtime = int64(4096), int64(1700000000)
 	cases := []struct {
 		name        string
 		status      client.NodeStatusItem
@@ -950,7 +953,7 @@ func TestReclaimGate_RequiresLiveTier3Master(t *testing.T) {
 			if tc.noLocalHash {
 				localHash = ""
 			}
-			if err := q.RecordLocalMedia(localID, nodeUUID, localHash, "ACTIVE"); err != nil {
+			if err := q.RecordLocalMediaWithBaseline(localID, nodeUUID, localHash, "ACTIVE", gateSize, gateMtime); err != nil {
 				t.Fatalf("RecordLocalMedia: %v", err)
 			}
 
@@ -973,7 +976,7 @@ func TestReclaimGate_RequiresLiveTier3Master(t *testing.T) {
 			}
 
 			// Reclaim path.
-			verdict, err := eng.SafeSpaceReclaim(context.Background(), localID)
+			verdict, err := eng.SafeSpaceReclaim(context.Background(), localID, LocalFileState{SizeBytes: gateSize, ModifiedUnix: gateMtime})
 			if verdict.Eligible != tc.eligible {
 				t.Fatalf("reclaim Eligible = %v, want %v (verdict %+v, err %v)", verdict.Eligible, tc.eligible, verdict, err)
 			}
@@ -1024,7 +1027,7 @@ func TestSafeSpaceReclaim_IgnoresStatusForOtherNode(t *testing.T) {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
 
-	verdict, err := eng.SafeSpaceReclaim(context.Background(), "local-x")
+	verdict, err := eng.SafeSpaceReclaim(context.Background(), "local-x", LocalFileState{})
 	if err == nil || verdict.Eligible {
 		t.Fatalf("expected ineligible verdict, got %+v, err %v", verdict, err)
 	}
@@ -1111,5 +1114,113 @@ func TestCheckSafeSpaceCandidates_DedupesSharedNodeUUIDs(t *testing.T) {
 		if !c.IsEligible {
 			t.Fatalf("candidate %s not eligible: %+v", c.LocalID, c)
 		}
+	}
+}
+
+// TestSafeSpaceReclaim_LocalChanged (#229): the BLAKE3 in queue.db speaks
+// only for the bytes the item had at enqueue. Reclaim deletes only when
+// the state the shell reads just before deleting matches the baseline
+// recorded with that hash; a localID whose bytes were replaced in place
+// since upload (size or mtime moved) is kept even though the server still
+// holds a matching hash for the old bytes. The scan path does not see the
+// current state and is unaffected.
+func TestSafeSpaceReclaim_LocalChanged(t *testing.T) {
+	const b3 = "a3ce4343025b0f98877e30d01847e2a882607401dd97d5f173fbec1d2f9fffa4" // pragma: allowlist secret
+	const size, mtime = int64(4096), int64(1700000000)
+	cases := []struct {
+		name             string
+		baseSize, baseMt int64
+		current          LocalFileState
+		eligible         bool
+		reasonPart       string
+	}{
+		{"unchanged", size, mtime, LocalFileState{SizeBytes: size, ModifiedUnix: mtime}, true, ""},
+		{"size changed", size, mtime, LocalFileState{SizeBytes: size + 1, ModifiedUnix: mtime}, false, ReasonLocalChanged + ": size"},
+		{"mtime changed", size, mtime, LocalFileState{SizeBytes: size, ModifiedUnix: mtime + 1}, false, ReasonLocalChanged + ": modification time"},
+		{"current state unknown", size, mtime, LocalFileState{}, false, ReasonLocalChanged},
+		{"no baseline recorded", 0, 0, LocalFileState{SizeBytes: size, ModifiedUnix: mtime}, false, ReasonNoLocalBaseline},
+		// iOS records no size (PhotoKit has no public one): only the
+		// recorded mtime is compared.
+		{"mtime-only baseline unchanged", 0, mtime, LocalFileState{ModifiedUnix: mtime}, true, ""},
+		{"mtime-only baseline changed", 0, mtime, LocalFileState{ModifiedUnix: mtime + 60}, false, ReasonLocalChanged + ": modification time"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const nodeUUID = "node-229"
+			const localID = "content://media/external/images/media/229"
+			srv, _ := newNodeStatusServer(t, map[string]client.NodeStatusItem{nodeUUID: {
+				NodeUUID: nodeUUID, Found: true, Verified: true,
+				Tier: ReclaimTier, LifecycleState: "ACTIVE", FullHash: b3,
+			}})
+			q, err := queue.Open(filepath.Join(t.TempDir(), "changed.db"))
+			if err != nil {
+				t.Fatalf("open queue: %v", err)
+			}
+			defer q.Close()
+			eng := New(q, client.New(client.Config{BaseURL: srv.URL, APIKey: "k", AgentID: "a"}))
+			if err := q.RecordLocalMediaWithBaseline(localID, nodeUUID, b3, "ACTIVE", tc.baseSize, tc.baseMt); err != nil {
+				t.Fatalf("RecordLocalMediaWithBaseline: %v", err)
+			}
+
+			verdict, err := eng.SafeSpaceReclaim(context.Background(), localID, tc.current)
+			if verdict.Eligible != tc.eligible {
+				t.Fatalf("Eligible = %v, want %v (verdict %+v, err %v)", verdict.Eligible, tc.eligible, verdict, err)
+			}
+			if tc.eligible && err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if !tc.eligible {
+				if err == nil {
+					t.Fatalf("err = nil, want ineligible error")
+				}
+				if !strings.Contains(verdict.Reason, tc.reasonPart) {
+					t.Fatalf("Reason = %q, want substring %q", verdict.Reason, tc.reasonPart)
+				}
+			}
+			offloaded, err := q.IsMediaOffloaded(localID)
+			if err != nil {
+				t.Fatalf("IsMediaOffloaded: %v", err)
+			}
+			if offloaded != tc.eligible {
+				t.Fatalf("offloaded flag = %v, want %v", offloaded, tc.eligible)
+			}
+		})
+	}
+}
+
+// TestEnqueueLocalCaptureWithBaseline_RecordsBaseline: the baseline the
+// shell passes at enqueue lands next to the BLAKE3, and a re-enqueue that
+// dedups against the existing upload records the new baseline with the
+// freshly computed hash.
+func TestEnqueueLocalCaptureWithBaseline_RecordsBaseline(t *testing.T) {
+	dir := t.TempDir()
+	q, err := queue.Open(filepath.Join(dir, "baseline.db"))
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+	eng := New(q, nil)
+	path := filepath.Join(dir, "IMG_0229.jpg")
+	if err := os.WriteFile(path, []byte("original bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const localID = "content://media/external/images/media/229"
+	item, err := eng.EnqueueLocalCaptureWithBaseline(path, "IMG_0229.jpg", 1, localID, "cam", "", LocalFileState{SizeBytes: 14, ModifiedUnix: 1700000000})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	m, err := q.GetMediaByLocalID(localID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Blake3Hash != item.Blake3Hash || m.SizeBytes != 14 || m.ModifiedUnix != 1700000000 {
+		t.Fatalf("recorded = %+v, want hash %s and baseline (14, 1700000000)", m, item.Blake3Hash)
+	}
+
+	if _, err := eng.EnqueueLocalCaptureWithBaseline(path, "IMG_0229.jpg", 1, localID, "cam", "", LocalFileState{SizeBytes: 14, ModifiedUnix: 1700000500}); err != nil {
+		t.Fatalf("re-enqueue: %v", err)
+	}
+	if m, _ := q.GetMediaByLocalID(localID); m.ModifiedUnix != 1700000500 {
+		t.Fatalf("re-enqueue baseline mtime = %d, want 1700000500", m.ModifiedUnix)
 	}
 }

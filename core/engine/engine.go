@@ -198,7 +198,51 @@ const (
 	// ReasonNoLocalHash: queue.db holds no BLAKE3 for this item, so there
 	// is nothing to compare the server's fullHash against.
 	ReasonNoLocalHash = "no-local-hash"
+	// ReasonLocalChanged: the local item's current size or modification
+	// time, as the shell read it just before the reclaim, differs from the
+	// baseline recorded with its BLAKE3. Its bytes may have been replaced
+	// since upload, so the recorded hash no longer proves the server holds
+	// them (issue #229).
+	ReasonLocalChanged = "local-changed"
+	// ReasonNoLocalBaseline: queue.db holds no size or modification time
+	// for this item (recorded before the baseline existed, or by a shell
+	// that supplied none), so a change since upload cannot be ruled out.
+	ReasonNoLocalBaseline = "no-local-baseline"
 )
+
+// LocalFileState is a local media item's size and modification time (unix
+// seconds) as the shell reads them from the platform media store (Android
+// MediaStore SIZE / DATE_MODIFIED, iOS PHAsset modificationDate). The core
+// cannot open the original on either platform -- it only ever sees a staged
+// copy -- so the shell supplies it: at enqueue, recorded as the reclaim
+// baseline next to the BLAKE3, and again immediately before a reclaim
+// deletes the item. A zero field means the platform does not report it.
+type LocalFileState struct {
+	SizeBytes    int64
+	ModifiedUnix int64
+}
+
+// localChangedReason compares the state the shell read just before a
+// reclaim (current) with the baseline recorded with the item's BLAKE3 and
+// returns "" when the item is provably unchanged, or a reason otherwise.
+// This mirrors branchdam-agent's prune, which re-checks disk size and
+// mtime immediately before deleting: the BLAKE3 in queue.db describes the
+// bytes at enqueue, and a localID whose bytes were replaced in place since
+// would otherwise be deleted on the strength of a stale-but-matching hash.
+// Each field the baseline recorded (non-zero) must match exactly; a row
+// with no baseline at all is kept.
+func localChangedReason(recorded *queue.LocalMediaState, current LocalFileState) string {
+	if recorded.SizeBytes <= 0 && recorded.ModifiedUnix <= 0 {
+		return ReasonNoLocalBaseline + ": no size or modification time recorded locally"
+	}
+	if recorded.SizeBytes > 0 && current.SizeBytes != recorded.SizeBytes {
+		return fmt.Sprintf("%s: size %d differs from %d recorded at enqueue", ReasonLocalChanged, current.SizeBytes, recorded.SizeBytes)
+	}
+	if recorded.ModifiedUnix > 0 && current.ModifiedUnix != recorded.ModifiedUnix {
+		return fmt.Sprintf("%s: modification time %d differs from %d recorded at enqueue", ReasonLocalChanged, current.ModifiedUnix, recorded.ModifiedUnix)
+	}
+	return ""
+}
 
 // reclaimIneligibleReason evaluates one node-status entry against every
 // reclaim gate and returns "" when the local original may be deleted, or a
@@ -253,7 +297,19 @@ func New(q *queue.Queue, c *client.Client) *Engine {
 }
 
 // EnqueueLocalCapture reads a local media file, calculates hashes, records local state, and queues for upload.
+// It records no reclaim baseline; see EnqueueLocalCaptureWithBaseline.
 func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix int64, localID string, cameraModel, sourcePathHash string) (*queue.UploadItem, error) {
+	return e.EnqueueLocalCaptureWithBaseline(localPath, filename, capturedAtUnix, localID, cameraModel, sourcePathHash, LocalFileState{})
+}
+
+// EnqueueLocalCaptureWithBaseline is EnqueueLocalCapture that also records
+// baseline -- the original item's media-store size and modification time,
+// read by the shell before it staged the bytes at localPath -- next to the
+// BLAKE3 for localID. SafeSpaceReclaim compares it with the item's state
+// just before deletion. Reading it before staging keeps the order
+// fail-safe: a change between the read and the copy leaves the baseline
+// describing the older bytes, so the reclaim sees a mismatch and keeps.
+func (e *Engine) EnqueueLocalCaptureWithBaseline(localPath, filename string, capturedAtUnix int64, localID string, cameraModel, sourcePathHash string, baseline LocalFileState) (*queue.UploadItem, error) {
 	srcPathHash := strings.ToLower(strings.TrimSpace(sourcePathHash))
 	if srcPathHash != "" {
 		if len(srcPathHash) != 64 || !client.IsLowerHex(srcPathHash) {
@@ -308,7 +364,7 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 	// Dedup gate: check if this blake3Hash is already queued or uploaded
 	if existing, err := e.q.GetUploadItemByBlake3Hash(fullHash); err == nil && existing != nil {
 		if localID != "" {
-			_ = e.q.RecordLocalMedia(localID, existing.NodeUUID, fullHash, "ACTIVE")
+			_ = e.q.RecordLocalMediaWithBaseline(localID, existing.NodeUUID, fullHash, "ACTIVE", baseline.SizeBytes, baseline.ModifiedUnix)
 		}
 		return existing, nil
 	}
@@ -350,7 +406,7 @@ func (e *Engine) EnqueueLocalCapture(localPath, filename string, capturedAtUnix 
 	item.ID = id
 
 	if localID != "" {
-		_ = e.q.RecordLocalMedia(localID, "", fullHash, "ACTIVE")
+		_ = e.q.RecordLocalMediaWithBaseline(localID, "", fullHash, "ACTIVE", baseline.SizeBytes, baseline.ModifiedUnix)
 	}
 
 	return item, nil
@@ -995,10 +1051,17 @@ func (e *Engine) CheckSafeSpaceCandidates(ctx context.Context, localIDs []string
 // says "not eligible", the flag is not set and the verdict's Reason
 // explains why.
 //
+// current is the item's media-store state as the shell read it
+// immediately before calling (and so before deleting): it must match the
+// baseline recorded with the BLAKE3 (see localChangedReason), otherwise
+// the item is kept with ReasonLocalChanged or ReasonNoLocalBaseline. That
+// last gate runs after the server's, so a server-side refusal is still
+// the reason reported when both would fail.
+//
 // Returns SafeSpaceVerdict with Eligible=true on success; callers
 // (the branchdam FFI surface) should only delete the local file
 // after seeing Eligible=true.
-func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpaceVerdict, error) {
+func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string, current LocalFileState) (SafeSpaceVerdict, error) {
 	if localID == "" {
 		return SafeSpaceVerdict{Reason: "localID is required"}, errors.New("localID is required")
 	}
@@ -1049,6 +1112,11 @@ func (e *Engine) SafeSpaceReclaim(ctx context.Context, localID string) (SafeSpac
 			errors.New("server has no record of node")
 	}
 	if reason := reclaimIneligibleReason(*st, state.Blake3Hash); reason != "" {
+		return SafeSpaceVerdict{LocalID: localID, Reason: reason}, errors.New(reason)
+	}
+	// Last gate, local: the recorded hash only speaks for the bytes the
+	// item had at enqueue. Re-verify it is still those bytes (#229).
+	if reason := localChangedReason(state, current); reason != "" {
 		return SafeSpaceVerdict{LocalID: localID, Reason: reason}, errors.New(reason)
 	}
 

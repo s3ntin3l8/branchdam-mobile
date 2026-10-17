@@ -8,8 +8,20 @@ import (
 	"fmt"
 )
 
-// RecordLocalMedia upserts local capture state indexed by local MediaStore ID / URI.
+// RecordLocalMedia upserts local capture state indexed by local MediaStore
+// ID / URI, with no reclaim baseline (see RecordLocalMediaWithBaseline).
 func (q *Queue) RecordLocalMedia(localID, nodeUUID, blake3Hash, lifecycleState string) error {
+	return q.RecordLocalMediaWithBaseline(localID, nodeUUID, blake3Hash, lifecycleState, 0, 0)
+}
+
+// RecordLocalMediaWithBaseline upserts local capture state indexed by local
+// MediaStore ID / URI together with its reclaim baseline: sizeBytes and
+// modifiedUnix are the original item's size and modification time (unix
+// seconds) as the shell read them from the platform media store when
+// blake3Hash was computed. The baseline is always overwritten with the hash,
+// so a re-recorded hash never keeps a baseline that described other bytes;
+// 0 means unknown.
+func (q *Queue) RecordLocalMediaWithBaseline(localID, nodeUUID, blake3Hash, lifecycleState string, sizeBytes, modifiedUnix int64) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -17,15 +29,17 @@ func (q *Queue) RecordLocalMedia(localID, nodeUUID, blake3Hash, lifecycleState s
 	query := `
 	INSERT INTO local_media_state (
 		local_id, node_uuid, blake3_hash, lifecycle_state, is_offloaded,
-		created_at_unix, updated_at_unix
-	) VALUES (?, ?, ?, ?, 0, ?, ?)
+		created_at_unix, updated_at_unix, size_bytes, modified_unix
+	) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)
 	ON CONFLICT(local_id) DO UPDATE SET
 		node_uuid = excluded.node_uuid,
 		blake3_hash = excluded.blake3_hash,
 		lifecycle_state = excluded.lifecycle_state,
-		updated_at_unix = excluded.updated_at_unix
+		updated_at_unix = excluded.updated_at_unix,
+		size_bytes = excluded.size_bytes,
+		modified_unix = excluded.modified_unix
 	`
-	_, err := q.db.Exec(query, localID, nodeUUID, blake3Hash, lifecycleState, now, now)
+	_, err := q.db.Exec(query, localID, nodeUUID, blake3Hash, lifecycleState, now, now, sizeBytes, modifiedUnix)
 	return err
 }
 
@@ -76,10 +90,10 @@ func (q *Queue) GetMediaByLocalID(localID string) (*LocalMediaState, error) {
 
 	var item LocalMediaState
 	var isOffloadedInt int
-	query := `SELECT local_id, node_uuid, blake3_hash, lifecycle_state, is_offloaded, created_at_unix, updated_at_unix FROM local_media_state WHERE local_id = ?`
+	query := `SELECT local_id, node_uuid, blake3_hash, lifecycle_state, is_offloaded, created_at_unix, updated_at_unix, size_bytes, modified_unix FROM local_media_state WHERE local_id = ?`
 	err := q.db.QueryRow(query, localID).Scan(
 		&item.LocalID, &item.NodeUUID, &item.Blake3Hash, &item.LifecycleState, &isOffloadedInt,
-		&item.CreatedAtUnix, &item.UpdatedAtUnix,
+		&item.CreatedAtUnix, &item.UpdatedAtUnix, &item.SizeBytes, &item.ModifiedUnix,
 	)
 	if err != nil {
 		return nil, err
@@ -96,11 +110,11 @@ func (q *Queue) GetMediaByNodeUUID(nodeUUID string) (*LocalMediaState, error) {
 
 	var item LocalMediaState
 	var isOffloadedInt int
-	query := `SELECT local_id, node_uuid, blake3_hash, lifecycle_state, is_offloaded, created_at_unix, updated_at_unix
+	query := `SELECT local_id, node_uuid, blake3_hash, lifecycle_state, is_offloaded, created_at_unix, updated_at_unix, size_bytes, modified_unix
 	FROM local_media_state WHERE node_uuid = ? ORDER BY created_at_unix ASC, local_id ASC LIMIT 1`
 	err := q.db.QueryRow(query, nodeUUID).Scan(
 		&item.LocalID, &item.NodeUUID, &item.Blake3Hash, &item.LifecycleState, &isOffloadedInt,
-		&item.CreatedAtUnix, &item.UpdatedAtUnix,
+		&item.CreatedAtUnix, &item.UpdatedAtUnix, &item.SizeBytes, &item.ModifiedUnix,
 	)
 	if err != nil {
 		return nil, err

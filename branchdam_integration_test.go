@@ -352,10 +352,10 @@ func TestReclaimSafeSpace_HappyPath(t *testing.T) {
 	e, _ := newTestEngineWithNodeStatus(t, map[string]client.NodeStatusItem{
 		"test-node-1": {NodeUUID: "test-node-1", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: "b3-happy"},
 	})
-	if err := e.queue.RecordLocalMedia("ph://happy-1", "test-node-1", "b3-happy", "ACTIVE"); err != nil {
+	if err := e.queue.RecordLocalMediaWithBaseline("ph://happy-1", "test-node-1", "b3-happy", "ACTIVE", 4096, 1700000000); err != nil {
 		t.Fatalf("RecordLocalMedia: %v", err)
 	}
-	verdict, err := e.ReclaimSafeSpace("ph://happy-1")
+	verdict, err := e.ReclaimSafeSpace("ph://happy-1", 4096, 1700000000)
 	if err != nil {
 		t.Fatalf("ReclaimSafeSpace: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestReclaimSafeSpace_HappyPath(t *testing.T) {
 // from a successful Eligible=true (which has no error).
 func TestReclaimSafeSpace_NotFoundInLocal(t *testing.T) {
 	e, _ := newTestEngineWithServer(t)
-	verdict, err := e.ReclaimSafeSpace("ph://does-not-exist")
+	verdict, err := e.ReclaimSafeSpace("ph://does-not-exist", 0, 0)
 	if verdict.Eligible {
 		t.Fatalf("expected Eligible=false for unknown LocalID")
 	}
@@ -513,4 +513,28 @@ func TestFetchNamingTemplate_HappyPath(t *testing.T) {
 // writeTestFile is a small helper that writes a small payload to a file.
 func writeTestFile(path string, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// TestReclaimSafeSpace_LocalChangedIsIneligible (#229): at the FFI surface a
+// size or mtime the shell reads just before the delete that differs from the
+// enqueue baseline is an ineligible verdict (VERIFIED_REQUIRED naming
+// local-changed), and the offloaded flag stays clear.
+func TestReclaimSafeSpace_LocalChangedIsIneligible(t *testing.T) {
+	e, _ := newTestEngineWithNodeStatus(t, map[string]client.NodeStatusItem{
+		"test-node-1": {NodeUUID: "test-node-1", Found: true, Verified: true, Tier: "TIER3_MASTER_ARCHIVE", LifecycleState: "ACTIVE", FullHash: "b3-changed"},
+	})
+	if err := e.queue.RecordLocalMediaWithBaseline("ph://changed-1", "test-node-1", "b3-changed", "ACTIVE", 4096, 1700000000); err != nil {
+		t.Fatalf("RecordLocalMediaWithBaseline: %v", err)
+	}
+	verdict, err := e.ReclaimSafeSpace("ph://changed-1", 8192, 1700000000)
+	if verdict.Eligible {
+		t.Fatalf("expected Eligible=false, got %+v", verdict)
+	}
+	be, ok := err.(*Error)
+	if !ok || be.Code != CodeVerifiedRequired || !strings.Contains(be.Message, "local-changed") {
+		t.Fatalf("err = %#v, want VERIFIED_REQUIRED naming local-changed", err)
+	}
+	if off, _ := e.queue.IsMediaOffloaded("ph://changed-1"); off {
+		t.Fatal("offloaded flag set for a changed local file")
+	}
 }

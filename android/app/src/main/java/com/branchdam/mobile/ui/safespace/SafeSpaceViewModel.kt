@@ -109,7 +109,7 @@ class SafeSpaceViewModel(application: Application) : AndroidViewModel(applicatio
             val context = getApplication<Application>()
             val plan = SafeSpaceManager.planReclaim(
                 toReclaim.map { ReclaimCandidate(it.contentUri, it.sizeBytes) },
-            )
+            ) { uri -> SafeSpaceManager.reclaimWithCurrentState(context, uri) }
             if (plan.approved.isEmpty()) {
                 finishReclaim("The server could not confirm any item is safely archived; nothing was removed.")
                 return@launch
