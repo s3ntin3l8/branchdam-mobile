@@ -33,10 +33,11 @@ func (c *Client) Handshake(ctx context.Context, lastProcessedEventUUID string) (
 	// A rotated key (branchDAM S13) is stored through the KeyStore,
 	// switched to and adopted right here; the confirming handshake's
 	// response replaces this one. See keyrotation.go.
-	if resp.PendingRotation != nil {
-		if confirmed := c.adoptRotation(ctx, reqBody, usedKey, resp.PendingRotation); confirmed != nil {
-			return confirmed, nil
-		}
+	if resp.PendingRotation == nil {
+		// No rotation pending: nothing left to re-pair for.
+		c.setRepairDeadline(0)
+	} else if confirmed := c.adoptRotation(ctx, reqBody, usedKey, resp.PendingRotation); confirmed != nil {
+		return confirmed, nil
 	}
 	return &resp, nil
 }

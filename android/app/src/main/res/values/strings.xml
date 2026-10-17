@@ -103,6 +103,8 @@
     <string name="settings_title">Settings</string>
     <string name="settings_connected">Connected to server</string>
     <string name="settings_disconnected">Disconnected</string>
+    <string name="settings_repair_before">Re-pair this device before %1$s</string>
+    <string name="settings_repair_before_detail">The server rotated the API key of this device but cannot deliver the new key. Pair again with a new QR code before then, or syncing stops.</string>
     <string name="settings_category_general">General</string>
     <string name="settings_category_system">System</string>
     <string name="settings_connection">Connection</string>

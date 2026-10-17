@@ -203,6 +203,10 @@
 "Couldn't save the API key to the Keychain. The connection was not changed." = "Couldn't save the API key to the Keychain. The connection was not changed.";
 "Couldn't save the agent ID to the Keychain. The connection was not changed." = "Couldn't save the agent ID to the Keychain. The connection was not changed.";
 
+/* Settings: re-pair prompt for an undeliverable key rotation (QrPairingView, #218); %@ is a medium-style date */
+"Re-pair this device before %@" = "Re-pair this device before %@";
+"The server rotated the API key of this device but cannot deliver the new key. Pair again with a new QR code before then, or syncing stops." = "The server rotated the API key of this device but cannot deliver the new key. Pair again with a new QR code before then, or syncing stops.";
+
 /* Camera roll access banner (PhotoAuthorizationBanner) */
 "Camera Roll Access Denied" = "Camera Roll Access Denied";
 "Camera Roll Access Restricted" = "Camera Roll Access Restricted";

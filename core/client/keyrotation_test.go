@@ -531,3 +531,82 @@ func TestHandshakeDue(t *testing.T) {
 		t.Fatal("always due with a zero interval")
 	}
 }
+
+// TestRepairDeadlineUndeliverableRotation (#218): a rotation the server
+// cannot deliver (empty sealedApiKey) keeps its previousKeyExpiresAtUnix
+// as the re-pair deadline, and the next handshake whose response has no
+// pendingRotation clears it.
+func TestRepairDeadlineUndeliverableRotation(t *testing.T) {
+	k1, k2 := randomKey(t), randomKey(t)
+	rs, srv := newRotationServer(t, k1, k2)
+	rs.undeliv = true
+	var stored []string
+	c := newRotationClient(srv.URL, k1, recordingPersister(rs, &stored, nil))
+
+	if got := c.RepairDeadlineUnix(); got != 0 {
+		t.Fatalf("deadline before any handshake = %d, want 0", got)
+	}
+	handshake(t, c)
+	if got := c.RepairDeadlineUnix(); got != 1900000000 {
+		t.Fatalf("deadline after an undeliverable rotation = %d, want 1900000000", got)
+	}
+	handshake(t, c) // still pending: still set
+	if got := c.RepairDeadlineUnix(); got != 1900000000 {
+		t.Fatalf("deadline after a second undeliverable handshake = %d, want 1900000000", got)
+	}
+
+	// The operator withdraws the rotation (or the device was re-paired
+	// onto the newest key): the handshake has no pendingRotation.
+	rs.mu.Lock()
+	delete(rs.ids, k2)
+	rs.newest = k1
+	rs.mu.Unlock()
+	hs := handshake(t, c)
+	if hs.PendingRotation != nil {
+		t.Fatal("test server still announces a rotation")
+	}
+	if got := c.RepairDeadlineUnix(); got != 0 {
+		t.Fatalf("deadline after a handshake without pendingRotation = %d, want 0", got)
+	}
+}
+
+// TestRepairDeadlineClearedByAdoption (#218): once the server can deliver
+// the rotated key and the client adopts it, the re-pair deadline is gone.
+// The first handshake of that round still carries pendingRotation, so it
+// is the accepted request on the new key that clears it.
+func TestRepairDeadlineClearedByAdoption(t *testing.T) {
+	k1, k2 := randomKey(t), randomKey(t)
+	rs, srv := newRotationServer(t, k1, k2)
+	rs.undeliv = true
+	var stored []string
+	c := newRotationClient(srv.URL, k1, recordingPersister(rs, &stored, nil))
+
+	handshake(t, c)
+	if got := c.RepairDeadlineUnix(); got != 1900000000 {
+		t.Fatalf("deadline after an undeliverable rotation = %d, want 1900000000", got)
+	}
+
+	rs.mu.Lock()
+	rs.undeliv = false // the server now has BRANCHDAM_SECRET_KEY
+	rs.mu.Unlock()
+	hs := handshake(t, c)
+	if hs.CurrentKeyID != 2 || c.currentKey() != k2 {
+		t.Fatalf("rotated key not adopted (currentKeyId %d)", hs.CurrentKeyID)
+	}
+	if got := c.RepairDeadlineUnix(); got != 0 {
+		t.Fatalf("deadline after adopting the rotated key = %d, want 0", got)
+	}
+}
+
+// TestRepairDeadlineNotSetByDeliverableRotation: a rotation the server
+// can deliver is adopted, not a reason to re-pair.
+func TestRepairDeadlineNotSetByDeliverableRotation(t *testing.T) {
+	k1, k2 := randomKey(t), randomKey(t)
+	rs, srv := newRotationServer(t, k1, k2)
+	var stored []string
+	c := newRotationClient(srv.URL, k1, recordingPersister(rs, &stored, nil))
+	handshake(t, c)
+	if got := c.RepairDeadlineUnix(); got != 0 {
+		t.Fatalf("deadline after a deliverable rotation = %d, want 0", got)
+	}
+}

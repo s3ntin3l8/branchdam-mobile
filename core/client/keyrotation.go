@@ -143,6 +143,11 @@ type keyState struct {
 	// lastHandshake is when a handshake last succeeded (HandshakeDue).
 	lastHandshake time.Time
 
+	// repairDeadline is the previousKeyExpiresAtUnix of the latest
+	// rotation the server could not deliver (empty sealedApiKey), or 0.
+	// The device must be paired again before then (RepairDeadlineUnix).
+	repairDeadline int64
+
 	// adoptMu serializes adoptRotation.
 	adoptMu sync.Mutex
 }
@@ -159,6 +164,26 @@ func (c *Client) HandshakeDue(interval time.Duration) bool {
 func (c *Client) markHandshake() {
 	c.keys.mu.Lock()
 	c.keys.lastHandshake = time.Now()
+	c.keys.mu.Unlock()
+}
+
+// RepairDeadlineUnix returns the previousKeyExpiresAtUnix of the latest
+// rotation the server announced but could not deliver (pendingRotation
+// with an empty sealedApiKey: the server has no BRANCHDAM_SECRET_KEY), or
+// 0 when there is none. The device cannot adopt that key and has to be
+// paired again before this time, when its current key stops working.
+// A successful adoption of a rotated key, or a handshake whose response
+// has no pendingRotation, clears it. It lives in memory only; the next
+// handshake after a launch sets it again.
+func (c *Client) RepairDeadlineUnix() int64 {
+	c.keys.mu.Lock()
+	defer c.keys.mu.Unlock()
+	return c.keys.repairDeadline
+}
+
+func (c *Client) setRepairDeadline(unix int64) {
+	c.keys.mu.Lock()
+	c.keys.repairDeadline = unix
 	c.keys.mu.Unlock()
 }
 
@@ -200,6 +225,7 @@ func (c *Client) observeAuth(ctx context.Context, usedKey string, status int) st
 		a := c.keys.adopting
 		c.keys.adopting = nil
 		if ok {
+			c.keys.repairDeadline = 0
 			slog.Info("branchdam: the server accepted the rotated API key; the previous key is now revoked", "keyId", a.keyID)
 			break
 		}
@@ -251,6 +277,7 @@ func (c *Client) observeAuth(ctx context.Context, usedKey string, status int) st
 func (c *Client) adoptRotation(ctx context.Context, req HandshakeRequest, usedKey string, rot *PendingRotation) *HandshakeResponse {
 	logAttrs := []any{"keyId", rot.KeyID, "previousKeyExpiresAtUnix", rot.PreviousKeyExpiresAtUnix}
 	if rot.SealedAPIKey == "" {
+		c.setRepairDeadline(rot.PreviousKeyExpiresAtUnix)
 		slog.Warn("branchdam: the server rotated this device's API key but cannot deliver it; pair this device again before the current key expires", logAttrs...)
 		return nil
 	}

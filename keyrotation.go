@@ -78,3 +78,16 @@ func (e *Engine) checkKeyRotation(batchCtx context.Context) {
 		slog.Debug("branchdam: pre-sync handshake failed", "err", err)
 	}
 }
+
+// RepairDeadlineUnix returns when this device's current API key stops
+// working because the server rotated it but could not deliver the new key
+// (pendingRotation with an empty sealedApiKey: no BRANCHDAM_SECRET_KEY on
+// the server), as Unix seconds, or 0 when no such rotation is pending.
+// The shells' Settings screens ask the user to pair the device again
+// before that time. See client.Client.RepairDeadlineUnix.
+func (e *Engine) RepairDeadlineUnix() (int64, error) {
+	if err := e.requireOpen(); err != nil {
+		return 0, err
+	}
+	return e.client.RepairDeadlineUnix(), nil
+}

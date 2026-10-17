@@ -42,6 +42,10 @@ public class AppleQrParser {
 
 public struct QrPairingView: View {
     @State private var showShareSheet = false
+    /// Unix seconds before which this device must be paired again (#218):
+    /// the server rotated its API key but cannot deliver the new one.
+    /// 0 when no such rotation is pending.
+    @State private var repairDeadlineUnix: Int64 = 0
 
     public init() {}
 
@@ -55,6 +59,23 @@ public struct QrPairingView: View {
                         Spacer()
                     }
                     .padding(.vertical, 8)
+                }
+
+                if let repairDeadlineText {
+                    Section {
+                        NavigationLink {
+                            ConnectionSettingsView()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label("Re-pair this device before \(repairDeadlineText)", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.headline)
+                                    .foregroundColor(.red)
+                                Text("The server rotated the API key of this device but cannot deliver the new key. Pair again with a new QR code before then, or syncing stops.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
                 }
 
                 Section {
@@ -101,10 +122,33 @@ public struct QrPairingView: View {
                 }
             }
             .navigationTitle("Settings")
+            .task { await refreshRepairDeadline() }
         }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [AppleSyncLogger.shared.logFileURL])
         }
+    }
+
+    /// The re-pair deadline in the locale's medium date style, while it is
+    /// set and still ahead; nil hides the prompt.
+    private var repairDeadlineText: String? {
+        guard repairDeadlineUnix > 0 else { return nil }
+        let deadline = Date(timeIntervalSince1970: TimeInterval(repairDeadlineUnix))
+        guard deadline > Date() else { return nil }
+        return DateFormatter.localizedString(from: deadline, dateStyle: .medium, timeStyle: .none)
+    }
+
+    /// Handshakes (which is how the engine learns of an undeliverable key
+    /// rotation, and of its withdrawal), then reads the re-pair deadline.
+    @MainActor
+    private func refreshRepairDeadline() async {
+        let bridge = BranchDamCoreBridge.shared
+        guard bridge.isInitialized else {
+            repairDeadlineUnix = 0
+            return
+        }
+        _ = await bridge.fetchNamingTemplateAsync()
+        repairDeadlineUnix = await bridge.repairDeadlineUnixAsync() ?? 0
     }
 
     private var appVersion: String {

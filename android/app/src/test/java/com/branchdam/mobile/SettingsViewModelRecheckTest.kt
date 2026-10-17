@@ -81,6 +81,7 @@ class SettingsViewModelRecheckTest {
         // test class.
         SettingsViewModel.testConnectionFn = { com.branchdam.mobile.EngineHolder.testConnection() }
         SettingsViewModel.reachabilityTimeoutMs = 5_000L
+        SettingsViewModel.repairDeadlineFn = { com.branchdam.mobile.EngineHolder.repairDeadlineUnix() }
         SettingsViewModel.testIoDispatcher = Dispatchers.IO
         SettingsViewModel.securePrefsProvider = { com.branchdam.mobile.EncryptedPrefs.get(it) }
         SettingsViewModel.engineInit = { _, _, _, _, _, _ ->
@@ -106,6 +107,33 @@ class SettingsViewModelRecheckTest {
             "a successful handshake must update isConnected = true",
             viewModel.isConnected.value,
         )
+    }
+
+    @Test
+    fun testCheckConnection_readsRepairDeadline() = runTest(testDispatcher) {
+        // #218: an undeliverable key rotation leaves a re-pair deadline
+        // on the engine; the handshake this screen makes refreshes it,
+        // and a later handshake without the rotation clears it.
+        var deadline = 1_900_000_000L
+        SettingsViewModel.testConnectionFn = { true }
+        SettingsViewModel.repairDeadlineFn = { deadline }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        assertEquals(1_900_000_000L, viewModel.repairDeadlineUnix.value)
+
+        deadline = 0L
+        viewModel.checkConnection()
+        advanceUntilIdle()
+        assertEquals(0L, viewModel.repairDeadlineUnix.value)
+    }
+
+    @Test
+    fun testShouldShowRepairPrompt() {
+        val now = 1_800_000_000_000L
+        assertFalse("no deadline", SettingsViewModel.shouldShowRepairPrompt(0L, now))
+        assertFalse("deadline passed", SettingsViewModel.shouldShowRepairPrompt(1_700_000_000L, now))
+        assertTrue("deadline ahead", SettingsViewModel.shouldShowRepairPrompt(1_900_000_000L, now))
     }
 
     @Test

@@ -251,6 +251,22 @@ object EngineHolder {
         }
     }
 
+    /**
+     * Unix seconds before which this device must be paired again because
+     * the server rotated its API key but could not deliver the new one
+     * (`Branchdam.bindingRepairDeadlineUnix`, #218), or 0 when no such
+     * rotation is pending. The engine learns it on a handshake.
+     */
+    fun repairDeadlineUnix(): Long {
+        if (!nativeAvailable.get() || !isInitialized) return 0L
+        return try {
+            queryExecutor.submit(Callable { Branchdam.bindingRepairDeadlineUnix() }).get()
+        } catch (t: Throwable) {
+            Log.w(TAG, "repairDeadlineUnix failed: $t")
+            0L
+        }
+    }
+
     fun resetFailedUploads(): Long {
         if (!nativeAvailable.get() || !isInitialized) return 0L
         return try {
