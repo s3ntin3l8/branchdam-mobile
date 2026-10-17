@@ -96,7 +96,7 @@ func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel
 // records its reclaim baseline: sizeBytes and modifiedUnix (unix seconds) are
 // the original item's size and modification time as the shell read them from
 // the platform media store (Android MediaStore SIZE / DATE_MODIFIED, iOS
-// PHAsset modificationDate) before staging localPath. BindingReclaimSafeSpace
+// PHAsset modificationDate, else creationDate) before staging localPath. BindingReclaimSafeSpace
 // re-verifies them before a delete (#229); 0 means not reported.
 // Returns the upload ID (>= 1) on success or 0 on error.
 func BindingEnqueueMediaWithBaseline(localPath, filename, localID, cameraModel, sourcePathHash string,

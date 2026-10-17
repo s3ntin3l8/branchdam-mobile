@@ -244,16 +244,22 @@ public class BranchDamCoreBridge: @unchecked Sendable {
 
     /// The reclaim baseline the core records with an item's BLAKE3 and
     /// re-verifies before a Safe-Space reclaim deletes it (#229): the
-    /// PHAsset's modificationDate as unix seconds. PhotoKit exposes no
-    /// public file size, so sizeBytes is always 0 (the core then compares
-    /// the modification time only). Anything that is not a PHAsset in the
-    /// library (an OTG card file, a synthetic "<id>/pairedVideo" child, no
-    /// photo access) yields (0, 0), which the core never reclaims.
+    /// PHAsset's modificationDate as unix seconds, or its creationDate when
+    /// modificationDate is nil (common for never-edited camera originals,
+    /// #232). The same fallback runs at enqueue and at reclaim, so an
+    /// asset baselined on its creationDate and edited later gets a non-nil
+    /// modificationDate that differs from the baseline and is kept
+    /// (local-changed). PhotoKit exposes no public file size, so sizeBytes
+    /// is always 0 (the core then compares the modification time only).
+    /// Anything that is not a PHAsset in the library (an OTG card file, a
+    /// synthetic "<id>/pairedVideo" child, no photo access) or has neither
+    /// date yields (0, 0), which the core never reclaims.
     static func photoLibraryFileState(localID: String) -> (sizeBytes: Int64, modifiedUnix: Int64) {
         let cleanId = localID.hasPrefix("ph://") ? String(localID.dropFirst(5)) : localID
         guard !cleanId.isEmpty else { return (0, 0) }
         let assets = PHAsset.fetchAssets(withLocalIdentifiers: [cleanId], options: nil)
-        guard let asset = assets.firstObject, let modified = asset.modificationDate else { return (0, 0) }
+        guard let asset = assets.firstObject,
+              let modified = asset.modificationDate ?? asset.creationDate else { return (0, 0) }
         return (0, Int64(modified.timeIntervalSince1970))
     }
 
@@ -261,9 +267,11 @@ public class BranchDamCoreBridge: @unchecked Sendable {
     /// stager copied the bytes before this runs, so an asset modified after
     /// the copy began would pair the old bytes' hash with the new
     /// modificationDate -- and a later reclaim would then delete the new
-    /// bytes. When modificationDate is not older than the staged file's
-    /// creation date the baseline is dropped to (0, 0) instead, which the
-    /// core never reclaims (fail-safe; a re-import records a fresh one).
+    /// bytes. When the baseline date (modificationDate, or creationDate
+    /// when that is nil -- see photoLibraryFileState) is not older than the
+    /// staged file's creation date the baseline is dropped to (0, 0)
+    /// instead, which the core never reclaims (fail-safe; a re-import
+    /// records a fresh one).
     static func enqueueBaseline(localID: String, stagedPath: String) -> (sizeBytes: Int64, modifiedUnix: Int64) {
         let state = photoLibraryFileState(localID: localID)
         guard state.modifiedUnix > 0 else { return state }
