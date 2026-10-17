@@ -11,7 +11,45 @@ import (
 	"runtime"
 )
 
+func translateSyscallAmd64(n, a1, a2, a3, a4, a5, a6 long) (sysno, p1, p2, p3, p4, p5, p6 long) {
+	if runtime.GOARCH != "amd64" {
+		return n, a1, a2, a3, a4, a5, a6
+	}
+	switch n {
+	case 2: // SYS_open: open(path, flags, mode) -> openat(AT_FDCWD, path, flags, mode)
+		return 257, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
+	case 4: // SYS_stat: stat(path, statbuf) -> newfstatat(AT_FDCWD, path, statbuf, 0)
+		return 262, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
+	case 6: // SYS_lstat: lstat(path, statbuf) -> newfstatat(AT_FDCWD, path, statbuf, AT_SYMLINK_NOFOLLOW)
+		return 262, long(unix.AT_FDCWD), a1, a2, long(unix.AT_SYMLINK_NOFOLLOW), 0, 0
+	case 21: // SYS_access: access(path, mode) -> faccessat(AT_FDCWD, path, mode, 0)
+		return 269, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
+	case 82: // SYS_rename: rename(old, new) -> renameat(AT_FDCWD, old, AT_FDCWD, new)
+		return 264, long(unix.AT_FDCWD), a1, long(unix.AT_FDCWD), a2, 0, 0
+	case 83: // SYS_mkdir: mkdir(path, mode) -> mkdirat(AT_FDCWD, path, mode)
+		return 258, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
+	case 84: // SYS_rmdir: rmdir(path) -> unlinkat(AT_FDCWD, path, AT_REMOVEDIR)
+		return 263, long(unix.AT_FDCWD), a1, long(unix.AT_REMOVEDIR), 0, 0, 0
+	case 86: // SYS_link: link(old, new) -> linkat(AT_FDCWD, old, AT_FDCWD, new, 0)
+		return 265, long(unix.AT_FDCWD), a1, long(unix.AT_FDCWD), a2, 0, 0
+	case 87: // SYS_unlink: unlink(path) -> unlinkat(AT_FDCWD, path, 0)
+		return 263, long(unix.AT_FDCWD), a1, 0, 0, 0, 0
+	case 88: // SYS_symlink: symlink(old, new) -> symlinkat(old, AT_FDCWD, new)
+		return 266, a1, long(unix.AT_FDCWD), a2, 0, 0, 0
+	case 89: // SYS_readlink: readlink(path, buf, size) -> readlinkat(AT_FDCWD, path, buf, size)
+		return 267, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
+	case 90: // SYS_chmod: chmod(path, mode) -> fchmodat(AT_FDCWD, path, mode)
+		return 268, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
+	case 92: // SYS_chown: chown(path, uid, gid) -> fchownat(AT_FDCWD, path, uid, gid, 0)
+		return 260, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
+	case 133: // SYS_mknod: mknod(path, mode, dev) -> mknodat(AT_FDCWD, path, mode, dev)
+		return 259, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
+	}
+	return n, a1, a2, a3, a4, a5, a6
+}
+
 func ___syscall_cp(tls *TLS, n, a, b, c, d, e, f long) long {
+	n, a, b, c, d, e, f = translateSyscallAmd64(n, a, b, c, d, e, f)
 	switch n {
 	case SYS_nanosleep:
 		// int nanosleep(const struct timespec *req, struct timespec *rem)
@@ -100,6 +138,7 @@ func X__syscall0(tls *TLS, n long) long {
 }
 
 func X__syscall1(tls *TLS, n, a1 long) long {
+	n, a1, _, _, _, _, _ = translateSyscallAmd64(n, a1, 0, 0, 0, 0, 0)
 	r1, _, err := unix.Syscall(uintptr(n), uintptr(a1), 0, 0)
 	if err != 0 {
 		return long(-err)
@@ -109,6 +148,7 @@ func X__syscall1(tls *TLS, n, a1 long) long {
 }
 
 func X__syscall2(tls *TLS, n, a1, a2 long) long {
+	n, a1, a2, _, _, _, _ = translateSyscallAmd64(n, a1, a2, 0, 0, 0, 0)
 	switch n {
 	case SYS_tkill:
 		// raise() and pthread_kill(pthread_self()): the tid is the emulated
@@ -130,6 +170,7 @@ func X__syscall2(tls *TLS, n, a1, a2 long) long {
 }
 
 func X__syscall3(tls *TLS, n, a1, a2, a3 long) long {
+	n, a1, a2, a3, _, _, _ = translateSyscallAmd64(n, a1, a2, a3, 0, 0, 0)
 	switch n {
 	case SYS_tgkill:
 		if int32(a2) == tls.tid() {
@@ -149,6 +190,7 @@ func X__syscall3(tls *TLS, n, a1, a2, a3 long) long {
 }
 
 func X__syscall4(tls *TLS, n, a1, a2, a3, a4 long) long {
+	n, a1, a2, a3, a4, _, _ = translateSyscallAmd64(n, a1, a2, a3, a4, 0, 0)
 	r1, _, err := unix.Syscall6(uintptr(n), uintptr(a1), uintptr(a2), uintptr(a3), uintptr(a4), 0, 0)
 	if err != 0 {
 		return long(-err)
@@ -158,6 +200,7 @@ func X__syscall4(tls *TLS, n, a1, a2, a3, a4 long) long {
 }
 
 func X__syscall5(tls *TLS, n, a1, a2, a3, a4, a5 long) long {
+	n, a1, a2, a3, a4, a5, _ = translateSyscallAmd64(n, a1, a2, a3, a4, a5, 0)
 	r1, _, err := unix.Syscall6(uintptr(n), uintptr(a1), uintptr(a2), uintptr(a3), uintptr(a4), uintptr(a5), 0)
 	if err != 0 {
 		return long(-err)
@@ -167,6 +210,7 @@ func X__syscall5(tls *TLS, n, a1, a2, a3, a4, a5 long) long {
 }
 
 func X__syscall6(tls *TLS, n, a1, a2, a3, a4, a5, a6 long) long {
+	n, a1, a2, a3, a4, a5, a6 = translateSyscallAmd64(n, a1, a2, a3, a4, a5, a6)
 	r1, _, err := unix.Syscall6(uintptr(n), uintptr(a1), uintptr(a2), uintptr(a3), uintptr(a4), uintptr(a5), uintptr(a6))
 	if err != 0 {
 		return long(-err)

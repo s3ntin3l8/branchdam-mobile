@@ -134004,7 +134004,7 @@ func Xchmod(tls *TLS, path uintptr, mode Tmode_t) (r int32) {
 		trc("tls=%v path=%v mode=%v, (%v:)", tls, path, mode, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_chmod), int64(path), Int64FromUint32(mode)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_fchmodat), int64(AT_FDCWD), int64(path), Int64FromUint32(mode)))))
 }
 
 func Xfchmod(tls *TLS, fd int32, mode Tmode_t) (r int32) {
@@ -134022,7 +134022,7 @@ func Xfchmod(tls *TLS, fd int32, mode Tmode_t) (r int32) {
 		return int32(X__syscall_ret(tls, Uint64FromInt32(ret)))
 	}
 	X__procfdname(tls, bp, Uint32FromInt32(fd))
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_chmod), int64(bp), Int64FromUint32(mode)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_fchmodat), int64(AT_FDCWD), int64(bp), Int64FromUint32(mode)))))
 }
 
 func Xfchmodat(tls *TLS, fd int32, path uintptr, mode Tmode_t, flag int32) (r int32) {
@@ -134204,19 +134204,11 @@ func _fstatat_kstat(tls *TLS, fd int32, path uintptr, st uintptr, flag int32) (r
 			ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(fd), int64(path), int64(bp), int64(flag)))
 			if ret == -int32(EINVAL) {
 				X__procfdname(tls, bp+144, Uint32FromInt32(fd))
-				ret = int32(X__syscall2(tls, int64(SYS_stat), int64(bp+144), int64(bp)))
+				ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(AT_FDCWD), int64(bp+144), int64(bp), 0))
 			}
 		}
 	} else {
-		if (fd == -int32(100) || int32(**(**int8)(__ccgo_up(path))) == int32('/')) && flag == int32(AT_SYMLINK_NOFOLLOW) {
-			ret = int32(X__syscall2(tls, int64(SYS_lstat), int64(path), int64(bp)))
-		} else {
-			if (fd == -int32(100) || int32(**(**int8)(__ccgo_up(path))) == int32('/')) && !(flag != 0) {
-				ret = int32(X__syscall2(tls, int64(SYS_stat), int64(path), int64(bp)))
-			} else {
-				ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(fd), int64(path), int64(bp), int64(flag)))
-			}
-		}
+		ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(fd), int64(path), int64(bp), int64(flag)))
 	}
 	if ret != 0 {
 		return ret
@@ -134346,7 +134338,7 @@ func Xmkdir(tls *TLS, path uintptr, mode Tmode_t) (r int32) {
 		trc("tls=%v path=%v mode=%v, (%v:)", tls, path, mode, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_mkdir), int64(path), Int64FromUint32(mode)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_mkdirat), int64(AT_FDCWD), int64(path), Int64FromUint32(mode)))))
 }
 
 func Xmkdirat(tls *TLS, fd int32, path uintptr, mode Tmode_t) (r int32) {
@@ -134641,7 +134633,7 @@ func X__fopen_rb_ca(tls *TLS, filename uintptr, f uintptr, buf uintptr, len1 Tsi
 		defer func() { trc("-> %v", r) }()
 	}
 	Xmemset(tls, f, 0, uint64(232))
-	(*TFILE)(unsafe.Pointer(f)).Ffd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_open), int64(filename), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_LARGEFILE))))))
+	(*TFILE)(unsafe.Pointer(f)).Ffd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_openat), int64(AT_FDCWD), int64(filename), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_LARGEFILE))))))
 	if (*TFILE)(unsafe.Pointer(f)).Ffd < 0 {
 		return uintptr(0)
 	}
@@ -136011,7 +136003,7 @@ func Xfopen(tls *TLS, filename uintptr, mode uintptr) (r uintptr) {
 	}
 	/* Compute the flags to pass to open() */
 	flags = X__fmodeflags(tls, mode)
-	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_open), int64(filename), int64(flags|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0666))))))
+	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall4(tls, int64(SYS_openat), int64(AT_FDCWD), int64(filename), int64(flags|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0666))))))
 	if fd < 0 {
 		return uintptr(0)
 	}
@@ -138046,9 +138038,9 @@ func Xremove(tls *TLS, path uintptr) (r1 int32) {
 	}
 	var r int32
 	_ = r
-	r = int32(X__syscall1(tls, int64(SYS_unlink), int64(path)))
+	r = int32(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), 0))
 	if r == -int32(EISDIR) {
-		r = int32(X__syscall1(tls, int64(SYS_rmdir), int64(path)))
+		r = int32(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), int64(AT_REMOVEDIR)))
 	}
 	return int32(X__syscall_ret(tls, Uint64FromInt32(r)))
 }
@@ -138058,7 +138050,7 @@ func Xrename(tls *TLS, old uintptr, new1 uintptr) (r int32) {
 		trc("tls=%v old=%v new1=%v, (%v:)", tls, old, new1, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_rename), int64(old), int64(new1)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall4(tls, int64(SYS_renameat), int64(AT_FDCWD), int64(old), int64(AT_FDCWD), int64(new1)))))
 }
 
 func Xrewind(tls *TLS, f uintptr) {
@@ -138319,7 +138311,7 @@ func Xtempnam(tls *TLS, dir uintptr, pfx uintptr) (r1 uintptr) {
 		}
 		___randname(tls, bp+1+uintptr(l)-uintptr(6))
 		*(*[1]int8)(unsafe.Pointer(bp)) = [1]int8{}
-		r = int32(X__syscall3(tls, int64(SYS_readlink), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
+		r = int32(X__syscall4(tls, int64(SYS_readlinkat), int64(AT_FDCWD), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
 		if r == -int32(ENOENT) {
 			return Xstrdup(tls, bp+1)
 		}
@@ -138349,9 +138341,9 @@ func Xtmpfile(tls *TLS) (r uintptr) {
 			break
 		}
 		___randname(tls, bp+uintptr(13))
-		fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_open), int64(bp), int64(Int32FromInt32(O_RDWR)|Int32FromInt32(O_CREAT)|Int32FromInt32(O_EXCL)|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0600))))))
+		fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall4(tls, int64(SYS_openat), int64(AT_FDCWD), int64(bp), int64(Int32FromInt32(O_RDWR)|Int32FromInt32(O_CREAT)|Int32FromInt32(O_EXCL)|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0600))))))
 		if fd >= 0 {
-			X__syscall1(tls, int64(SYS_unlink), int64(bp))
+			X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(bp), 0)
 			f = X__fdopen(tls, fd, __ccgo_ts+1416)
 			if !(f != 0) {
 				X__syscall1(tls, int64(SYS_close), int64(fd))
@@ -138385,7 +138377,7 @@ func Xtmpnam(tls *TLS, buf uintptr) (r1 uintptr) {
 		}
 		___randname(tls, bp+1+uintptr(12))
 		*(*[1]int8)(unsafe.Pointer(bp)) = [1]int8{}
-		r = int32(X__syscall3(tls, int64(SYS_readlink), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
+		r = int32(X__syscall4(tls, int64(SYS_readlinkat), int64(AT_FDCWD), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
 		if r == -int32(ENOENT) {
 			if buf != 0 {
 				v2 = buf
@@ -147302,7 +147294,7 @@ func X__map_file(tls *TLS, pathname uintptr, size uintptr) (r uintptr) {
 	var _ /* st at bp+0 */ Tstat
 	_, _, _ = fd, map1, v1
 	map1 = uintptr(-Int32FromInt32(1))
-	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_open), int64(pathname), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_NONBLOCK)|Int32FromInt32(O_LARGEFILE))))))
+	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_openat), int64(AT_FDCWD), int64(pathname), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_NONBLOCK)|Int32FromInt32(O_LARGEFILE))))))
 	if fd < 0 {
 		return uintptr(0)
 	}
@@ -149867,7 +149859,7 @@ func Xchown(tls *TLS, path uintptr, uid Tuid_t, gid Tgid_t) (r int32) {
 		trc("tls=%v path=%v uid=%v gid=%v, (%v:)", tls, path, uid, gid, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_chown), int64(path), Int64FromUint32(uid), Int64FromUint32(gid)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall5(tls, int64(SYS_fchownat), int64(AT_FDCWD), int64(path), Int64FromUint32(uid), Int64FromUint32(gid), 0))))
 }
 
 func _dummy13(tls *TLS, fd int32) (r int32) {
@@ -150049,7 +150041,7 @@ func Xfchown(tls *TLS, fd int32, uid Tuid_t, gid Tgid_t) (r int32) {
 		return int32(X__syscall_ret(tls, Uint64FromInt32(ret)))
 	}
 	X__procfdname(tls, bp, Uint32FromInt32(fd))
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_chown), int64(bp), Int64FromUint32(uid), Int64FromUint32(gid)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall5(tls, int64(SYS_fchownat), int64(AT_FDCWD), int64(bp), Int64FromUint32(uid), Int64FromUint32(gid), 0))))
 }
 
 func Xfchownat(tls *TLS, fd int32, path uintptr, uid Tuid_t, gid Tgid_t, flag int32) (r int32) {
@@ -150304,7 +150296,7 @@ func Xlink(tls *TLS, existing uintptr, new1 uintptr) (r int32) {
 		trc("tls=%v existing=%v new1=%v, (%v:)", tls, existing, new1, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_link), int64(existing), int64(new1)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall5(tls, int64(SYS_linkat), int64(AT_FDCWD), int64(existing), int64(AT_FDCWD), int64(new1), 0))))
 }
 
 func Xlinkat(tls *TLS, fd1 int32, existing uintptr, fd2 int32, new1 uintptr, flag int32) (r int32) {
@@ -150471,7 +150463,7 @@ func Xreadlink(tls *TLS, path uintptr, buf uintptr, bufsize Tsize_t) (r1 Tssize_
 		buf = bp
 		bufsize = uint64(1)
 	}
-	r = int32(X__syscall3(tls, int64(SYS_readlink), int64(path), int64(buf), Int64FromUint64(bufsize)))
+	r = int32(X__syscall4(tls, int64(SYS_readlinkat), int64(AT_FDCWD), int64(path), int64(buf), Int64FromUint64(bufsize)))
 	if buf == bp && r > 0 {
 		r = 0
 	}
@@ -150520,7 +150512,7 @@ func Xrmdir(tls *TLS, path uintptr) (r int32) {
 		trc("tls=%v path=%v, (%v:)", tls, path, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall1(tls, int64(SYS_rmdir), int64(path)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), int64(AT_REMOVEDIR)))))
 }
 
 func Xsetgid(tls *TLS, gid Tgid_t) (r int32) {
@@ -150641,7 +150633,7 @@ func Xsymlink(tls *TLS, existing uintptr, new1 uintptr) (r int32) {
 		trc("tls=%v existing=%v new1=%v, (%v:)", tls, existing, new1, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_symlink), int64(existing), int64(new1)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_symlinkat), int64(existing), int64(AT_FDCWD), int64(new1)))))
 }
 
 func Xsymlinkat(tls *TLS, existing uintptr, fd int32, new1 uintptr) (r int32) {
@@ -150780,7 +150772,7 @@ func Xunlink(tls *TLS, path uintptr) (r int32) {
 		trc("tls=%v path=%v, (%v:)", tls, path, origin(2))
 		defer func() { trc("-> %v", r) }()
 	}
-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall1(tls, int64(SYS_unlink), int64(path)))))
+	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), 0))))
 }
 
 func Xunlinkat(tls *TLS, fd int32, path uintptr, flag int32) (r int32) {
