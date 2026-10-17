@@ -44,7 +44,7 @@ import (
 // annotated line together with .release-please-manifest.json (see
 // release-please-config.json extra-files), and TestVersionMatchesReleaseManifest
 // keeps the two in step.
-const version = "0.7.11" // x-release-please-version
+const version = "0.7.12" // x-release-please-version
 
 // Version is the package's reported build version: the default client
 // version sent to the server when the shell doesn't pass its own, and a
