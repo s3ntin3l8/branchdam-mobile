@@ -299,41 +299,44 @@ prepare_device() {
     adb_s shell settings put global sysui_demo_allowed 1
 }
 
-# Prints the default network's transport ("WIFI", "CELLULAR", ...), or
-# nothing when there is none.
-default_transport() {
-    local conn def
+# Prints "<transport> <netId>" for the default network, e.g. "WIFI 101".
+# The transport is "?" when its agent line did not parse, and the netId
+# "none" when there is no default network.
+default_network() {
+    local conn def transport
     conn="$(adb_s shell dumpsys connectivity 2>/dev/null | tr -d '\r' || true)"
     def="$(sed -n 's/^Active default network: //p' <<<"${conn}" | head -n 1)"
-    grep -F "NetworkAgentInfo{network{${def}}" <<<"${conn}" |
-        grep -oE 'Transports: [A-Z|]+' | head -n 1 | sed 's/^Transports: //' || true
+    transport="$(grep -F "NetworkAgentInfo{network{${def}}" <<<"${conn}" |
+        grep -oE 'Transports: [A-Z|]+' | head -n 1 | sed 's/^Transports: //' || true)"
+    printf '%s %s\n' "${transport:-?}" "${def:-none}"
 }
 
-# Best effort: give the emulator's virtual AndroidWifi up to ~90 seconds
-# to become the default network (one Wi-Fi off/on toggle half-way). It
-# boots on metered cellular until Wi-Fi associates, and on a loaded host
-# Wi-Fi can fail to associate for many minutes, so this never fails the
-# run: pair_app turns on the app's "sync on mobile data" setting, so the
-# sync does not depend on Wi-Fi (see there).
+# Best effort: give the emulator's virtual AndroidWifi 90 seconds to
+# become the default network (one Wi-Fi off/on toggle half-way). It boots
+# on metered cellular until Wi-Fi associates, and on a loaded host Wi-Fi
+# can fail to associate for many minutes, so this never fails the run:
+# pair_app turns on the app's "sync on mobile data" setting, so the sync
+# does not depend on Wi-Fi (see there).
 prefer_wifi() {
     log "waiting for Wi-Fi to become the default network"
     adb_s shell svc wifi enable
-    local i transport=""
-    for ((i = 0; i < 90; i++)); do
-        transport="$(default_transport)"
+    local start="${SECONDS}" toggled="" transport="" net=""
+    while ((SECONDS - start < 90)); do
+        read -r transport net <<<"$(default_network)"
         if [[ "${transport}" == WIFI ]]; then
-            log "default network: Wi-Fi"
+            log "default network: Wi-Fi (net ${net})"
             return 0
         fi
-        if [[ "${i}" -eq 45 ]]; then
+        if [[ -z "${toggled}" ]] && ((SECONDS - start >= 45)); then
+            toggled=1
             log "no Wi-Fi yet; toggling it"
             adb_s shell svc wifi disable
             sleep 2
             adb_s shell svc wifi enable
         fi
-        sleep 1
+        sleep 3
     done
-    log "Wi-Fi did not connect; default network: ${transport:-none} (syncing over mobile data)"
+    log "Wi-Fi did not connect; default network: ${transport:-?} (net ${net:-none}); syncing over mobile data"
 }
 
 demo_cmd() { adb_s shell am broadcast -a com.android.systemui.demo -e command "$@" >/dev/null; }
@@ -354,7 +357,9 @@ demo_ok() {
 # Demo-mode status bar: 10:00, full battery, full Wi-Fi and nothing else.
 demo_status_bar() {
     local try
-    for ((try = 0; try < 3; try++)); do
+    # A just-restarted SystemUI can take a while to accept demo commands,
+    # so back off a little more on each try before giving up.
+    for ((try = 0; try < 4; try++)); do
         [[ "${try}" -gt 0 ]] && demo_cmd exit
         demo_cmd enter
         demo_cmd clock -e hhmm 1000
@@ -367,7 +372,7 @@ demo_status_bar() {
         sleep 2
         demo_ok && return 0
         log "status bar is not in the demo state yet; re-entering demo mode"
-        sleep 3
+        sleep $((3 + try * 5))
     done
     die "could not put the status bar into demo mode"
 }
