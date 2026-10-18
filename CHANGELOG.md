@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.13](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.12...branchdam-mobile-v0.7.13) (2026-10-17)
+
+
+### Bug Fixes
+
+* **android:** resolve x86_64 seccomp SIGSYS crash and bump sqlite to 1.60.1 ([#235](https://github.com/s3ntin3l8/branchdam-mobile/issues/235)) ([fbf6bd6](https://github.com/s3ntin3l8/branchdam-mobile/commit/fbf6bd6b32aa7289d2aee1ac328d889a170a4251))
+
 ## [0.7.12](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.11...branchdam-mobile-v0.7.12) (2026-10-17)
 
 
