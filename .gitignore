@@ -91,6 +91,9 @@ tmp/
 docs/superpowers/
 .superpowers/
 
+# Claude Code session state / plans
+.claude/
+
 # Agent worktrees
 .worktrees/
 
