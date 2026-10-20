@@ -49,6 +49,7 @@ Pods/
 dist/
 coverage.txt
 coverage.html
+govulncheck.json
 vendor/
 *.o
 *.a

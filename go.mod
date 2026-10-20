@@ -2,6 +2,8 @@ module github.com/s3ntin3l8/branchdam-mobile
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require github.com/s3ntin3l8/branchdam-mobile/core v0.0.0-00010101000000-000000000000
 
 require (
