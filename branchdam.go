@@ -769,7 +769,9 @@ func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]Sa
 		}
 		localIDs = append(localIDs, c.LocalID)
 	}
-	raw, err := e.engine.CheckSafeSpaceCandidates(context.Background(), localIDs)
+	ctx, cancel := context.WithTimeout(context.Background(), reclaimTimeout)
+	defer cancel()
+	raw, err := e.engine.CheckSafeSpaceCandidates(ctx, localIDs)
 	if err != nil {
 		return nil, errToError(err)
 	}
@@ -792,6 +794,15 @@ func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]Sa
 	return out, nil
 }
 
+// reclaimTimeout bounds a reclaim-gate call.
+//
+// The gate is a server round trip (node-status) plus local checks, so it
+// needs a deadline. The shells run these on a two-thread query pool: an
+// unreachable server would otherwise pin a thread for the client's whole
+// timeout, and with two concurrent reclaims every other engine query queues
+// behind them.
+const reclaimTimeout = 30 * time.Second
+
 // ReclaimSafeSpace marks LocalID as offloaded after re-checking the server
 // and only if the node is currently verified, on the Tier-3 master archive,
 // live (ACTIVE or HIDDEN) and holding the recorded BLAKE3, and only if
@@ -807,7 +818,9 @@ func (e *Engine) ReclaimSafeSpace(localID string, sizeBytes, modifiedUnix int64)
 	if localID == "" {
 		return SafeSpaceVerdict{}, newError(CodeInvalidInput, "LocalID is required")
 	}
-	verdict, err := e.engine.SafeSpaceReclaim(context.Background(), localID,
+	ctx, cancel := context.WithTimeout(context.Background(), reclaimTimeout)
+	defer cancel()
+	verdict, err := e.engine.SafeSpaceReclaim(ctx, localID,
 		engine.LocalFileState{SizeBytes: sizeBytes, ModifiedUnix: modifiedUnix})
 	if err != nil {
 		// Distinguish transient infrastructure failures (network, DB)
