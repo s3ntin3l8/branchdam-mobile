@@ -42,8 +42,22 @@ Native mobile companion application for [branchDAM](https://github.com/s3ntin3l8
 #### Method B: Direct Standalone APK Download
 1. Navigate to the [Releases page](https://github.com/s3ntin3l8/branchdam-mobile/releases).
 2. Download the latest `branchdam-mobile.apk` asset.
-3. Open the downloaded APK on your device.
-4. When prompted by Android, enable **Install unknown apps** for your browser or file manager, then tap **Install**.
+3. (Optional but recommended) Verify the download's provenance. Every release asset is signed with a
+   [Sigstore](https://docs.sigstore.dev/) keyless certificate, and the `.sig` / `.cert` sidecars are
+   published next to it:
+   ```bash
+   cosign verify-blob branchdam-mobile.apk \
+     --signature branchdam-mobile.apk.sig \
+     --certificate branchdam-mobile.apk.cert \
+     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release\.yml@' \
+     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+   ```
+   The certificate identity must be this repository's release workflow and the issuer must be
+   GitHub's OIDC issuer — that is what proves the artifact came from a release run of this
+   repository and not from somewhere that merely copied a file. The `.sha256` sidecar next to the
+   APK covers the checksum; the `.sig`/`.cert` sidecars cover who built it.
+4. Open the downloaded APK on your device.
+5. When prompted by Android, enable **Install unknown apps** for your browser or file manager, then tap **Install**.
 
 #### Method C: Build from Source via Gradle
 Prerequisites: JDK 21, Android SDK Platform 35, Android NDK (for native Go JNI library), and Go 1.25+.
@@ -87,7 +101,16 @@ To use the prebuilt iOS framework from a GitHub Release asset without building f
    ```bash
    shasum -a 256 -c branchdam.xcframework.zip.sha256
    ```
-3. Extract into `ios/Frameworks/`:
+3. Verify the artifact's provenance with its Sigstore signature (`branchdam.xcframework.zip.sig` and
+   `branchdam.xcframework.zip.cert` are published next to it):
+   ```bash
+   cosign verify-blob branchdam.xcframework.zip \
+     --signature branchdam.xcframework.zip.sig \
+     --certificate branchdam.xcframework.zip.cert \
+     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release\.yml@' \
+     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+   ```
+4. Extract into `ios/Frameworks/`:
    ```bash
    unzip branchdam.xcframework.zip -d ios/Frameworks/
    ```
