@@ -47,7 +47,14 @@ func (s *uploadServer) handler(w http.ResponseWriter, r *http.Request) {
 		s.bodies = append(s.bodies, body)
 		s.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(client.UploadResponse{OK: true, NodeUUID: fmt.Sprintf("node-%d", n)})
+		// The real server echoes the hash it computed over the bytes it
+		// stored, on the UPLOADED and the DEDUPLICATED path alike. The
+		// client treats an ABSENT hash as "not verified".
+		_ = json.NewEncoder(w).Encode(client.UploadResponse{
+			OK:         true,
+			NodeUUID:   fmt.Sprintf("node-%d", n),
+			Blake3Hash: r.Header.Get("X-Blake3-Hash"),
+		})
 	default:
 		http.NotFound(w, r)
 	}
@@ -131,7 +138,11 @@ func blockUntilCancelled(started chan<- struct{}) func(http.ResponseWriter, *htt
 		case <-time.After(3 * time.Second):
 		}
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(client.UploadResponse{OK: true, NodeUUID: "late-node"})
+		_ = json.NewEncoder(w).Encode(client.UploadResponse{
+			OK:         true,
+			NodeUUID:   "late-node",
+			Blake3Hash: r.Header.Get("X-Blake3-Hash"),
+		})
 		return true
 	}
 }
@@ -207,7 +218,11 @@ func TestSyncUploads_SlowUploadOutlivesBatchDeadline(t *testing.T) {
 			}
 		}
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(client.UploadResponse{OK: true, NodeUUID: "slow-node"})
+		_ = json.NewEncoder(w).Encode(client.UploadResponse{
+			OK:         true,
+			NodeUUID:   "slow-node",
+			Blake3Hash: r.Header.Get("X-Blake3-Hash"),
+		})
 		return true
 	}
 	eng, q, dir := newUploadTestEngine(t, srv)
@@ -400,7 +415,11 @@ func TestSyncUploads_FileChangedAfterEnqueue(t *testing.T) {
 					return true
 				}
 				w.WriteHeader(http.StatusCreated)
-				_ = json.NewEncoder(w).Encode(client.UploadResponse{OK: true, NodeUUID: "edited-node"})
+				_ = json.NewEncoder(w).Encode(client.UploadResponse{
+					OK:         true,
+					NodeUUID:   "edited-node",
+					Blake3Hash: hash,
+				})
 				return true
 			}
 			eng, q, dir := newUploadTestEngine(t, srv)
