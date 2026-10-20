@@ -81,24 +81,38 @@ jobs:
       - name: Configure Release Signing Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag }}
         run: |
           mkdir -p ~/.android
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Decoding repository release keystore from secrets..."
-            echo "$KEYSTORE_BASE64" | base64 --decode > ~/.android/release.keystore
-          else
-            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set in repository secrets; using self-signed development keystore for sideloading."
-            if [ ! -f ~/.android/debug.keystore ]; then
-              keytool -genkey -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-            fi
+          # A release build MUST be signed with this project's own keystore.
+          # The Android debug keystore is not an acceptable substitute: its
+          # credentials (android / androiddebugkey) ship in the Android SDK
+          # and in every tutorial, and Android's upgrade check compares
+          # signing CERTIFICATES rather than keys -- so an APK signed with the
+          # debug key can be replaced by any third party and still be
+          # accepted as an in-place upgrade of this app. Fail the release
+          # instead of publishing such an artifact.
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set in repository secrets; refusing to publish a release signed with the public Android debug key."
+            exit 1
           fi
+          for var in KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!var}" ]; then
+              echo "::error::$var is not set in repository secrets; refusing to publish a release signed with the public Android debug key."
+              exit 1
+            fi
+          done
+          echo "Decoding repository release keystore from secrets..."
+          echo "$KEYSTORE_BASE64" | base64 --decode > ~/.android/release.keystore
 
       - name: Build Release APK and App Bundle
         working-directory: android
         env:
           APP_VERSION_NAME: ${{ needs.release-please.outputs.tag_name || inputs.release-tag || '0.2.0' }}
-          KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '/home/runner/.android/release.keystore' || '' }}
+          KEYSTORE_FILE: /home/runner/.android/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}

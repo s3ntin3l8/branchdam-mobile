@@ -71,6 +71,21 @@ android {
 
     signingConfigs {
         create("release") {
+            // No debug-keystore fallback. The Android debug key's credentials
+            // (android / androiddebugkey) ship in the Android SDK and in every
+            // tutorial, and Android's upgrade check compares signing
+            // CERTIFICATES, not keys -- so an APK signed with it can be
+            // replaced by any third party and still be accepted as an
+            // in-place upgrade of this app. A release build with no project
+            // keystore must fail instead of shipping such an artifact.
+            //
+            // The block stays tolerant of a missing KEYSTORE_FILE because it
+            // is evaluated at configuration time for EVERY Gradle invocation
+            // (test, lint, assembleDebug) and the project runs with the
+            // configuration cache on. AGP's own validateSigningRelease task
+            // fails the release variant when this config is incomplete, and
+            // .github/workflows/release.yml refuses to publish at all when
+            // the keystore secret is absent.
             val keystorePath = System.getenv("KEYSTORE_FILE")
             if (!keystorePath.isNullOrEmpty()) {
                 val kFile = file(keystorePath)
@@ -85,14 +100,6 @@ android {
                 storePassword = storePass
                 keyAlias = kAlias
                 keyPassword = kPass
-            } else {
-                val debugKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
-                if (debugKeystore.exists()) {
-                    storeFile = debugKeystore
-                    storePassword = "android" // pragma: allowlist secret
-                    keyAlias = "androiddebugkey"
-                    keyPassword = "android" // pragma: allowlist secret
-                }
             }
         }
     }
