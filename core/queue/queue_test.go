@@ -166,6 +166,58 @@ func TestLocalMediaStateAndOffload(t *testing.T) {
 	}
 }
 
+// TestRecordLocalMediaClearsOffloadFlag pins that re-recording a local
+// media item clears the offload flag.
+//
+// The flag means "this item's local copy was deliberately deleted, the
+// server master is the only copy left". Recording the media happens on
+// the enqueue path, where the local file has just been read and hashed,
+// so the local copy is present and the flag is stale. Leaving it set made
+// a re-enqueued item still read as OFFLOADED and made the delete event
+// for it be skipped -- so a photo the user deleted stayed on the server.
+func TestRecordLocalMediaClearsOffloadFlag(t *testing.T) {
+	q := newTestQueue(t)
+
+	localID := "content://media/external/images/media/2004"
+	nodeUUID := "018f2345-6789-7abc-def0-123456789abc"
+	blake3 := "c0ffee00000000000000000000000000000000000000000000000000000000c0" // pragma: allowlist secret
+
+	if err := q.RecordLocalMedia(localID, nodeUUID, blake3, "ACTIVE"); err != nil {
+		t.Fatalf("RecordLocalMedia failed: %v", err)
+	}
+	if err := q.SetMediaOffloaded(localID, true); err != nil {
+		t.Fatalf("SetMediaOffloaded failed: %v", err)
+	}
+	offloaded, err := q.IsMediaOffloaded(localID)
+	if err != nil || !offloaded {
+		t.Fatalf("expected isOffloaded true before the re-record, got %v (err: %v)", offloaded, err)
+	}
+
+	// Re-record the media: the local copy is present again.
+	if err := q.RecordLocalMediaWithBaseline(localID, nodeUUID, blake3, "ACTIVE", 4096, 1700000000); err != nil {
+		t.Fatalf("RecordLocalMediaWithBaseline failed: %v", err)
+	}
+
+	offloaded, err = q.IsMediaOffloaded(localID)
+	if err != nil {
+		t.Fatalf("IsMediaOffloaded failed: %v", err)
+	}
+	if offloaded {
+		t.Fatal("the offload flag survived a re-record of the local media")
+	}
+
+	state, err := q.GetMediaByLocalID(localID)
+	if err != nil {
+		t.Fatalf("GetMediaByLocalID failed: %v", err)
+	}
+	if state.IsOffloaded {
+		t.Fatal("the re-recorded local media state still reports IsOffloaded")
+	}
+	if state.NodeUUID != nodeUUID || state.Blake3Hash != blake3 {
+		t.Fatalf("the re-record lost the identity fields: %+v", state)
+	}
+}
+
 func TestGetUploadItemByBlake3Hash(t *testing.T) {
 	q := newTestQueue(t)
 

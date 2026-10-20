@@ -21,6 +21,15 @@ func (q *Queue) RecordLocalMedia(localID, nodeUUID, blake3Hash, lifecycleState s
 // blake3Hash was computed. The baseline is always overwritten with the hash,
 // so a re-recorded hash never keeps a baseline that described other bytes;
 // 0 means unknown.
+//
+// Recording the media also clears the offload flag. The flag means "this
+// item's local copy was deliberately deleted, the server master is the
+// only copy left" -- but this function is only ever called on the enqueue
+// path, where the local file has just been read and hashed, so the local
+// copy is present. Leaving the flag set from a previous life made a
+// re-enqueued item still read as OFFLOADED, and made the delete event for
+// it be skipped ("the server master is kept"), so a photo the user
+// deleted stayed on the server.
 func (q *Queue) RecordLocalMediaWithBaseline(localID, nodeUUID, blake3Hash, lifecycleState string, sizeBytes, modifiedUnix int64) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -35,6 +44,7 @@ func (q *Queue) RecordLocalMediaWithBaseline(localID, nodeUUID, blake3Hash, life
 		node_uuid = excluded.node_uuid,
 		blake3_hash = excluded.blake3_hash,
 		lifecycle_state = excluded.lifecycle_state,
+		is_offloaded = excluded.is_offloaded,
 		updated_at_unix = excluded.updated_at_unix,
 		size_bytes = excluded.size_bytes,
 		modified_unix = excluded.modified_unix
