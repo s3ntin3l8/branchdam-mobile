@@ -262,4 +262,4 @@ and what it needs.
 
 ## License
 
-MIT
+Copyright (C) 2026 Björn Hansen — licensed under [AGPL-3.0-or-later](LICENSE).
