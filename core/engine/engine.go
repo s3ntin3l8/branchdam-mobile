@@ -75,6 +75,9 @@ type Engine struct {
 	// uploadBudget overrides UploadBudget; tests only.
 	uploadBudget func(sizeBytes int64) time.Duration
 
+	// hashSizeLimit overrides maxEnqueueFileBytes; tests only.
+	hashSizeLimit int64
+
 	activeMu         sync.Mutex
 	activeUpload     *ActiveUploadProgress
 	lastProgressTime time.Time
@@ -323,7 +326,15 @@ func (e *Engine) EnqueueLocalCaptureWithBaseline(localPath, filename string, cap
 	// B.2.5: Stat before Open so a missing-file failure surfaces with
 	// the canonical IO_ERROR code at the FFI boundary rather than a
 	// generic open error.
-	if _, err := os.Stat(localPath); err != nil {
+	//
+	// The path crosses the FFI boundary from the native shell, so it is
+	// not necessarily a file. A FIFO (or a device node) is the dangerous
+	// case: opening a FIFO read-only blocks until some process opens the
+	// write end, which would pin one of the shell's two query threads for
+	// good. Stat does not block on a FIFO, so the check comes first, and
+	// the open is non-blocking where the platform supports it.
+	info, err := os.Stat(localPath)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, &client.ClientError{
 				Code:    client.CodeIOError,
@@ -337,8 +348,17 @@ func (e *Engine) EnqueueLocalCaptureWithBaseline(localPath, filename string, cap
 			Cause:   err,
 		}
 	}
+	if !info.Mode().IsRegular() {
+		return nil, &client.ClientError{
+			Code:    client.CodeInvalidInput,
+			Message: fmt.Sprintf("local path is not a regular file: %s", localPath),
+		}
+	}
+	if err := e.checkHashSize(localPath, info.Size()); err != nil {
+		return nil, err
+	}
 
-	file, err := os.Open(localPath)
+	file, err := os.OpenFile(localPath, os.O_RDONLY|openFlagsNonblock, 0)
 	if err != nil {
 		return nil, &client.ClientError{
 			Code:    client.CodeIOError,
@@ -348,6 +368,26 @@ func (e *Engine) EnqueueLocalCaptureWithBaseline(localPath, filename string, cap
 	}
 	// B.2.5: defer close before the first non-error return.
 	defer file.Close()
+
+	// The check above is about the PATH; this one is about the file that
+	// was actually opened, which is what will be hashed.
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, &client.ClientError{
+			Code:    client.CodeIOError,
+			Message: fmt.Sprintf("stat local file: %v", err),
+			Cause:   err,
+		}
+	}
+	if !opened.Mode().IsRegular() {
+		return nil, &client.ClientError{
+			Code:    client.CodeInvalidInput,
+			Message: fmt.Sprintf("local path is not a regular file: %s", localPath),
+		}
+	}
+	if err := e.checkHashSize(localPath, opened.Size()); err != nil {
+		return nil, err
+	}
 
 	fastHash, fullHash, sizeBytes, mtime, err := hashOpenFile(file)
 	if err != nil {
@@ -430,6 +470,17 @@ const (
 	// margin keeps it far clear of any claim still being worked on.
 	StaleClaimAge = 30 * time.Minute
 )
+
+// maxEnqueueFileBytes bounds the size of a file the enqueue path will
+// hash.
+//
+// A media file is orders of magnitude below this: a photo is megabytes,
+// even a long 4K ProRes clip is tens of gigabytes. The bound is not
+// about legitimate media -- it is about making the work bounded. The
+// hash streams the whole file, so without a cap a path that is not
+// really a media file turns into an unbounded read on a phone's query
+// thread. It matches the FFI surface's maxHashFileBytes.
+const maxEnqueueFileBytes = 64 << 30 // 64 GiB
 
 // Per-upload time budget. An upload is not bound by the batch deadline
 // (SyncBatch's TimeoutSecs), which only stops new items from starting:
@@ -658,6 +709,23 @@ func fileChangedSinceEnqueue(item *queue.UploadItem, info os.FileInfo) bool {
 	return item.ModTimeUnixNano != 0 && info.ModTime().UnixNano() != item.ModTimeUnixNano
 }
 
+// checkHashSize rejects a file that is too large to hash, so that hashing
+// it stays bounded work. The limit is maxEnqueueFileBytes unless a test
+// lowered it.
+func (e *Engine) checkHashSize(localPath string, size int64) error {
+	limit := int64(maxEnqueueFileBytes)
+	if e.hashSizeLimit > 0 {
+		limit = e.hashSizeLimit
+	}
+	if size <= limit {
+		return nil
+	}
+	return &client.ClientError{
+		Code:    client.CodeInvalidInput,
+		Message: fmt.Sprintf("local file is too large to hash: %s (%d bytes)", localPath, size),
+	}
+}
+
 // hashOpenFile hashes file from its current offset and returns the
 // modification time it had before hashing. Recording the pre-hash mtime
 // means a write that lands during the hash leaves a stored mtime that no
@@ -679,6 +747,19 @@ func hashOpenFile(file *os.File) (fastHash, fullHash string, sizeBytes, mtimeUni
 // stale hash the server would reject on every retry. file is rewound for
 // streaming afterwards.
 func (e *Engine) refreshChangedUpload(file *os.File, item *queue.UploadItem) (*queue.UploadItem, error) {
+	// The re-hash is the one hash site the size bound did not reach. It
+	// fires exactly when the file's size differs from the one recorded at
+	// enqueue, so a path replaced with a file of ANY size would be read to
+	// EOF while the batch holds the engine's read lock. Bound it the same
+	// way the other two hash sites are bounded -- a one-time stall per row
+	// is still a stall the sync thread pays for.
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat for re-hash: %w", err)
+	}
+	if err := e.checkHashSize(item.LocalPath, info.Size()); err != nil {
+		return nil, err
+	}
 	fastHash, fullHash, sizeBytes, mtime, err := hashOpenFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("re-hash: %w", err)
@@ -736,7 +817,26 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 		return uploadFailed, statErr
 	}
 
-	file, openErr := os.Open(item.LocalPath)
+	// The path crosses the FFI boundary from the native shell, so it is
+	// not necessarily a file. A FIFO (or a device node) is the dangerous
+	// case: opening a FIFO read-only blocks until some process opens the
+	// write end, which would hold the engine's read lock for the whole
+	// batch -- the close and every later query queue behind it. Stat does
+	// not block on a FIFO, so the check comes first, and the open is
+	// non-blocking where the platform supports it.
+	if !info.Mode().IsRegular() {
+		if e.preScreen(ctx, item) {
+			return uploadCompleted, nil
+		}
+		notRegular := &client.ClientError{
+			Code:    client.CodeInvalidInput,
+			Message: fmt.Sprintf("local path is not a regular file: %s", item.LocalPath),
+		}
+		_ = e.q.MarkUploadFailed(item.ID, notRegular.Error(), p.MaxRetries)
+		return uploadFailed, notRegular
+	}
+
+	file, openErr := os.OpenFile(item.LocalPath, os.O_RDONLY|openFlagsNonblock, 0)
 	if openErr != nil {
 		if e.preScreen(ctx, item) {
 			return uploadCompleted, nil
@@ -747,7 +847,38 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 	// B.2.5: defer close inside helper method so cleanup is guaranteed.
 	defer file.Close()
 
-	if fileChangedSinceEnqueue(item, info) {
+	// The check above is about the PATH; this one is about the file that
+	// was actually opened, which is what will be uploaded.
+	//
+	// There is no test over this one, and there cannot be a deterministic
+	// one: the case it exists for is the path being swapped for a FIFO
+	// between the stat and the open, which needs a race to land. The
+	// portable test that covers the same refusal (a directory instead of
+	// a file) happens to be caught by the path check as well, so it does
+	// not discriminate between the two. The POSIX test pins the pre-open
+	// path check, which is the one with observable teeth; this one closes
+	// the window the pre-open check cannot see.
+	opened, openedStatErr := file.Stat()
+	if openedStatErr != nil {
+		if e.preScreen(ctx, item) {
+			return uploadCompleted, nil
+		}
+		_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file stat failed: %v", openedStatErr), p.MaxRetries)
+		return uploadFailed, openedStatErr
+	}
+	if !opened.Mode().IsRegular() {
+		if e.preScreen(ctx, item) {
+			return uploadCompleted, nil
+		}
+		notRegular := &client.ClientError{
+			Code:    client.CodeInvalidInput,
+			Message: fmt.Sprintf("local path is not a regular file: %s", item.LocalPath),
+		}
+		_ = e.q.MarkUploadFailed(item.ID, notRegular.Error(), p.MaxRetries)
+		return uploadFailed, notRegular
+	}
+
+	if fileChangedSinceEnqueue(item, opened) {
 		refreshed, err := e.refreshChangedUpload(file, item)
 		if err != nil {
 			_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file changed since enqueue: %v", err), p.MaxRetries)

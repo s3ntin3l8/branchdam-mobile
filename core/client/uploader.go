@@ -157,13 +157,31 @@ func (c *Client) UploadStream(ctx context.Context, r io.Reader, sizeBytes int64,
 		return nil, fmt.Errorf("failed to decode upload response: %w", err)
 	}
 
-	// B.2.6: server-claimed BLAKE3 verification. If the server
-	// returns a hash and it doesn't match what we sent, refuse
-	// the response.
-	if uploadResp.Blake3Hash != "" && opts.Blake3Hash != "" && uploadResp.Blake3Hash != opts.Blake3Hash {
-		return nil, &ClientError{
-			Code:    CodeHashMismatch,
-			Message: fmt.Sprintf("server returned blake3 %q, expected %q", uploadResp.Blake3Hash, opts.Blake3Hash),
+	// B.2.6: server-claimed BLAKE3 verification. The server returns the
+	// hash it computed over the bytes it stored -- agent_upload.go returns
+	// it on both the UPLOADED and the DEDUPLICATED path -- so an ABSENT
+	// hash means the server confirmed nothing, and it must not read as a
+	// pass. (The reclaim path independently re-checks the server's fullHash
+	// against the locally recorded BLAKE3, so this is not the only thing
+	// standing between a bad response and a local delete -- but it is what
+	// decides whether the CLIENT believes the upload was verified.)
+	//
+	// The comparison is case-insensitive: the server emits lowercase hex
+	// today, but a case difference is not a different digest, and refusing
+	// an upload over one would break ingestion against a server that
+	// uppercases.
+	if opts.Blake3Hash != "" {
+		if uploadResp.Blake3Hash == "" {
+			return nil, &ClientError{
+				Code:    CodeHashMismatch,
+				Message: "server response carried no blake3 hash: the upload was not verified",
+			}
+		}
+		if !strings.EqualFold(uploadResp.Blake3Hash, opts.Blake3Hash) {
+			return nil, &ClientError{
+				Code:    CodeHashMismatch,
+				Message: fmt.Sprintf("server returned blake3 %q, expected %q", uploadResp.Blake3Hash, opts.Blake3Hash),
+			}
 		}
 	}
 

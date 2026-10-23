@@ -708,6 +708,67 @@ func TestUploadStream_HashMismatch(t *testing.T) {
 	}
 }
 
+// TestUploadStream_HashAbsentFromResponse: the server returned no blake3
+// hash at all. That is not a pass -- the server confirmed nothing -- so the
+// client must refuse the response rather than record the upload as
+// verified.
+func TestUploadStream_HashAbsentFromResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(UploadResponse{
+			OK:       true,
+			NodeUUID: "node-uuid-1",
+		})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent"})
+	_, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("payload")),
+		7,
+		"no_hash.dng",
+		UploadOptions{Blake3Hash: "b3_client_hash"},
+	)
+	if err == nil {
+		t.Fatal("expected an error when the server confirmed nothing, got nil")
+	}
+	ce, ok := err.(*ClientError)
+	if !ok {
+		t.Fatalf("error type = %T, want *ClientError", err)
+	}
+	if ce.Code != CodeHashMismatch {
+		t.Fatalf("Code = %q, want %q", ce.Code, CodeHashMismatch)
+	}
+}
+
+// TestUploadStream_HashCaseInsensitive: a server that returns the same
+// digest in a different case is not claiming a different content hash. The
+// client must not refuse the upload over casing alone -- that would break
+// ingestion against a server that uppercases its hex.
+func TestUploadStream_HashCaseInsensitive(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(UploadResponse{
+			OK:         true,
+			NodeUUID:   "node-uuid-1",
+			Blake3Hash: strings.ToUpper("b3_client_hash"),
+		})
+	}))
+	defer server.Close()
+
+	c := New(Config{BaseURL: server.URL, APIKey: "key", AgentID: "agent"})
+	if _, err := c.UploadStream(
+		context.Background(),
+		bytes.NewReader([]byte("payload")),
+		7,
+		"case.dng",
+		UploadOptions{Blake3Hash: "b3_client_hash"},
+	); err != nil {
+		t.Fatalf("UploadStream failed on a case-only difference: %v", err)
+	}
+}
+
 func TestRequestHeaders_SignaturePresent(t *testing.T) {
 	var sawTimestamp, sawNonce, sawSignature bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

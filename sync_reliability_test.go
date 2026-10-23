@@ -155,7 +155,14 @@ func TestBindingSyncBatchWithRetry_PassesPolicy(t *testing.T) {
 		t.Fatalf("BindingOpen: %v", err)
 	}
 	defer BindingClose()
-	e, _ := getBindingEngine()
+	// The engine pointer, taken under the read lock and released at once:
+	// the test reaches into the queue directly, but it must not hold the
+	// lock across the binding call below (that call takes it again).
+	e, release, err := acquireBindingEngine()
+	if err != nil {
+		t.Fatalf("acquireBindingEngine: %v", err)
+	}
+	release()
 	id := enqueueTestMedia(t, e, "b.jpg")
 
 	if _, err := BindingSyncBatchWithRetry(10, 5, 30, 1); err != nil {

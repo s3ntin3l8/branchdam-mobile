@@ -3,12 +3,52 @@ package queue
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+// queuePragmas are applied to EVERY connection the pool hands out, via the
+// DSN's _pragma list. A PRAGMA issued after open would only apply to the
+// one connection it ran on.
+var queuePragmas = []string{
+	"busy_timeout(5000)",
+	"journal_mode(WAL)",
+	"synchronous(NORMAL)",
+}
+
+// dsn builds the driver DSN for the queue.db at path: an absolute "file:"
+// URI with the path percent-escaped, plus the _pragma list.
+//
+// The driver hands a "file:" DSN to SQLite as a URI, and SQLite reads '?'
+// as the start of the parameters, '#' as a fragment and '%' as an escape --
+// so an unescaped "file:"+path silently opened a DIFFERENT file for a path
+// containing any of them, and a '?' in the path could inject further DSN
+// parameters. url.URL escapes exactly those (and spaces). A Windows drive
+// path becomes file:///C:/..., which SQLite accepts.
+//
+// This mirrors branchdam-agent's internal/queue.dsn, so the two clients open
+// their queue databases the same way.
+func dsn(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	p := filepath.ToSlash(abs)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	q := url.Values{}
+	for _, pr := range queuePragmas {
+		q.Add("_pragma", pr)
+	}
+	u := url.URL{Scheme: "file", Path: p, RawQuery: q.Encode()}
+	return u.String(), nil
+}
 
 // Queue manages local offline buffering for uploads, events, and local media state.
 type Queue struct {
@@ -18,8 +58,11 @@ type Queue struct {
 
 // Open initializes or connects to SQLite at dbPath and executes schema migrations.
 func Open(dbPath string) (*Queue, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)", dbPath)
-	db, err := sql.Open("sqlite", dsn)
+	d, err := dsn(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("queue: build dsn for %s: %w", dbPath, err)
+	}
+	db, err := sql.Open("sqlite", d)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite db: %w", err)
 	}

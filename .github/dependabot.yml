@@ -5,6 +5,14 @@ updates:
     schedule:
       interval: "weekly"
 
+  # The Android/Gradle dependency graph: AndroidX, CameraX, Media3, Coil,
+  # ML Kit and the build plugins. Without this the whole Android surface is
+  # unmonitored -- no advisory ever reaches it.
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "weekly"
+
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:

@@ -2,6 +2,8 @@ module github.com/s3ntin3l8/branchdam-mobile/core
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/uuid v1.6.0

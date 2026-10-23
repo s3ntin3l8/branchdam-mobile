@@ -318,6 +318,16 @@ type ProgressFunc func(bytesRead, totalBytes int64) (cont bool)
 // returns false.
 var ErrProgressAborted = errors.New("hash progress aborted by caller")
 
+// maxHashFileBytes bounds the size of a file ComputeHashes will stream.
+//
+// A media file is orders of magnitude below this: a photo is megabytes,
+// even a long 4K ProRes clip is tens of gigabytes. The bound is not
+// about legitimate media -- it is about making the work bounded. The
+// hash streams the whole file, so without a cap a path that is not
+// really a media file turns into an unbounded read on a phone's query
+// thread.
+const maxHashFileBytes = 64 << 30 // 64 GiB
+
 // ComputeHashes streams the file at LocalPath and returns the BLAKE3 and
 // xxHash digests. The progress parameter is currently unused at the Go
 // level (the core hasher doesn't accept a progress callback yet) but is
@@ -339,17 +349,43 @@ func (e *Engine) ComputeHashes(localPath string, progress ProgressFunc) (Hashes,
 		}
 	}
 
-	f, err := os.Open(localPath)
+	// The path arrives over the FFI boundary from the native shell, so it
+	// is not necessarily a file. A FIFO (or a device node) is the
+	// dangerous case: opening a FIFO read-only blocks until some process
+	// opens the write end, which would pin one of the shell's two query
+	// threads for good. Stat does not block on a FIFO, so the check comes
+	// first and the open is non-blocking where the platform supports it.
+	info, err := os.Stat(localPath)
+	if err != nil {
+		return Hashes{}, newError(CodeIOError, "stat: %v", err)
+	}
+	if !info.Mode().IsRegular() {
+		return Hashes{}, newError(CodeInvalidInput, "not a regular file: %s", localPath)
+	}
+	if info.Size() > maxHashFileBytes {
+		return Hashes{}, newError(CodeInvalidInput, "file too large to hash: %s (%d bytes)", localPath, info.Size())
+	}
+
+	f, err := os.OpenFile(localPath, os.O_RDONLY|openFlagsNonblock, 0)
 	if err != nil {
 		return Hashes{}, newError(CodeIOError, "open: %v", err)
 	}
 	defer f.Close()
 
-	info, err := f.Stat()
+	// The check above is about the PATH; this one is about the file that
+	// was actually opened, which is what will be hashed.
+	opened, err := f.Stat()
 	if err != nil {
 		return Hashes{}, newError(CodeIOError, "stat: %v", err)
 	}
-	fastHash, fullHash, _, err := hasher.HashReader(f, info.Size())
+	if !opened.Mode().IsRegular() {
+		return Hashes{}, newError(CodeInvalidInput, "not a regular file: %s", localPath)
+	}
+	if opened.Size() > maxHashFileBytes {
+		return Hashes{}, newError(CodeInvalidInput, "file too large to hash: %s (%d bytes)", localPath, opened.Size())
+	}
+
+	fastHash, fullHash, _, err := hasher.HashReader(f, opened.Size())
 	if err != nil {
 		return Hashes{}, newError(CodeIOError, "hash: %v", err)
 	}
@@ -769,7 +805,9 @@ func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]Sa
 		}
 		localIDs = append(localIDs, c.LocalID)
 	}
-	raw, err := e.engine.CheckSafeSpaceCandidates(context.Background(), localIDs)
+	ctx, cancel := context.WithTimeout(context.Background(), reclaimTimeout)
+	defer cancel()
+	raw, err := e.engine.CheckSafeSpaceCandidates(ctx, localIDs)
 	if err != nil {
 		return nil, errToError(err)
 	}
@@ -792,6 +830,15 @@ func (e *Engine) CheckSafeSpaceCandidates(candidates []SafeSpaceCandidate) ([]Sa
 	return out, nil
 }
 
+// reclaimTimeout bounds a reclaim-gate call.
+//
+// The gate is a server round trip (node-status) plus local checks, so it
+// needs a deadline. The shells run these on a two-thread query pool: an
+// unreachable server would otherwise pin a thread for the client's whole
+// timeout, and with two concurrent reclaims every other engine query queues
+// behind them.
+const reclaimTimeout = 30 * time.Second
+
 // ReclaimSafeSpace marks LocalID as offloaded after re-checking the server
 // and only if the node is currently verified, on the Tier-3 master archive,
 // live (ACTIVE or HIDDEN) and holding the recorded BLAKE3, and only if
@@ -807,7 +854,9 @@ func (e *Engine) ReclaimSafeSpace(localID string, sizeBytes, modifiedUnix int64)
 	if localID == "" {
 		return SafeSpaceVerdict{}, newError(CodeInvalidInput, "LocalID is required")
 	}
-	verdict, err := e.engine.SafeSpaceReclaim(context.Background(), localID,
+	ctx, cancel := context.WithTimeout(context.Background(), reclaimTimeout)
+	defer cancel()
+	verdict, err := e.engine.SafeSpaceReclaim(ctx, localID,
 		engine.LocalFileState{SizeBytes: sizeBytes, ModifiedUnix: modifiedUnix})
 	if err != nil {
 		// Distinguish transient infrastructure failures (network, DB)

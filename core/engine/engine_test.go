@@ -42,12 +42,17 @@ func TestEngineFullLifecycle(t *testing.T) {
 			uploadedFiles = append(uploadedFiles, filename)
 			_, _ = io.ReadAll(r.Body)
 			w.WriteHeader(http.StatusCreated)
+			// The real server echoes the hash it computed over the bytes it
+			// stored on BOTH the UPLOADED and the DEDUPLICATED path. The
+			// client treats an ABSENT hash as "not verified", so the fake
+			// has to send one back.
 			_ = json.NewEncoder(w).Encode(client.UploadResponse{
 				OK:           true,
 				NodeUUID:     "018f-test-node-1",
 				FilePath:     "/storage/archive/2026/2026-08-29/" + filename,
 				Status:       "UPLOADED",
 				RelativePath: "2026/2026-08-29/" + filename,
+				Blake3Hash:   r.Header.Get("X-Blake3-Hash"),
 			})
 		case "/api/v1/agent/events":
 			var req client.AgentEventRequest
@@ -250,9 +255,10 @@ func TestSyncUploads_DedupResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Dedup", "true")
 		_ = json.NewEncoder(w).Encode(client.UploadResponse{
-			OK:       true,
-			NodeUUID: "existing-server-node-uuid",
-			Status:   "EXISTS",
+			OK:         true,
+			NodeUUID:   "existing-server-node-uuid",
+			Status:     "EXISTS",
+			Blake3Hash: r.Header.Get("X-Blake3-Hash"),
 		})
 	}))
 	defer server.Close()
@@ -389,9 +395,10 @@ func TestSyncUploads_CancelDoesNotStallNextBatch(t *testing.T) {
 			uploads++
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(client.UploadResponse{
-				OK:       true,
-				NodeUUID: "resume-node-1",
-				Status:   "UPLOADED",
+				OK:         true,
+				NodeUUID:   "resume-node-1",
+				Status:     "UPLOADED",
+				Blake3Hash: r.Header.Get("X-Blake3-Hash"),
 			})
 		} else {
 			http.NotFound(w, r)

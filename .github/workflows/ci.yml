@@ -18,10 +18,10 @@ jobs:
     name: Core (Go build · vet · test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
@@ -36,7 +36,7 @@ jobs:
           go test -race -v .
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: core/coverage.txt
@@ -47,19 +47,68 @@ jobs:
     name: Pre-commit & Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: core/go.mod
 
       - name: Pre-commit
-        uses: pre-commit/action@v3.0.1
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+
+  govulncheck:
+    name: govulncheck (core + root)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+
+      # Mirrors the sibling repos' ci-go.yml vulnerability step: govulncheck's
+      # exit code is always 0 in -format json mode, so the pass/fail decision
+      # is applied here against the parsed findings.
+      #
+      # This repo had NO vulnerability scan at all -- its Go code was covered
+      # by tests and pre-commit only, while both sibling repos ran
+      # govulncheck. Both modules are scanned: core/ (client, engine, queue,
+      # hasher) and the root gomobile binding package.
+      #
+      # No ignore list: this repo imports neither golang.org/x/crypto
+      # (the openpgp advisory the siblings suppress) nor anything else they
+      # had to suppress, so a finding here is a real one.
+      - name: Vulnerability scan with govulncheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pinned: the tool is a build input like any other. The advisory
+          # DATA is not pinned -- govulncheck reads the live Go vulnerability
+          # database on every run, so a new advisory still fails the build.
+          # Bump the tool by hand; @latest would make the scan's own
+          # behaviour change under the branch.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          GOVULN="$(go env GOPATH)/bin/govulncheck"
+          for mod in core .; do
+            echo "::group::govulncheck ($mod)"
+            ( cd "$mod" && "$GOVULN" -format json ./... > govulncheck.json )
+            found="$(jq -r 'select(.finding != null) | .finding.osv' "$mod/govulncheck.json" | sort -u)"
+            if [ -n "$found" ]; then
+              echo "::error::govulncheck found vulnerabilities in $mod: $found"
+              exit 1
+            fi
+            echo "govulncheck($mod): clean"
+            echo "::endgroup::"
+          done
 
   test-mobile:
     name: Mobile CI (Android & iOS)
-    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@main
+    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@a80bd75142af1ac69bd3fe9ccfb40342a45978d4 # main @ 2026-10-19
     with:
       java-version: '21'
       android-ndk-version: '25.1.8937393'
@@ -73,15 +122,15 @@ jobs:
     needs: [test-mobile]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Android SDK & NDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;25.1.8937393'
 
       - name: Download Built AAR
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: branchdam-aar
           path: android/app/libs/

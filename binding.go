@@ -11,22 +11,43 @@ import (
 
 // gomobile-compatible binding layer. gomobile's gobind skips methods that
 // accept or return struct types; these wrappers use only primitives so
-// they survive into the Java/Swift bindings. A package-level mutex
-// serializes access — the mobile shell is single-threaded by design
-// (see EngineHolder.kt's executor).
+// they survive into the Java/Swift bindings.
+//
+// Access is serialized by a package-level RWMutex, NOT by the shell being
+// single-threaded: EngineHolder.kt runs bindingOpen/bindingClose on
+// syncExecutor (one thread) and the queries on queryExecutor (two), so a
+// query really can be in flight while the engine is reopened or closed.
+// Each binding call holds the READ lock for its whole duration (see
+// acquireBindingEngine) and bindingOpen/bindingClose take the WRITE lock,
+// which is what keeps the engine from being closed underneath a call.
 
 var (
-	bindingMu     sync.Mutex
+	bindingMu     sync.RWMutex
 	bindingEngine *Engine
 )
 
-func getBindingEngine() (*Engine, error) {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
+// acquireBindingEngine returns the current engine together with a release
+// function the caller MUST defer.
+//
+// The shells call this layer from two pools: syncExecutor (one thread) runs
+// bindingOpen/bindingClose, and queryExecutor (two threads) runs the
+// queries. A query can therefore be in flight while the engine is reopened
+// or closed. Releasing the lock before the call returned left that window
+// open: the engine could be closed underneath a query that had already
+// passed its own closed-check, and the query would then fail against a
+// closed database. For an enqueue that means the ingest intent is LOST
+// rather than recorded in queue.db (invariant 1).
+//
+// Holding the read lock for the call's duration closes the window:
+// bindingOpen/bindingClose take the WRITE lock, so they wait for every
+// in-flight call to finish before they close anything.
+func acquireBindingEngine() (*Engine, func(), error) {
+	bindingMu.RLock()
 	if bindingEngine == nil {
-		return nil, fmt.Errorf("engine not open")
+		bindingMu.RUnlock()
+		return nil, nil, fmt.Errorf("engine not open")
 	}
-	return bindingEngine, nil
+	return bindingEngine, bindingMu.RUnlock, nil
 }
 
 // BindingOpen initialises the engine from primitive parameters.
@@ -102,10 +123,11 @@ func BindingEnqueueMediaWithSourceHash(localPath, filename, localID, cameraModel
 func BindingEnqueueMediaWithBaseline(localPath, filename, localID, cameraModel, sourcePathHash string,
 	capturedAtUnix, sizeBytes, modifiedUnix int64) (int64, error) {
 
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return 0, err
 	}
+	defer release()
 	return e.EnqueueMedia(EnqueueMediaOptions{
 		LocalPath:      localPath,
 		Filename:       filename,
@@ -126,10 +148,11 @@ func BindingEnqueueMediaWithBaseline(localPath, filename, localID, cameraModel, 
 func BindingEnqueueLineageEvent(parentLocalID, childLocalID,
 	relationshipType, resolver string, confidence float64) (string, error) {
 
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	return e.EnqueueLineageEvent(
 		parentLocalID, childLocalID, relationshipType, resolver,
 		Confidence(confidence))
@@ -141,10 +164,11 @@ func BindingEnqueueLineageEvent(parentLocalID, childLocalID,
 func BindingConfirmLineageEdge(parentLocalID, childLocalID,
 	relationshipType, resolver string, confidence float64) (string, error) {
 
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	return e.ConfirmLineageEdge(parentLocalID, childLocalID, relationshipType, resolver, Confidence(confidence))
 }
 
@@ -153,20 +177,22 @@ func BindingConfirmLineageEdge(parentLocalID, childLocalID,
 func BindingRejectLineageEdge(parentLocalID, childLocalID,
 	relationshipType, resolver string, confidence float64) error {
 
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return err
 	}
+	defer release()
 	return e.RejectLineageEdge(parentLocalID, childLocalID, relationshipType, resolver, Confidence(confidence))
 }
 
 // BindingListLineageReviews returns the user's lineage review decisions as
 // a JSON array; see Engine.LineageReviewsJSON.
 func BindingListLineageReviews() (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "[]", err
 	}
+	defer release()
 	return e.LineageReviewsJSON()
 }
 
@@ -174,10 +200,11 @@ func BindingListLineageReviews() (string, error) {
 // local ID the media was enqueued for upload under (not a node UUID); see
 // Engine.EnqueueDeleteEvent.
 func BindingEnqueueDeleteEvent(localID string) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	return e.EnqueueDeleteEvent(localID)
 }
 
@@ -192,10 +219,11 @@ func BindingSyncBatch(timeoutSecs, batchSize int64) (string, error) {
 // after a failed attempt and maxRetries the number of failed attempts
 // before an item is FAILED (0 = the defaults, 10s and 5). See SyncOptions.
 func BindingSyncBatchWithRetry(timeoutSecs, batchSize, retryBackoffSecs, maxRetries int64) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "0,0", err
 	}
+	defer release()
 	res, syncErr := e.SyncBatch(SyncOptions{
 		TimeoutSecs:      int(timeoutSecs),
 		BatchSize:        int(batchSize),
@@ -213,47 +241,52 @@ func BindingSyncBatchWithRetry(timeoutSecs, batchSize, retryBackoffSecs, maxRetr
 // BindingIsMediaOffloaded returns the offload flag. On error returns false
 // (fail-closed: shell refuses to delete).
 func BindingIsMediaOffloaded(localID string) (bool, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return false, err
 	}
+	defer release()
 	return e.IsMediaOffloaded(localID)
 }
 
 // BindingSetMediaOffloaded sets the offload flag directly.
 func BindingSetMediaOffloaded(localID string, isOffloaded bool) error {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return err
 	}
+	defer release()
 	return e.SetMediaOffloaded(localID, isOffloaded)
 }
 
 // BindingSetCancelFlag requests cancellation of the current sync batch.
 func BindingSetCancelFlag() error {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return err
 	}
+	defer release()
 	e.SetCancelFlag()
 	return nil
 }
 
 // BindingFetchNamingTemplate fetches the naming template from the server.
 func BindingFetchNamingTemplate() (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	return e.FetchNamingTemplate()
 }
 
 // BindingReclaimSafeSpace runs the atomic reclaim for a single local ID.
 func BindingReclaimSafeSpace(localID string, sizeBytes, modifiedUnix int64) error {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return err
 	}
+	defer release()
 	_, reclaimErr := e.ReclaimSafeSpace(localID, sizeBytes, modifiedUnix)
 	return reclaimErr
 }
@@ -262,10 +295,11 @@ func BindingReclaimSafeSpace(localID string, sizeBytes, modifiedUnix int64) erro
 // eligibility. localIDs is a comma-separated list. Returns a JSON-encoded
 // string array of SafeSpaceVerdict objects.
 func BindingCheckSafeSpaceCandidates(localIDs string) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	if localIDs == "" {
 		return "[]", nil
 	}
@@ -302,10 +336,11 @@ func splitIDs(s string) []string {
 // implementation in sync with the upload-side hash. Returns "" on error;
 // callers should treat that as "hash unavailable, defer to upload-side".
 func BindingComputeHashes(localPath string) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	if localPath == "" {
 		return "", fmt.Errorf("local path is required")
 	}
@@ -325,10 +360,11 @@ func BindingComputeHashes(localPath string) (string, error) {
 // happens but continues with the new hash (the source-of-truth is the file
 // on disk, not the prior queue entry).
 func BindingLookupBlake3ForLocalID(localID string) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	if localID == "" {
 		return "", nil
 	}
@@ -348,10 +384,11 @@ func BindingLookupBlake3ForLocalID(localID string) (string, error) {
 // Follows the BindingCheckSafeSpaceCandidates pattern for gomobile compatibility.
 // Uses a 30-second timeout to prevent ANR on mobile if the server is slow.
 func BindingCheckContent(fastHash, fullHash string) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	result, checkErr := e.client.CheckContent(ctx, fastHash, fullHash)
@@ -368,19 +405,21 @@ func BindingCheckContent(fastHash, fullHash string) (string, error) {
 // BindingGetMediaStatus returns the status of a local media asset.
 // Returns "OFFLOADED", "COMPLETED", "IN_PROGRESS", "PENDING", "FAILED", or "NOT_ENQUEUED".
 func BindingGetMediaStatus(localID string) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "NOT_ENQUEUED", err
 	}
+	defer release()
 	return e.GetMediaStatus(localID)
 }
 
 // BindingGetAllMediaStatuses returns a JSON-encoded map of localID/localPath/srcPathHash -> status.
 func BindingGetAllMediaStatuses() (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "{}", err
 	}
+	defer release()
 	m, statusErr := e.GetAllMediaStatuses()
 	if statusErr != nil {
 		return "{}", statusErr
@@ -394,10 +433,11 @@ func BindingGetAllMediaStatuses() (string, error) {
 
 // BindingCountPendingUploads returns the number of pending/in-progress uploads in the queue.
 func BindingCountPendingUploads() (int64, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return 0, err
 	}
+	defer release()
 	return e.CountPendingUploads()
 }
 
@@ -410,28 +450,31 @@ func BindingCountPendingUploads() (int64, error) {
 // key. The shells' Settings screens show a re-pair prompt while it is set
 // and in the future. See Engine.RepairDeadlineUnix.
 func BindingRepairDeadlineUnix() (int64, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return 0, err
 	}
+	defer release()
 	return e.RepairDeadlineUnix()
 }
 
 // BindingResetFailedUploads resets all FAILED upload items back to PENDING.
 func BindingResetFailedUploads() (int64, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return 0, err
 	}
+	defer release()
 	return e.ResetFailedUploads()
 }
 
 // BindingGetActiveUploadProgress returns JSON string of active upload metrics, or "" if none.
 func BindingGetActiveUploadProgress() (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "", err
 	}
+	defer release()
 	prog, progErr := e.GetActiveUploadProgress()
 	if progErr != nil || prog == nil {
 		return "", progErr
@@ -447,10 +490,11 @@ func BindingGetActiveUploadProgress() (string, error) {
 // user's import confirmation; see Engine.StagePendingImport. Returns false
 // (without error) when the user already skipped the item.
 func BindingStagePendingImport(localID, localPath, filename, mimeType string, sizeBytes, capturedAtUnix int64) (bool, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return false, err
 	}
+	defer release()
 	return e.StagePendingImport(localID, localPath, filename, mimeType, sizeBytes, capturedAtUnix)
 }
 
@@ -458,39 +502,43 @@ func BindingStagePendingImport(localID, localPath, filename, mimeType string, si
 // as a JSON array; see Engine.ListPendingImportsJSON. limit <= 0 returns
 // all of them.
 func BindingListPendingImports(limit int64) (string, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return "[]", err
 	}
+	defer release()
 	return e.ListPendingImportsJSON(int(limit))
 }
 
 // BindingDeletePendingImport forgets a pending or skipped item; see
 // Engine.DeletePendingImport.
 func BindingDeletePendingImport(localID string) (bool, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return false, err
 	}
+	defer release()
 	return e.DeletePendingImport(localID)
 }
 
 // BindingSuppressPendingImport records that the user skipped localID; see
 // Engine.SuppressPendingImport.
 func BindingSuppressPendingImport(localID string) error {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return err
 	}
+	defer release()
 	return e.SuppressPendingImport(localID)
 }
 
 // BindingIsImportSuppressed reports whether the user skipped localID. On
 // error returns false.
 func BindingIsImportSuppressed(localID string) (bool, error) {
-	e, err := getBindingEngine()
+	e, release, err := acquireBindingEngine()
 	if err != nil {
 		return false, err
 	}
+	defer release()
 	return e.IsImportSuppressed(localID)
 }
