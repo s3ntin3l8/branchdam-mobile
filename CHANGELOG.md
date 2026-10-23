@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.14](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.13...branchdam-mobile-v0.7.14) (2026-10-23)
+
+
+### Bug Fixes
+
+* **security:** remediate the 2026-10-20 audit findings ([3a55fb8](https://github.com/s3ntin3l8/branchdam-mobile/commit/3a55fb81aa1c93944059dd3b49e794c329053ed3))
+
 ## [0.7.13](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.12...branchdam-mobile-v0.7.13) (2026-10-17)
 
 
