@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "com.branchdam.mobile"
-    compileSdk = 35
+    // navigation-compose 2.10 / lifecycle 2.11 require compileSdk 37.
+    // targetSdk stays 35 so this toolchain bump does not opt the app
+    // into new runtime behavior.
+    compileSdk = 37
 
     val appVersionName = System.getenv("APP_VERSION_NAME")?.removePrefix("v") ?: run {
         val manifestFile = rootProject.file("../.release-please-manifest.json")
@@ -120,13 +123,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "21"
-        freeCompilerArgs += listOf(
-            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
-        )
-    }
-
     // F plan: unit tests for Android framework-touching code
     // (BootReceiver, MediaStoreObserver) run on the JVM without
     // Robolectric. `isReturnDefaultValues = true` makes the test
@@ -154,6 +150,15 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        freeCompilerArgs.add(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        )
+    }
+}
+
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.10.00"))
     implementation("androidx.compose.ui:ui")
@@ -161,14 +166,14 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.navigation:navigation-compose:2.8.3")
+    implementation("androidx.navigation:navigation-compose:2.10.2")
     implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
@@ -214,7 +219,7 @@ dependencies {
     // shadow runtime. The Robolectric annotation (`@RunWith(...)`)
     // is the seam that opts a single class out of the module-wide
     // default.
-    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.test.ext:junit:1.2.1")
     // work-testing is the in-test seam for WorkManager.getInstance.
