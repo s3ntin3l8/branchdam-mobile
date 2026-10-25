@@ -6,10 +6,7 @@ plugins {
 
 android {
     namespace = "com.branchdam.mobile"
-    // navigation-compose 2.10 / lifecycle 2.11 require compileSdk 37.
-    // targetSdk stays 35 so this toolchain bump does not opt the app
-    // into new runtime behavior.
-    compileSdk = 37
+    compileSdk = 35
 
     val appVersionName = System.getenv("APP_VERSION_NAME")?.removePrefix("v") ?: run {
         val manifestFile = rootProject.file("../.release-please-manifest.json")
@@ -173,7 +170,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.navigation:navigation-compose:2.10.2")
+    implementation("androidx.navigation:navigation-compose:2.8.3")
     implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
