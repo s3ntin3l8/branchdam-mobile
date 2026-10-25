@@ -4,6 +4,18 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # codeql-action/init and codeql-action/analyze must move in the same
+    # commit. Separate PRs fail CI with a version-mismatch configuration error.
+    groups:
+      codeql:
+        patterns:
+          - "github/codeql-action*"
+      # applies-to defaults to version-updates, so a GHSA bump would still
+      # open one PR per sub-action and could land init and analyze apart.
+      codeql-security:
+        applies-to: security-updates
+        patterns:
+          - "github/codeql-action*"
 
   # The Android/Gradle dependency graph: AndroidX, CameraX, Media3, Coil,
   # ML Kit and the build plugins. Without this the whole Android surface is
@@ -12,6 +24,17 @@ updates:
     directory: "/android"
     schedule:
       interval: "weekly"
+    # The Compose compiler plugin version has to match the Kotlin Gradle
+    # plugin. Bumping only one of them fails script compilation.
+    groups:
+      kotlin:
+        patterns:
+          # Colon form is the Maven coordinate (org.jetbrains.kotlin:kotlin-stdlib).
+          # It does not match org.jetbrains.kotlinx, so coroutines stays out.
+          # The other two are Gradle plugin ids, which have no group:artifact colon.
+          - "org.jetbrains.kotlin:*"
+          - "org.jetbrains.kotlin.android*"
+          - "org.jetbrains.kotlin.plugin*"
 
   - package-ecosystem: "gomod"
     directory: "/"
