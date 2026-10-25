@@ -108,7 +108,7 @@ jobs:
 
   test-mobile:
     name: Mobile CI (Android & iOS)
-    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@cdafa81aed01ae5c0e070209476403e5c53a4d9c # android-sdk-packages input
+    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@5ee8c679d580f66286eff4176d7fac43459392f5 # main @ 2026-10-25
     with:
       java-version: '21'
       android-ndk-version: '25.1.8937393'
