@@ -112,7 +112,7 @@ jobs:
     with:
       java-version: '21'
       android-ndk-version: '25.1.8937393'
-      android-sdk-packages: 'platform-tools platforms;android-35 build-tools;35.0.0 build-tools;36.0.0'
+      android-sdk-packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       xcode-version: '/Applications/Xcode_15.4.app/Contents/Developer'
       ios-scheme: 'BranchDamApp'
       ios-project: 'ios/BranchDamApp.xcodeproj'
