@@ -278,7 +278,7 @@ jobs:
             cosign verify-blob "$asset" \
               --signature "${asset}.sig" \
               --certificate "${asset}.cert" \
-              --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release\.yml@' \
+              --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release-please\.yml@' \
               --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
             echo "signed and verified: $asset"
           done

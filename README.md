@@ -49,10 +49,11 @@ Native mobile companion application for [branchDAM](https://github.com/s3ntin3l8
    cosign verify-blob branchdam-mobile.apk \
      --signature branchdam-mobile.apk.sig \
      --certificate branchdam-mobile.apk.cert \
-     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release\.yml@' \
+     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release(-please)?\.yml@' \
      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
    ```
-   The certificate identity must be this repository's release workflow and the issuer must be
+   The certificate identity must be this repository's release workflow (`release-please.yml`; releases
+   cut before the rename were signed by `release.yml`, hence the `(-please)?` — keep it) and the issuer must be
    GitHub's OIDC issuer — that is what proves the artifact came from a release run of this
    repository and not from somewhere that merely copied a file. The `.sha256` sidecar next to the
    APK covers the checksum; the `.sig`/`.cert` sidecars cover who built it.
@@ -107,7 +108,7 @@ To use the prebuilt iOS framework from a GitHub Release asset without building f
    cosign verify-blob branchdam.xcframework.zip \
      --signature branchdam.xcframework.zip.sig \
      --certificate branchdam.xcframework.zip.cert \
-     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release\.yml@' \
+     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release(-please)?\.yml@' \
      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
    ```
 4. Extract into `ios/Frameworks/`:

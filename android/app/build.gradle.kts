@@ -84,7 +84,7 @@ android {
             // (test, lint, assembleDebug) and the project runs with the
             // configuration cache on. AGP's own validateSigningRelease task
             // fails the release variant when this config is incomplete, and
-            // .github/workflows/release.yml refuses to publish at all when
+            // .github/workflows/release-please.yml refuses to publish at all when
             // the keystore secret is absent.
             val keystorePath = System.getenv("KEYSTORE_FILE")
             if (!keystorePath.isNullOrEmpty()) {
