@@ -49,7 +49,7 @@ Native mobile companion application for [branchDAM](https://github.com/s3ntin3l8
    cosign verify-blob branchdam-mobile.apk \
      --signature branchdam-mobile.apk.sig \
      --certificate branchdam-mobile.apk.cert \
-     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release\.yml@' \
+     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release(-please)?\.yml@' \
      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
    ```
    The certificate identity must be this repository's release workflow and the issuer must be
@@ -107,7 +107,7 @@ To use the prebuilt iOS framework from a GitHub Release asset without building f
    cosign verify-blob branchdam.xcframework.zip \
      --signature branchdam.xcframework.zip.sig \
      --certificate branchdam.xcframework.zip.cert \
-     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release\.yml@' \
+     --certificate-identity-regexp '^https://github\.com/s3ntin3l8/branchdam-mobile/\.github/workflows/release(-please)?\.yml@' \
      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
    ```
 4. Extract into `ios/Frameworks/`:
