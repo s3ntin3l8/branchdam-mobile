@@ -214,7 +214,7 @@ dependencies {
     // shadow runtime. The Robolectric annotation (`@RunWith(...)`)
     // is the seam that opts a single class out of the module-wide
     // default.
-    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.test.ext:junit:1.2.1")
     // work-testing is the in-test seam for WorkManager.getInstance.
