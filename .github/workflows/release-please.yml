@@ -182,7 +182,7 @@ jobs:
     name: Build Release iOS Framework
     needs: [release-please]
     if: ${{ needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       GOTOOLCHAIN: auto
     steps:

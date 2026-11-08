@@ -112,7 +112,7 @@ jobs:
     with:
       java-version: '21'
       android-ndk-version: '25.1.8937393'
-      xcode-version: '/Applications/Xcode_15.4.app/Contents/Developer'
+      xcode-version: '/Applications/Xcode_16.4.app/Contents/Developer'
       ios-scheme: 'BranchDamApp'
       ios-project: 'ios/BranchDamApp.xcodeproj'
       upload-aar: true
