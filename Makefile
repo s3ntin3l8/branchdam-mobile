@@ -43,8 +43,10 @@ contract-sync:
 # wrong libc. Fix with scripts/update-libc-overlay.sh <version>.
 check-libc-overlay:
 	@have=$$(sed -n 's/.*overlay of `modernc.org\/libc` `\(v[^`]*\)`.*/\1/p' third_party/modernc.org/libc/README.md | head -1); \
-	need=$$(grep -hE '^[[:space:]]+modernc.org/libc v' go.mod core/go.mod | awk '{print $$2}' | sort -V | tail -1); \
-	[ -n "$$have" ] && [ "$$have" = "$$need" ] || { echo "libc overlay is $$have but go.mod requires $$need: run scripts/update-libc-overlay.sh $$need"; exit 1; }
+	for f in go.mod core/go.mod; do \
+	  need=$$(awk '$$1=="modernc.org/libc" && $$2 ~ /^v/ {print $$2} $$1=="require" && $$2=="modernc.org/libc" {print $$3}' $$f | head -1); \
+	  [ -n "$$need" ] && [ "$$have" = "$$need" ] || { echo "libc overlay is '$$have' but $$f requires '$$need': run scripts/update-libc-overlay.sh <version>"; exit 1; }; \
+	done
 
 lint: check-libc-overlay
 	pre-commit run --all-files

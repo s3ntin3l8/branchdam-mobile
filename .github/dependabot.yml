@@ -46,6 +46,10 @@ updates:
       - "/core"
     schedule:
       interval: "weekly"
+    # group-by applies to version updates only. A security update still opens
+    # one PR per directory (applies-to: security-updates groups within a
+    # directory, never across them), so a GHSA bump can still need a
+    # `go mod tidy` in the other module; the go-mod-tidy hooks flag it.
     groups:
       go-modules:
         group-by: dependency-name
