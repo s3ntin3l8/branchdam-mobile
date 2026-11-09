@@ -36,12 +36,22 @@ updates:
           - "org.jetbrains.kotlin.android*"
           - "org.jetbrains.kotlin.plugin*"
 
+  # Root and core are two modules sharing one dependency graph (root requires
+  # core via replace). A bump that lands in only one of them fails CI on the
+  # other with "go: updates to go.mod needed" (#260), so group-by
+  # dependency-name folds both directories into a single PR per dependency.
   - package-ecosystem: "gomod"
-    directory: "/"
+    directories:
+      - "/"
+      - "/core"
     schedule:
       interval: "weekly"
-
-  - package-ecosystem: "gomod"
-    directory: "/core"
-    schedule:
-      interval: "weekly"
+    # group-by applies to version updates only. A security update still opens
+    # one PR per directory (applies-to: security-updates groups within a
+    # directory, never across them), so a GHSA bump can still need a
+    # `go mod tidy` in the other module; the go-mod-tidy hooks flag it.
+    groups:
+      go-modules:
+        group-by: dependency-name
+        patterns:
+          - "*"

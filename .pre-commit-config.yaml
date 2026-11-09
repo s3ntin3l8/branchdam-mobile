@@ -73,6 +73,16 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # Runs in CI via pre-commit/action: a Dependabot bump that moves libc in
+      # go.mod fails here until scripts/update-libc-overlay.sh is run.
+      - id: libc-overlay
+        name: libc overlay matches go.mod
+        entry: make check-libc-overlay
+        language: system
+        files: '(^|/)go\.mod$'
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: ios-unit-tests
         name: iOS Unit Tests (macOS only)
         entry: bash -c 'if command -v xcodebuild >/dev/null 2>&1; then DEST=$(xcodebuild -showdestinations -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp 2>/dev/null | grep "platform:iOS Simulator" | grep "iPhone" | grep -v "Placeholder" | head -1 | sed -n "s/.*id:\([^,]*\).*/id=\1/p"); DEST=${DEST:-"platform=iOS Simulator,name=iPhone 16"}; xcodebuild test -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp -destination "$DEST" CODE_SIGNING_ALLOWED=NO; else echo "xcodebuild not found, skipping iOS tests"; fi'

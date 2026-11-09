@@ -376,7 +376,7 @@ func main() {
 	// originals. (On linux/arm musl's memcpy is assembly and never
 	// transpiled; the hand-written one in libc_musl_linux_arm.go carries the
 	// ___musl_memcpy name itself, so that sed is a no-op there.)
-	for _, name := range []string{"fabs", "memcmp", "memcpy", "memmove", "memset", "strcspn"} {
+	for _, name := range []string{"fabs", "memcmp", "memcpy", "memmove", "memset", "qsort", "strcspn"} {
 		util.MustShell(true, nil, "sed", "-i", fmt.Sprintf(`s/^func X%s(/func ___musl_%s(/`, name, name), fn)
 	}
 

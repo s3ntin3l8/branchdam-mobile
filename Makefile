@@ -1,4 +1,4 @@
-.PHONY: all check test lint contract-sync android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots screenshots-landing clean
+.PHONY: all check test lint check-libc-overlay contract-sync android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots screenshots-landing clean
 
 UNAME_S := $(shell uname -s)
 IOS_DEST := $(shell xcodebuild -showdestinations -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp 2>/dev/null | grep 'platform:iOS Simulator' | grep 'iPhone' | grep -v 'Placeholder' | head -1 | sed -n 's/.*id:\([^,]*\).*/id=\1/p')
@@ -38,7 +38,17 @@ contract-sync:
 	@test -s core/client/testdata/contract/SOURCE || { echo "no commit touches $(BRANCHDAM)/docs/contract/fixtures; SOURCE is empty"; exit 1; }
 	cd core && go test ./client/ ./engine/ -run Contract -count=1
 
-lint:
+# The patched modernc.org/libc overlay must track the version go.mod requires
+# (a sqlite bump pulls libc forward); a stale overlay builds sqlite against the
+# wrong libc. Fix with scripts/update-libc-overlay.sh <version>.
+check-libc-overlay:
+	@have=$$(sed -n 's/.*overlay of `modernc.org\/libc` `\(v[^`]*\)`.*/\1/p' third_party/modernc.org/libc/README.md | head -1); \
+	for f in go.mod core/go.mod; do \
+	  need=$$(awk '$$1=="modernc.org/libc" && $$2 ~ /^v/ {print $$2} $$1=="require" && $$2=="modernc.org/libc" {print $$3}' $$f | head -1); \
+	  [ -n "$$need" ] && [ "$$have" = "$$need" ] || { echo "libc overlay is '$$have' but $$f requires '$$need': run scripts/update-libc-overlay.sh <version>"; exit 1; }; \
+	done
+
+lint: check-libc-overlay
 	pre-commit run --all-files
 	cd core && go vet ./...
 	cd . && go vet ./.

@@ -1,0 +1,292 @@
+--- a/ccgo_linux_amd64.go
++++ b/ccgo_linux_amd64.go
+@@ -134004,7 +134004,7 @@
+ 		trc("tls=%v path=%v mode=%v, (%v:)", tls, path, mode, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_chmod), int64(path), Int64FromUint32(mode)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_fchmodat), int64(AT_FDCWD), int64(path), Int64FromUint32(mode)))))
+ }
+ 
+ func Xfchmod(tls *TLS, fd int32, mode Tmode_t) (r int32) {
+@@ -134022,7 +134022,7 @@
+ 		return int32(X__syscall_ret(tls, Uint64FromInt32(ret)))
+ 	}
+ 	X__procfdname(tls, bp, Uint32FromInt32(fd))
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_chmod), int64(bp), Int64FromUint32(mode)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_fchmodat), int64(AT_FDCWD), int64(bp), Int64FromUint32(mode)))))
+ }
+ 
+ func Xfchmodat(tls *TLS, fd int32, path uintptr, mode Tmode_t, flag int32) (r int32) {
+@@ -134204,19 +134204,11 @@
+ 			ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(fd), int64(path), int64(bp), int64(flag)))
+ 			if ret == -int32(EINVAL) {
+ 				X__procfdname(tls, bp+144, Uint32FromInt32(fd))
+-				ret = int32(X__syscall2(tls, int64(SYS_stat), int64(bp+144), int64(bp)))
++				ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(AT_FDCWD), int64(bp+144), int64(bp), 0))
+ 			}
+ 		}
+ 	} else {
+-		if (fd == -int32(100) || int32(**(**int8)(__ccgo_up(path))) == int32('/')) && flag == int32(AT_SYMLINK_NOFOLLOW) {
+-			ret = int32(X__syscall2(tls, int64(SYS_lstat), int64(path), int64(bp)))
+-		} else {
+-			if (fd == -int32(100) || int32(**(**int8)(__ccgo_up(path))) == int32('/')) && !(flag != 0) {
+-				ret = int32(X__syscall2(tls, int64(SYS_stat), int64(path), int64(bp)))
+-			} else {
+-				ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(fd), int64(path), int64(bp), int64(flag)))
+-			}
+-		}
++		ret = int32(X__syscall4(tls, int64(SYS_newfstatat), int64(fd), int64(path), int64(bp), int64(flag)))
+ 	}
+ 	if ret != 0 {
+ 		return ret
+@@ -134346,7 +134338,7 @@
+ 		trc("tls=%v path=%v mode=%v, (%v:)", tls, path, mode, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_mkdir), int64(path), Int64FromUint32(mode)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_mkdirat), int64(AT_FDCWD), int64(path), Int64FromUint32(mode)))))
+ }
+ 
+ func Xmkdirat(tls *TLS, fd int32, path uintptr, mode Tmode_t) (r int32) {
+@@ -134641,7 +134633,7 @@
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+ 	Xmemset(tls, f, 0, uint64(232))
+-	(*TFILE)(unsafe.Pointer(f)).Ffd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_open), int64(filename), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_LARGEFILE))))))
++	(*TFILE)(unsafe.Pointer(f)).Ffd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_openat), int64(AT_FDCWD), int64(filename), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_LARGEFILE))))))
+ 	if (*TFILE)(unsafe.Pointer(f)).Ffd < 0 {
+ 		return uintptr(0)
+ 	}
+@@ -136011,7 +136003,7 @@
+ 	}
+ 	/* Compute the flags to pass to open() */
+ 	flags = X__fmodeflags(tls, mode)
+-	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_open), int64(filename), int64(flags|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0666))))))
++	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall4(tls, int64(SYS_openat), int64(AT_FDCWD), int64(filename), int64(flags|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0666))))))
+ 	if fd < 0 {
+ 		return uintptr(0)
+ 	}
+@@ -138046,9 +138038,9 @@
+ 	}
+ 	var r int32
+ 	_ = r
+-	r = int32(X__syscall1(tls, int64(SYS_unlink), int64(path)))
++	r = int32(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), 0))
+ 	if r == -int32(EISDIR) {
+-		r = int32(X__syscall1(tls, int64(SYS_rmdir), int64(path)))
++		r = int32(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), int64(AT_REMOVEDIR)))
+ 	}
+ 	return int32(X__syscall_ret(tls, Uint64FromInt32(r)))
+ }
+@@ -138058,7 +138050,7 @@
+ 		trc("tls=%v old=%v new1=%v, (%v:)", tls, old, new1, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_rename), int64(old), int64(new1)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall4(tls, int64(SYS_renameat), int64(AT_FDCWD), int64(old), int64(AT_FDCWD), int64(new1)))))
+ }
+ 
+ func Xrewind(tls *TLS, f uintptr) {
+@@ -138319,7 +138311,7 @@
+ 		}
+ 		___randname(tls, bp+1+uintptr(l)-uintptr(6))
+ 		*(*[1]int8)(unsafe.Pointer(bp)) = [1]int8{}
+-		r = int32(X__syscall3(tls, int64(SYS_readlink), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
++		r = int32(X__syscall4(tls, int64(SYS_readlinkat), int64(AT_FDCWD), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
+ 		if r == -int32(ENOENT) {
+ 			return Xstrdup(tls, bp+1)
+ 		}
+@@ -138349,9 +138341,9 @@
+ 			break
+ 		}
+ 		___randname(tls, bp+uintptr(13))
+-		fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_open), int64(bp), int64(Int32FromInt32(O_RDWR)|Int32FromInt32(O_CREAT)|Int32FromInt32(O_EXCL)|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0600))))))
++		fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall4(tls, int64(SYS_openat), int64(AT_FDCWD), int64(bp), int64(Int32FromInt32(O_RDWR)|Int32FromInt32(O_CREAT)|Int32FromInt32(O_EXCL)|Int32FromInt32(O_LARGEFILE)), int64(Int32FromInt32(0600))))))
+ 		if fd >= 0 {
+-			X__syscall1(tls, int64(SYS_unlink), int64(bp))
++			X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(bp), 0)
+ 			f = X__fdopen(tls, fd, __ccgo_ts+1416)
+ 			if !(f != 0) {
+ 				X__syscall1(tls, int64(SYS_close), int64(fd))
+@@ -138385,7 +138377,7 @@
+ 		}
+ 		___randname(tls, bp+1+uintptr(12))
+ 		*(*[1]int8)(unsafe.Pointer(bp)) = [1]int8{}
+-		r = int32(X__syscall3(tls, int64(SYS_readlink), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
++		r = int32(X__syscall4(tls, int64(SYS_readlinkat), int64(AT_FDCWD), int64(bp+1), int64(bp), int64(Int32FromInt32(1))))
+ 		if r == -int32(ENOENT) {
+ 			if buf != 0 {
+ 				v2 = buf
+@@ -147302,7 +147294,7 @@
+ 	var _ /* st at bp+0 */ Tstat
+ 	_, _, _ = fd, map1, v1
+ 	map1 = uintptr(-Int32FromInt32(1))
+-	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_open), int64(pathname), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_NONBLOCK)|Int32FromInt32(O_LARGEFILE))))))
++	fd = int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_openat), int64(AT_FDCWD), int64(pathname), int64(Int32FromInt32(O_RDONLY)|Int32FromInt32(O_CLOEXEC)|Int32FromInt32(O_NONBLOCK)|Int32FromInt32(O_LARGEFILE))))))
+ 	if fd < 0 {
+ 		return uintptr(0)
+ 	}
+@@ -149867,7 +149859,7 @@
+ 		trc("tls=%v path=%v uid=%v gid=%v, (%v:)", tls, path, uid, gid, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_chown), int64(path), Int64FromUint32(uid), Int64FromUint32(gid)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall5(tls, int64(SYS_fchownat), int64(AT_FDCWD), int64(path), Int64FromUint32(uid), Int64FromUint32(gid), 0))))
+ }
+ 
+ func _dummy13(tls *TLS, fd int32) (r int32) {
+@@ -150049,7 +150041,7 @@
+ 		return int32(X__syscall_ret(tls, Uint64FromInt32(ret)))
+ 	}
+ 	X__procfdname(tls, bp, Uint32FromInt32(fd))
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_chown), int64(bp), Int64FromUint32(uid), Int64FromUint32(gid)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall5(tls, int64(SYS_fchownat), int64(AT_FDCWD), int64(bp), Int64FromUint32(uid), Int64FromUint32(gid), 0))))
+ }
+ 
+ func Xfchownat(tls *TLS, fd int32, path uintptr, uid Tuid_t, gid Tgid_t, flag int32) (r int32) {
+@@ -150304,7 +150296,7 @@
+ 		trc("tls=%v existing=%v new1=%v, (%v:)", tls, existing, new1, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_link), int64(existing), int64(new1)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall5(tls, int64(SYS_linkat), int64(AT_FDCWD), int64(existing), int64(AT_FDCWD), int64(new1), 0))))
+ }
+ 
+ func Xlinkat(tls *TLS, fd1 int32, existing uintptr, fd2 int32, new1 uintptr, flag int32) (r int32) {
+@@ -150471,7 +150463,7 @@
+ 		buf = bp
+ 		bufsize = uint64(1)
+ 	}
+-	r = int32(X__syscall3(tls, int64(SYS_readlink), int64(path), int64(buf), Int64FromUint64(bufsize)))
++	r = int32(X__syscall4(tls, int64(SYS_readlinkat), int64(AT_FDCWD), int64(path), int64(buf), Int64FromUint64(bufsize)))
+ 	if buf == bp && r > 0 {
+ 		r = 0
+ 	}
+@@ -150520,7 +150512,7 @@
+ 		trc("tls=%v path=%v, (%v:)", tls, path, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall1(tls, int64(SYS_rmdir), int64(path)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), int64(AT_REMOVEDIR)))))
+ }
+ 
+ func Xsetgid(tls *TLS, gid Tgid_t) (r int32) {
+@@ -150641,7 +150633,7 @@
+ 		trc("tls=%v existing=%v new1=%v, (%v:)", tls, existing, new1, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall2(tls, int64(SYS_symlink), int64(existing), int64(new1)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_symlinkat), int64(existing), int64(AT_FDCWD), int64(new1)))))
+ }
+ 
+ func Xsymlinkat(tls *TLS, existing uintptr, fd int32, new1 uintptr) (r int32) {
+@@ -150780,7 +150772,7 @@
+ 		trc("tls=%v path=%v, (%v:)", tls, path, origin(2))
+ 		defer func() { trc("-> %v", r) }()
+ 	}
+-	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall1(tls, int64(SYS_unlink), int64(path)))))
++	return int32(X__syscall_ret(tls, Uint64FromInt64(X__syscall3(tls, int64(SYS_unlinkat), int64(AT_FDCWD), int64(path), 0))))
+ }
+ 
+ func Xunlinkat(tls *TLS, fd int32, path uintptr, flag int32) (r int32) {
+--- a/syscall_musl.go
++++ b/syscall_musl.go
+@@ -11,7 +11,49 @@
+ 	"runtime"
+ )
+ 
++func translateSyscallAmd64(n, a1, a2, a3, a4, a5, a6 long) (sysno, p1, p2, p3, p4, p5, p6 long) {
++	if runtime.GOARCH != "amd64" {
++		return n, a1, a2, a3, a4, a5, a6
++	}
++	switch n {
++	case 2: // SYS_open: open(path, flags, mode) -> openat(AT_FDCWD, path, flags, mode)
++		return 257, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
++	case 4: // SYS_stat: stat(path, statbuf) -> newfstatat(AT_FDCWD, path, statbuf, 0)
++		return 262, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
++	case 6: // SYS_lstat: lstat(path, statbuf) -> newfstatat(AT_FDCWD, path, statbuf, AT_SYMLINK_NOFOLLOW)
++		return 262, long(unix.AT_FDCWD), a1, a2, long(unix.AT_SYMLINK_NOFOLLOW), 0, 0
++	case 21: // SYS_access: access(path, mode) -> faccessat(AT_FDCWD, path, mode, 0)
++		return 269, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
++	case 22: // SYS_pipe: pipe(pipefd) -> pipe2(pipefd, 0)
++		return 293, a1, 0, 0, 0, 0, 0
++	case 33: // SYS_dup2: dup2(oldfd, newfd) -> dup3(oldfd, newfd, 0)
++		return 292, a1, a2, 0, 0, 0, 0
++	case 82: // SYS_rename: rename(old, new) -> renameat(AT_FDCWD, old, AT_FDCWD, new)
++		return 264, long(unix.AT_FDCWD), a1, long(unix.AT_FDCWD), a2, 0, 0
++	case 83: // SYS_mkdir: mkdir(path, mode) -> mkdirat(AT_FDCWD, path, mode)
++		return 258, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
++	case 84: // SYS_rmdir: rmdir(path) -> unlinkat(AT_FDCWD, path, AT_REMOVEDIR)
++		return 263, long(unix.AT_FDCWD), a1, long(unix.AT_REMOVEDIR), 0, 0, 0
++	case 86: // SYS_link: link(old, new) -> linkat(AT_FDCWD, old, AT_FDCWD, new, 0)
++		return 265, long(unix.AT_FDCWD), a1, long(unix.AT_FDCWD), a2, 0, 0
++	case 87: // SYS_unlink: unlink(path) -> unlinkat(AT_FDCWD, path, 0)
++		return 263, long(unix.AT_FDCWD), a1, 0, 0, 0, 0
++	case 88: // SYS_symlink: symlink(old, new) -> symlinkat(old, AT_FDCWD, new)
++		return 266, a1, long(unix.AT_FDCWD), a2, 0, 0, 0
++	case 89: // SYS_readlink: readlink(path, buf, size) -> readlinkat(AT_FDCWD, path, buf, size)
++		return 267, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
++	case 90: // SYS_chmod: chmod(path, mode) -> fchmodat(AT_FDCWD, path, mode)
++		return 268, long(unix.AT_FDCWD), a1, a2, 0, 0, 0
++	case 92: // SYS_chown: chown(path, uid, gid) -> fchownat(AT_FDCWD, path, uid, gid, 0)
++		return 260, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
++	case 133: // SYS_mknod: mknod(path, mode, dev) -> mknodat(AT_FDCWD, path, mode, dev)
++		return 259, long(unix.AT_FDCWD), a1, a2, a3, 0, 0
++	}
++	return n, a1, a2, a3, a4, a5, a6
++}
++
+ func ___syscall_cp(tls *TLS, n, a, b, c, d, e, f long) long {
++	n, a, b, c, d, e, f = translateSyscallAmd64(n, a, b, c, d, e, f)
+ 	switch n {
+ 	case SYS_nanosleep:
+ 		// int nanosleep(const struct timespec *req, struct timespec *rem)
+@@ -100,6 +142,7 @@
+ }
+ 
+ func X__syscall1(tls *TLS, n, a1 long) long {
++	n, a1, _, _, _, _, _ = translateSyscallAmd64(n, a1, 0, 0, 0, 0, 0)
+ 	r1, _, err := unix.Syscall(uintptr(n), uintptr(a1), 0, 0)
+ 	if err != 0 {
+ 		return long(-err)
+@@ -109,6 +152,7 @@
+ }
+ 
+ func X__syscall2(tls *TLS, n, a1, a2 long) long {
++	n, a1, a2, _, _, _, _ = translateSyscallAmd64(n, a1, a2, 0, 0, 0, 0)
+ 	switch n {
+ 	case SYS_tkill:
+ 		// raise() and pthread_kill(pthread_self()): the tid is the emulated
+@@ -130,6 +174,7 @@
+ }
+ 
+ func X__syscall3(tls *TLS, n, a1, a2, a3 long) long {
++	n, a1, a2, a3, _, _, _ = translateSyscallAmd64(n, a1, a2, a3, 0, 0, 0)
+ 	switch n {
+ 	case SYS_tgkill:
+ 		if int32(a2) == tls.tid() {
+@@ -149,6 +194,7 @@
+ }
+ 
+ func X__syscall4(tls *TLS, n, a1, a2, a3, a4 long) long {
++	n, a1, a2, a3, a4, _, _ = translateSyscallAmd64(n, a1, a2, a3, a4, 0, 0)
+ 	r1, _, err := unix.Syscall6(uintptr(n), uintptr(a1), uintptr(a2), uintptr(a3), uintptr(a4), 0, 0)
+ 	if err != 0 {
+ 		return long(-err)
+@@ -158,6 +204,7 @@
+ }
+ 
+ func X__syscall5(tls *TLS, n, a1, a2, a3, a4, a5 long) long {
++	n, a1, a2, a3, a4, a5, _ = translateSyscallAmd64(n, a1, a2, a3, a4, a5, 0)
+ 	r1, _, err := unix.Syscall6(uintptr(n), uintptr(a1), uintptr(a2), uintptr(a3), uintptr(a4), uintptr(a5), 0)
+ 	if err != 0 {
+ 		return long(-err)
+@@ -167,6 +214,7 @@
+ }
+ 
+ func X__syscall6(tls *TLS, n, a1, a2, a3, a4, a5, a6 long) long {
++	n, a1, a2, a3, a4, a5, a6 = translateSyscallAmd64(n, a1, a2, a3, a4, a5, a6)
+ 	r1, _, err := unix.Syscall6(uintptr(n), uintptr(a1), uintptr(a2), uintptr(a3), uintptr(a4), uintptr(a5), uintptr(a6))
+ 	if err != 0 {
+ 		return long(-err)
