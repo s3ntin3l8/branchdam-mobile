@@ -228,7 +228,14 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         }
 
         manager.confirmImport(scanResult: scanResult, stageDirectory: stageDir, onFileStaged: { _, _ in
-            _ = cancelLanded.wait(timeout: .now() + 10)
+            // Shorter than the idle expectation below (5s), so a main queue
+            // that never ran the cancel fails here, as itself, instead of as
+            // a misleading "Manager reaches idle after cancel" later.
+            XCTAssertEqual(
+                cancelLanded.wait(timeout: .now() + 4),
+                .success,
+                "The cancel never ran on the main queue while the copy loop was held"
+            )
         })
 
         let idleExpectation = expectation(description: "Manager reaches idle after cancel")
