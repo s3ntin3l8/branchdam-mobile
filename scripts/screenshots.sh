@@ -82,8 +82,10 @@ SDK="${ANDROID_HOME:-${HOME}/Android/Sdk}"
 ADB="${SDK}/platform-tools/adb"
 EMULATOR="${SDK}/emulator/emulator"
 AVD_CONFIG="${REPO_ROOT}/scripts/avd/config.ini"
-AVD_TARGET="android-35"
-SYSTEM_IMAGE="${SDK}/system-images/${AVD_TARGET}/google_apis/x86_64"
+# The system image and API level come from the profile itself, so editing it
+# there is enough (image.sysdir.1 is relative to the SDK, target= names the API).
+SYSTEM_IMAGE="${SDK}/$(sed -n 's/^image\.sysdir\.1=//p' "${AVD_CONFIG}")"
+AVD_TARGET="$(sed -n 's/^target=//p' "${AVD_CONFIG}")"
 DEMO_NOW="${DEMO_NOW:-2026-10-15T10:00:00Z}"
 EMU_PORT="${EMU_PORT:-5580}"
 SERIAL="emulator-${EMU_PORT}"
@@ -111,8 +113,11 @@ done
 [[ -r /dev/kvm && -w /dev/kvm ]] || die "/dev/kvm is not accessible; the emulator needs KVM"
 
 [[ -f "${AVD_CONFIG}" ]] || die "${AVD_CONFIG} missing"
+[[ -n "${AVD_TARGET}" && "${SYSTEM_IMAGE}" != "${SDK}/" ]] || die "${AVD_CONFIG} needs target= and image.sysdir.1="
 [[ -d "${SYSTEM_IMAGE}" ]] ||
     die "system image ${SYSTEM_IMAGE} missing (sdkmanager 'system-images;${AVD_TARGET};google_apis;x86_64')"
+# date -d is GNU: validate DEMO_NOW here, before anything is built or booted.
+CLOCK_STAMP="$(date -u -d "${DEMO_NOW}" +%m%d%H%M%Y.%S)" || die "DEMO_NOW=${DEMO_NOW} is not a date-time"
 
 if "${ADB}" devices | awk 'NR > 1 {print $1}' | grep -qx "${SERIAL}"; then
     die "${SERIAL} is already attached; pick another EMU_PORT"
@@ -184,13 +189,17 @@ trap 'exit 143' TERM
 start_emulator() {
     local avd_home="${SCRATCH}/avd"
     mkdir -p "${avd_home}/${SHOT_AVD}.avd"
-    # The checked-in hardware profile; the image it names (image.sysdir.1)
-    # is the API 35 google_apis x86_64 one under the SDK.
-    cp "${AVD_CONFIG}" "${avd_home}/${SHOT_AVD}.avd/config.ini"
+    # The checked-in hardware profile, minus identity, data-partition path and
+    # snapshot settings, so the AVD cold-boots from a fresh userdata image.
+    grep -vE '^(avd\.id|avd\.name|disk\.dataPartition\.path|firstboot\.|fastboot\.)' \
+        "${AVD_CONFIG}" >"${avd_home}/${SHOT_AVD}.avd/config.ini"
     printf 'avd.ini.encoding=UTF-8\npath=%s\ntarget=%s\n' \
         "${avd_home}/${SHOT_AVD}.avd" "${AVD_TARGET}" >"${avd_home}/${SHOT_AVD}.ini"
 
     log "booting the throwaway ${SHOT_AVD} AVD as ${SERIAL}"
+    # -no-snapshot -wipe-data keep the AVD throwaway: never load or save a
+    # snapshot, always start from empty userdata (the app and the pairing are
+    # installed fresh every run). Do not drop them as cosmetic.
     # -selinux permissive: zygote then skips the per-app seccomp filter.
     # The x86_64 build of the Go core is killed by that filter (SIGSYS:
     # modernc.org/libc issues a raw lstat(2) on linux/amd64, which the app
@@ -318,17 +327,20 @@ prepare_device() {
 # run. Needs root: the userdebug image allows `adb root`. Best effort: when
 # the clock cannot be set the shots are still taken on the real one.
 fix_clock() {
-    local stamp
-    stamp="$(date -u -d "${DEMO_NOW}" +%m%d%H%M%Y.%S 2>/dev/null)" || die "DEMO_NOW=${DEMO_NOW} is not a date-time"
     if ! "${ADB}" -s "${SERIAL}" root >/dev/null 2>&1; then
         log "adb root is not available; the emulator keeps the real clock"
         return 0
     fi
     adb_s wait-for-device
-    adb_s shell settings put global auto_time 0
-    adb_s shell settings put global auto_time_zone 0
-    adb_s shell service call alarm 3 s16 UTC >/dev/null
-    adb_s shell date -u "${stamp}" >/dev/null
+    {
+        adb_s shell settings put global auto_time 0 &&
+            adb_s shell settings put global auto_time_zone 0 &&
+            adb_s shell service call alarm 3 s16 UTC >/dev/null &&
+            adb_s shell date -u "${CLOCK_STAMP}" >/dev/null
+    } || {
+        log "could not set the device clock; the emulator keeps the real one"
+        return 0
+    }
     log "device clock: $(adb_s shell date -u | tr -d '\r')"
 }
 
