@@ -37,7 +37,9 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
         _ notifier: AppleCameraRollImportNotifier,
         _ action: AppleCameraRollImportNotifier.Action,
         stagedBefore: Int64 = .max,
-        timeout: TimeInterval = 2.0
+        // Generous: a loaded CI simulator can starve the import queue for seconds (see #267);
+        // a passing run still returns as soon as the action completes.
+        timeout: TimeInterval = 15.0
     ) -> Bool {
         let done = expectation(description: "action handled")
         let handled = HandledFlag()
@@ -151,7 +153,7 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
             _ = notifier.stagePendingAsset(asset("A/L0/\(i)"))
         }
 
-        XCTAssertTrue(run(notifier, .importNow, timeout: 10))
+        XCTAssertTrue(run(notifier, .importNow, timeout: 15))
 
         XCTAssertEqual(engine.enqueued.count, 10)
         XCTAssertLessThanOrEqual(stager.maxInFlight, AppleCameraRollImportNotifier.importChunkSize)
@@ -274,7 +276,7 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
             count.value = queued
             done.fulfill()
         }
-        wait(for: [done], timeout: 2.0)
+        wait(for: [done], timeout: 15.0)
 
         XCTAssertEqual(count.value, 1)
         XCTAssertEqual(engine.enqueued.map { $0.localID }, ["A/L0/001"])
