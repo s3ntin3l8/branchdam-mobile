@@ -199,10 +199,15 @@ final class AppleOtgIngestManagerTests: XCTestCase {
             var didCancel = false
         }
         let box = TestStateBox()
+        // Signalled once the cancel has run on the main queue. The copy
+        // loop is held on it after its first file (see `onFileStaged`
+        // below), so the cancel is deterministically mid-flight: without
+        // the hold, a fast host could finish all 120 small files before the
+        // main-queue hop landed and `.completed` would be (legitimately)
+        // published.
+        let cancelLanded = DispatchSemaphore(value: 0)
 
-        // Cancel the moment the loop publishes its first `.ingesting`
-        // state — that lands squarely mid-flight regardless of how
-        // fast the host disk is.
+        // Cancel the moment the loop publishes its first `.ingesting` state.
         let cancellable = manager.$state.sink { state in
             box.lock.lock()
             box.observedStates.append(state)
@@ -215,11 +220,16 @@ final class AppleOtgIngestManagerTests: XCTestCase {
                 box.lock.lock()
                 box.didCancel = true
                 box.lock.unlock()
-                DispatchQueue.main.async { manager.cancelImport() }
+                DispatchQueue.main.async {
+                    manager.cancelImport()
+                    cancelLanded.signal()
+                }
             }
         }
 
-        manager.confirmImport(scanResult: scanResult, stageDirectory: stageDir)
+        manager.confirmImport(scanResult: scanResult, stageDirectory: stageDir, onFileStaged: { _, _ in
+            _ = cancelLanded.wait(timeout: .now() + 10)
+        })
 
         let idleExpectation = expectation(description: "Manager reaches idle after cancel")
         let poller = DispatchQueue(label: "test.otg.cancel.poller")

@@ -339,20 +339,23 @@ func TestSyncUploads_PolicyBackoffAndMaxRetries(t *testing.T) {
 		}
 	}
 
+	// The claim compares whole seconds, so every age keeps a 50s margin on
+	// both sides of the boundary: a 1s margin flips whenever the clock ticks
+	// between setAge and the claim (the test then saw an extra upload).
 	sync()
 	expect(queue.UploadPending, 1, 1)
 	// retry 1: waits 100<<1 = 200s.
 	setAge(150)
 	sync()
 	expect(queue.UploadPending, 1, 1)
-	setAge(201)
+	setAge(250)
 	sync()
 	expect(queue.UploadPending, 2, 2)
 	// retry 2: waits 400s.
-	setAge(399)
+	setAge(350)
 	sync()
 	expect(queue.UploadPending, 2, 2)
-	setAge(401)
+	setAge(450)
 	sync()
 	// Third failure reaches MaxRetries=3.
 	expect(queue.UploadFailed, 3, 3)
