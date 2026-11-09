@@ -6,18 +6,26 @@ set -euo pipefail
 #
 #   make screenshots                      # writes docs/screenshots/
 #   make screenshots OUT=/abs/path/shots  # any other directory
-#   scripts/screenshots.sh --out DIR
+#   make screenshots-landing OUT=DIR      # the landing contract: <scene>-mobile.png
+#   scripts/screenshots.sh --out DIR [--landing]
+#
+# --landing names the files <scene>-mobile.png, as personal-landing's
+# assets:sync expects (visual-kit's CONTRACT.md, "landing" phone profile:
+# 1170x2532, 390x844 dp at 3x). Both targets capture the same device, so
+# docs/screenshots and the landing set differ only in their names.
 #
 # What it does, end to end:
 #   1. Builds the gomobile AAR and the debug APK from this checkout.
-#   2. Boots a throwaway copy of the AVD (default: pixel_10) headless. Only
-#      its config.ini is copied into a scratch ANDROID_AVD_HOME, so the
-#      emulator starts from a fresh userdata image and the user's AVD is
-#      never written to. SELinux is permissive in that copy, see
+#   2. Boots a throwaway AVD headless: the checked-in hardware profile
+#      scripts/avd/config.ini (1170x2532 at 480 dpi) on the API 35
+#      google_apis x86_64 system image, built in a scratch ANDROID_AVD_HOME,
+#      so no AVD of the user's is read or written and every machine
+#      captures the same device. SELinux is permissive in that AVD, see
 #      start_emulator for why.
 #   3. Starts the branchDAM demo (`make demo`'s scripts/demo/instance.mjs)
 #      from the sibling checkout: synthetic media, scratch config/DB,
-#      127.0.0.1:3975. The emulator reaches it as 10.0.2.2:3975.
+#      127.0.0.1:3975, its clock fixed at DEMO_NOW. The emulator reaches it
+#      as 10.0.2.2:3975 and has its own clock set to DEMO_NOW too.
 #   4. Creates a companion pairing on the demo (POST
 #      /api/v1/companion/pairings, X-Forwarded-Host: 10.0.2.2:3975) and
 #      hands its server/key/agent to the app through the plain prefs file
@@ -38,7 +46,10 @@ set -euo pipefail
 # Environment (all optional):
 #   ANDROID_HOME    Android SDK (default: ~/Android/Sdk). adb and emulator
 #                   are used from here, not from PATH.
-#   AVD             source AVD name (default: pixel_10)
+#   DEMO_NOW        the instant both the demo's data and the emulator's
+#                   clock are fixed at (default: 2026-10-15T10:00:00Z, the
+#                   instant branchDAM's visual/scenes.json uses; needs the
+#                   branchDAM demo that reads DEMO_NOW, branchdam#617)
 #   EMU_PORT        emulator console port, even (default: 5580); the
 #                   device is always addressed as emulator-$EMU_PORT
 #   BRANCHDAM_DIR   branchDAM checkout with scripts/demo (default:
@@ -52,10 +63,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 OUT="docs/screenshots"
+SUFFIX=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
         --out=*) OUT="${1#--out=}"; shift ;;
+        --landing) SUFFIX="-mobile"; shift ;;
         -h|--help) awk 'NR > 3 && /^#/ { sub(/^# ?/, ""); print; next } NR > 3 { exit }' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -68,7 +81,10 @@ OUT="$(cd "${OUT}" && pwd)"
 SDK="${ANDROID_HOME:-${HOME}/Android/Sdk}"
 ADB="${SDK}/platform-tools/adb"
 EMULATOR="${SDK}/emulator/emulator"
-AVD="${AVD:-pixel_10}"
+AVD_CONFIG="${REPO_ROOT}/scripts/avd/config.ini"
+AVD_TARGET="android-35"
+SYSTEM_IMAGE="${SDK}/system-images/${AVD_TARGET}/google_apis/x86_64"
+DEMO_NOW="${DEMO_NOW:-2026-10-15T10:00:00Z}"
 EMU_PORT="${EMU_PORT:-5580}"
 SERIAL="emulator-${EMU_PORT}"
 BRANCHDAM_DIR="${BRANCHDAM_DIR:-${REPO_ROOT}/../branchDAM}"
@@ -94,11 +110,9 @@ done
     die "EMU_PORT must be an even number from 5554 to 5682"
 [[ -r /dev/kvm && -w /dev/kvm ]] || die "/dev/kvm is not accessible; the emulator needs KVM"
 
-AVD_SRC_HOME="${ANDROID_AVD_HOME:-${HOME}/.android/avd}"
-[[ -f "${AVD_SRC_HOME}/${AVD}.ini" ]] || die "AVD ${AVD} not found in ${AVD_SRC_HOME}"
-AVD_SRC_DIR="$(sed -n 's/^path=//p' "${AVD_SRC_HOME}/${AVD}.ini")"
-[[ -f "${AVD_SRC_DIR}/config.ini" ]] || die "${AVD_SRC_DIR}/config.ini not found"
-AVD_TARGET="$(sed -n 's/^target=//p' "${AVD_SRC_HOME}/${AVD}.ini")"
+[[ -f "${AVD_CONFIG}" ]] || die "${AVD_CONFIG} missing"
+[[ -d "${SYSTEM_IMAGE}" ]] ||
+    die "system image ${SYSTEM_IMAGE} missing (sdkmanager 'system-images;${AVD_TARGET};google_apis;x86_64')"
 
 if "${ADB}" devices | awk 'NR > 1 {print $1}' | grep -qx "${SERIAL}"; then
     die "${SERIAL} is already attached; pick another EMU_PORT"
@@ -170,14 +184,13 @@ trap 'exit 143' TERM
 start_emulator() {
     local avd_home="${SCRATCH}/avd"
     mkdir -p "${avd_home}/${SHOT_AVD}.avd"
-    # Hardware profile only: identity, data-partition path and snapshot
-    # settings are dropped so the copy cold-boots from a fresh userdata.
-    grep -vE '^(avd\.id|avd\.name|disk\.dataPartition\.path|firstboot\.|fastboot\.)' \
-        "${AVD_SRC_DIR}/config.ini" >"${avd_home}/${SHOT_AVD}.avd/config.ini"
+    # The checked-in hardware profile; the image it names (image.sysdir.1)
+    # is the API 35 google_apis x86_64 one under the SDK.
+    cp "${AVD_CONFIG}" "${avd_home}/${SHOT_AVD}.avd/config.ini"
     printf 'avd.ini.encoding=UTF-8\npath=%s\ntarget=%s\n' \
         "${avd_home}/${SHOT_AVD}.avd" "${AVD_TARGET}" >"${avd_home}/${SHOT_AVD}.ini"
 
-    log "booting a throwaway copy of ${AVD} as ${SERIAL}"
+    log "booting the throwaway ${SHOT_AVD} AVD as ${SERIAL}"
     # -selinux permissive: zygote then skips the per-app seccomp filter.
     # The x86_64 build of the Go core is killed by that filter (SIGSYS:
     # modernc.org/libc issues a raw lstat(2) on linux/amd64, which the app
@@ -225,7 +238,7 @@ start_demo() {
         die "npm ci in ${BRANCHDAM_DIR}/web failed"
     }
     log "starting the branchDAM demo on ${DEMO_URL}"
-    (cd "${BRANCHDAM_DIR}" && DEMO_PORT="${DEMO_PORT}" exec setsid node scripts/demo/instance.mjs) \
+    (cd "${BRANCHDAM_DIR}" && DEMO_NOW="${DEMO_NOW}" DEMO_PORT="${DEMO_PORT}" exec setsid node scripts/demo/instance.mjs) \
         >"${SCRATCH}/demo.log" 2>&1 &
     DEMO_PID=$!
 }
@@ -297,6 +310,26 @@ prepare_device() {
         adb_s shell settings put global "${s}" 0
     done
     adb_s shell settings put global sysui_demo_allowed 1
+    fix_clock
+}
+
+# Sets the device clock to DEMO_NOW (UTC), so what the app words relative to
+# "now" (the Sync screen's "Last Sync") does not depend on the day of the
+# run. Needs root: the userdebug image allows `adb root`. Best effort: when
+# the clock cannot be set the shots are still taken on the real one.
+fix_clock() {
+    local stamp
+    stamp="$(date -u -d "${DEMO_NOW}" +%m%d%H%M%Y.%S 2>/dev/null)" || die "DEMO_NOW=${DEMO_NOW} is not a date-time"
+    if ! "${ADB}" -s "${SERIAL}" root >/dev/null 2>&1; then
+        log "adb root is not available; the emulator keeps the real clock"
+        return 0
+    fi
+    adb_s wait-for-device
+    adb_s shell settings put global auto_time 0
+    adb_s shell settings put global auto_time_zone 0
+    adb_s shell service call alarm 3 s16 UTC >/dev/null
+    adb_s shell date -u "${stamp}" >/dev/null
+    log "device clock: $(adb_s shell date -u | tr -d '\r')"
 }
 
 # Prints "<transport> <netId>" for the default network, e.g. "WIFI 101".
@@ -549,8 +582,8 @@ capture() {
     # Bytes 2-4 of the PNG signature spell "PNG".
     [[ "$(head -c 4 "${tmp}" | tail -c 3)" == PNG ]] ||
         die "screencap for $1 is not a PNG"
-    mv -f "${tmp}" "${OUT}/$1.png"
-    log "captured $1.png"
+    mv -f "${tmp}" "${OUT}/$1${SUFFIX}.png"
+    log "captured $1${SUFFIX}.png"
 }
 
 capture_screens() {

@@ -1,4 +1,4 @@
-.PHONY: all check test lint contract-sync android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots clean
+.PHONY: all check test lint contract-sync android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots screenshots-landing clean
 
 UNAME_S := $(shell uname -s)
 IOS_DEST := $(shell xcodebuild -showdestinations -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp 2>/dev/null | grep 'platform:iOS Simulator' | grep 'iPhone' | grep -v 'Placeholder' | head -1 | sed -n 's/.*id:\([^,]*\).*/id=\1/p')
@@ -68,6 +68,12 @@ mobile-build-ios:
 OUT ?= docs/screenshots
 screenshots:
 	./scripts/screenshots.sh --out "$(OUT)"
+
+# The same capture named for personal-landing (<scene>-mobile.png, 1170x2532;
+# visual-kit's landing contract). OUT is required: it is a delivery directory.
+screenshots-landing:
+	@test -n "$(filter command line,$(origin OUT))" || { echo "usage: make screenshots-landing OUT=<dir>"; exit 2; }
+	./scripts/screenshots.sh --landing --out "$(OUT)"
 
 ios-test:
 ifeq ($(UNAME_S),Darwin)
