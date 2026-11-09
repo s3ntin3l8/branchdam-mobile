@@ -1,13 +1,12 @@
 # modernc.org/libc (branchDAM Mobile Overlay)
 
-This directory contains a vendored overlay of `modernc.org/libc` `v1.77.1` (Git commit `9176651b0b6d3fb661a848553e5d608e47e2285e`).
+This directory contains a vendored overlay of `modernc.org/libc` `v1.79.0` (Git commit `02bd2316433516d22b0cc2946cbd2ebc08fbd44f`).
+Regenerate it with `scripts/update-libc-overlay.sh <version>`; the patch lives in `third_party/modernc.org/libc.patch`.
 
 ## Patch Details (x86_64 Android Seccomp Fix - #211)
-Android's per-app Zygote seccomp filter on x86_64 devices and emulators blocks legacy non-`*at` syscalls (`SYS_lstat` [6], `SYS_stat` [4], `SYS_open` [2], `SYS_chmod`, `SYS_chown`, `SYS_mkdir`, `SYS_unlink`, `SYS_rmdir`, `SYS_rename`, `SYS_link`, `SYS_symlink`, `SYS_readlink`), killing the Go core engine in `EngineInit` with `SIGSYS` (signal 31).
+Android's per-app Zygote seccomp filter on x86_64 devices and emulators blocks legacy non-`*at` syscalls (`SYS_lstat`, `SYS_stat`, `SYS_open`, `SYS_chmod`, `SYS_chown`, `SYS_mkdir`, `SYS_unlink`, `SYS_rmdir`, `SYS_rename`, `SYS_link`, `SYS_symlink`, `SYS_readlink`), killing the Go core engine in `EngineInit` with `SIGSYS` (signal 31).
 
-`ccgo_linux_amd64.go` and `syscall_musl.go` have been patched to replace those legacy non-`*at` syscalls with their modern `*at` equivalents (`SYS_newfstatat` [262] with `AT_FDCWD`/`AT_SYMLINK_NOFOLLOW`, `SYS_openat` [257], `SYS_fchmodat` [268], `SYS_unlinkat` [263], `SYS_faccessat` [269], `SYS_renameat` [264], `SYS_fchownat` [260], `SYS_linkat` [265], `SYS_readlinkat` [267], `SYS_mkdirat` [258], `SYS_symlinkat` [266]).
-
-These `*at` syscalls comply with Android's Zygote seccomp filter policy and run on all Linux 2.6.16+ kernels.
+`ccgo_linux_amd64.go` and `syscall_musl.go` are patched to use the modern `*at` equivalents (`newfstatat`, `openat`, `fchmodat`, `unlinkat`, `renameat`, `fchownat`, `linkat`, `readlinkat`, `mkdirat`, `symlinkat`), which comply with the Zygote filter and run on all Linux 2.6.16+ kernels.
 
 ---
 
