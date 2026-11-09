@@ -153,7 +153,7 @@ final class AppleCameraRollImportNotifierTests: XCTestCase {
             _ = notifier.stagePendingAsset(asset("A/L0/\(i)"))
         }
 
-        XCTAssertTrue(run(notifier, .importNow, timeout: 15))
+        XCTAssertTrue(run(notifier, .importNow))
 
         XCTAssertEqual(engine.enqueued.count, 10)
         XCTAssertLessThanOrEqual(stager.maxInFlight, AppleCameraRollImportNotifier.importChunkSize)
