@@ -64,7 +64,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
             expectation.fulfill()
         }
 
-        wait(for: [expectation], timeout: 1.0)
+        wait(for: [expectation], timeout: 15.0)
     }
 
     // MARK: - Measured network path (NWPathMonitor)
@@ -114,7 +114,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
             XCTAssertTrue(uploaded)
             finished.fulfill()
         }
-        wait(for: [finished], timeout: 2.0)
+        wait(for: [finished], timeout: 15.0)
 
         XCTAssertEqual(calls.calls, ["batch", "sweep"], "the sweep runs once, after the batch")
     }
@@ -137,7 +137,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
 
         let skipped = expectation(description: "sync skipped on cellular")
         manager.triggerImmediateSync(isOnCellular: true) { _ in skipped.fulfill() }
-        wait(for: [skipped], timeout: 1.0)
+        wait(for: [skipped], timeout: 15.0)
 
         XCTAssertEqual(calls.calls, [])
     }

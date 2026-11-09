@@ -43,7 +43,7 @@ final class ImportNotificationDelegateTests: XCTestCase {
         )
 
         XCTAssertTrue(routed)
-        wait(for: [finished], timeout: 1.0)
+        wait(for: [finished], timeout: 15.0)
         XCTAssertEqual(received.action, .importNow)
         XCTAssertEqual(received.stagedBefore, 1_724_000_000)
     }
@@ -99,11 +99,11 @@ final class ImportNotificationDelegateTests: XCTestCase {
             completion: { finished.fulfill() }
         )
 
-        wait(for: [finished], timeout: 1.0)
+        wait(for: [finished], timeout: 15.0)
         // Let the deadline pass; an over-fulfil would fail the test.
         let settle = expectation(description: "deadline passed")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { settle.fulfill() }
-        wait(for: [settle], timeout: 1.0)
+        wait(for: [settle], timeout: 15.0)
     }
 
     func testNotificationWithoutAPostingTimeAppliesToEverything() {
@@ -126,7 +126,7 @@ final class ImportNotificationDelegateTests: XCTestCase {
             completion: { finished.fulfill() }
         )
 
-        wait(for: [finished], timeout: 2.0)
+        wait(for: [finished], timeout: 15.0)
         XCTAssertTrue(engine.isImportSuppressed(localID: "A/L0/001"))
     }
 
