@@ -33,22 +33,34 @@ from a reproducible pipeline, not from a personal device:
 ```sh
 make screenshots                       # writes docs/screenshots/
 make screenshots OUT=/abs/path/shots   # any other directory
+make screenshots-landing OUT=/abs/dir  # the same shots as <scene>-mobile.png
 ```
 
-`scripts/screenshots.sh` builds the debug APK, boots a throwaway copy of
-the `pixel_10` AVD headless (only its `config.ini` is copied into a scratch
-`ANDROID_AVD_HOME`, so your AVD's data is never touched), starts a branchDAM
+`screenshots-landing` is what personal-landing's `assets:sync` runs for this
+app. It meets visual-kit's landing contract for a phone: files named
+`<scene>-mobile.png` (`audit-queue`, `gallery`, `sync-status`), each exactly
+1170x2532 (390x844 dp at 3x). There is no visual-kit runner or CI check for
+this repo: a hosted runner has no emulator, and visual-kit's runner drives a
+browser, not an Android device. Both targets capture the same device, so the
+README images are 1170x2532 too.
+
+`scripts/screenshots.sh` builds the debug APK, boots a throwaway AVD
+headless (the checked-in hardware profile `scripts/avd/config.ini` on the
+API 35 `google_apis` x86_64 system image, built in a scratch
+`ANDROID_AVD_HOME`, so none of your AVDs is read or touched), starts a branchDAM
 demo instance from the sibling `../branchDAM` checkout (`make demo` tooling,
 synthetic media, scratch dir, `127.0.0.1:3975`), pairs the app with it,
-pushes a few demo photos into `DCIM/Camera`, switches to dark theme with a
+sets the emulator's clock to the demo's fixed instant (`DEMO_NOW`, default
+`2026-10-15T10:00:00Z`; the demo fixes its own data to the same one, so two
+runs give the same images), pushes a few demo photos into `DCIM/Camera`, switches to dark theme with a
 demo-mode status bar and captures each screen with `adb exec-out screencap`.
 On any exit it kills the emulator and the demo and deletes the scratch dirs.
 
 Requirements: Android SDK at `$ANDROID_HOME` (default `~/Android/Sdk`, adb
-and emulator are used from there), a `pixel_10` AVD, an NDK under
+and emulator are used from there), the API 35 `google_apis` x86_64 system image, an NDK under
 `$ANDROID_HOME/ndk` (the Go core is rebuilt every run), KVM, JDK, Go,
 node/npm, ffmpeg, exiftool, curl and jq; `../branchDAM` must include the
-demo tooling (branchdam#530). Override with `AVD`, `EMU_PORT` (default
+demo tooling that reads `DEMO_NOW` (branchdam#617). Override with `DEMO_NOW`, `EMU_PORT` (default
 5580), `BRANCHDAM_DIR` and `DEMO_PORT`; set `DEBUG_DIR` to keep a screencap,
 UI dump, logcat and the build/demo logs when a run fails. The script only
 ever addresses its own `emulator-$EMU_PORT` and refuses to run if that

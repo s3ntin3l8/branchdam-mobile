@@ -254,7 +254,8 @@ This runs:
 ### Screenshots
 
 The images at the top of this README come from `make screenshots`
-(`scripts/screenshots.sh`). It runs a headless emulator paired with a
+(`scripts/screenshots.sh`); `make screenshots-landing OUT=<dir>` writes the
+same shots as `<scene>-mobile.png` for the landing page. It runs a headless emulator paired with a
 throwaway branchDAM demo instance and uses synthetic media only. See
 [CONTRIBUTING.md](CONTRIBUTING.md#regenerating-screenshots) for what it does
 and what it needs.
