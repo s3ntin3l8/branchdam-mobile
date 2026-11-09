@@ -73,7 +73,10 @@ public final class ImportNotificationDelegate: NSObject, UNUserNotificationCente
         }
         let once = CompletionBox(completion)
         handler(action, Self.stagedBefore(userInfo: userInfo)) { once.call() }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + completionDeadline) { once.call() }
+        // userInitiated, not utility: this timer releases the system's completion
+        // handler for a notification the user just tapped. On a loaded device (or CI
+        // simulator) the utility class was observed firing a 0.1s deadline ~12s late.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + completionDeadline) { once.call() }
         return true
     }
 

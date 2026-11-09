@@ -80,11 +80,11 @@ final class ImportNotificationDelegateTests: XCTestCase {
         )
 
         XCTAssertTrue(routed)
-        // The deadline is 0.1s but fires on a utility-QoS global queue, which
-        // a loaded CI simulator can starve for seconds; the assertion is that
-        // the completion is released, not how quickly, so wait generously
-        // (a passing run still returns at ~0.1s).
-        wait(for: [finished], timeout: 15.0)
+        // The deadline is 0.1s. The assertion is that the completion is
+        // released, not how quickly, so wait generously: a loaded CI
+        // simulator was seen firing it ~12s late on a utility-QoS queue
+        // (the timer is userInitiated now). A passing run returns at ~0.1s.
+        wait(for: [finished], timeout: 30.0)
     }
 
     func testCompletionRunsOnceWhenTheHandlerFinishesFirst() {
