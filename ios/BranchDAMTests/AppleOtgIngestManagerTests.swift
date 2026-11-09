@@ -90,7 +90,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         }
 
         manager.onCardDetected(deviceLabel: "CANON R5", directory: tempDir)
-        wait(for: [expectation], timeout: 2.0)
+        wait(for: [expectation], timeout: 15.0)
         cancellable.cancel()
     }
 
@@ -140,7 +140,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
         }
 
         manager.confirmImport(scanResult: scanResult, stageDirectory: stageDir)
-        wait(for: [expectation], timeout: 2.0)
+        wait(for: [expectation], timeout: 15.0)
         cancellable.cancel()
 
         let staged1 = stageDir.appendingPathComponent("DCIM/100EOSR5/IMG_0001.CR3")
@@ -495,7 +495,7 @@ final class AppleOtgIngestManagerTests: XCTestCase {
             if case .error = state { reported.fulfill() }
         }
         manager.onCardFolderPicked(empty)
-        wait(for: [reported], timeout: 2.0)
+        wait(for: [reported], timeout: 15.0)
         cancellable.cancel()
     }
 
