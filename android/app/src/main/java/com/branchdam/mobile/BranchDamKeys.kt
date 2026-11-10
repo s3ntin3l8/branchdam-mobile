@@ -144,6 +144,16 @@ object BranchDamKeys {
      */
     const val ONBOARDING_COMPLETED = "branchdam_onboarding_completed"
 
+    /**
+     * True once a handshake with the stored server has succeeded: the
+     * device is then "paired" ([isPaired]), not merely configured with a
+     * URL. See [confirmPairing] and [migratePairingConfirmed].
+     */
+    const val PAIRED_CONFIRMED = "branchdam_paired_confirmed"
+
+    /** Set once [migratePairingConfirmed] has run, so it only ever runs on the first launch of the version that added [PAIRED_CONFIRMED]. */
+    const val PAIRED_CONFIRMED_MIGRATED = "branchdam_paired_confirmed_migrated"
+
     /** Default background sync interval in minutes. */
     const val DEFAULT_SYNC_INTERVAL_MINUTES = 15
 

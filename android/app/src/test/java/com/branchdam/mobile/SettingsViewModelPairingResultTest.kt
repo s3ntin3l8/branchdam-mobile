@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -97,7 +98,43 @@ class SettingsViewModelPairingResultTest {
         advanceUntilIdle()
 
         assertEquals(PairingResult.Connected(config.serverUrl), viewModel.pairingResult.value)
+        assertTrue("a successful handshake confirms the pairing", isPaired(appPrefs()))
     }
+
+    @Test
+    fun failedHandshakeLeavesTheDeviceUnpaired() = runTest(testDispatcher) {
+        SettingsViewModel.testConnectionFn = { false }
+        SettingsViewModel.testConnectionDetailedFn = { "connection refused" }
+
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.applyPairingConfig(config)
+        advanceUntilIdle()
+
+        val prefs = appPrefs()
+        assertTrue("the URL is saved", hasServerUrl(prefs))
+        assertFalse("but never answered, so not paired", isPaired(prefs))
+    }
+
+    @Test
+    fun aLaterSuccessfulCheckPairsTheDevice() = runTest(testDispatcher) {
+        SettingsViewModel.testConnectionFn = { false }
+        SettingsViewModel.testConnectionDetailedFn = { "connection refused" }
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.applyPairingConfig(config)
+        advanceUntilIdle()
+        assertFalse(isPaired(appPrefs()))
+
+        SettingsViewModel.testConnectionFn = { true }
+        viewModel.checkConnection()
+        advanceUntilIdle()
+
+        assertTrue(isPaired(appPrefs()))
+    }
+
+    private fun appPrefs() = ApplicationProvider.getApplicationContext<android.content.Context>()
+        .getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
 
     @Test
     fun failedHandshakeIsConnectingUntilTheErrorIsRecorded() = runTest(testDispatcher) {

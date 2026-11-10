@@ -42,9 +42,55 @@ class PairingStatusTest {
         assertFalse(isPaired(prefs))
     }
 
-    @Test
-    fun storedServerUrlIsPaired() {
+    private fun storeUrl() {
         prefs.edit().putString(BranchDamApplication.KEY_SERVER_URL, "https://dam.example.com").commit()
+    }
+
+    @Test
+    fun storedServerUrlAloneIsNotPaired() {
+        // A mistyped URL that never answered must keep the not-paired prompts.
+        storeUrl()
+        assertTrue(hasServerUrl(prefs))
+        assertFalse(isPaired(prefs))
+    }
+
+    @Test
+    fun storedServerUrlWithAHandshakeIsPaired() {
+        storeUrl()
+        confirmPairing(prefs)
+        assertTrue(isPaired(prefs))
+    }
+
+    @Test
+    fun confirmingWithoutAServerUrlDoesNothing() {
+        // The cold-start check against the default URL on a fresh install.
+        confirmPairing(prefs)
+        assertFalse(prefs.contains(BranchDamKeys.PAIRED_CONFIRMED))
+        storeUrl()
+        assertFalse(isPaired(prefs))
+    }
+
+    @Test
+    fun existingInstallWithAUrlStaysPairedAfterTheMigration() {
+        storeUrl()
+        migratePairingConfirmed(prefs)
+        assertTrue(isPaired(prefs))
+    }
+
+    @Test
+    fun freshInstallIsNotConfirmedByAUrlStoredAfterTheMigration() {
+        migratePairingConfirmed(prefs) // first launch: nothing stored yet
+        storeUrl() // pairing with a URL that then fails its handshake
+        migratePairingConfirmed(prefs) // next launch
+        assertFalse(isPaired(prefs))
+    }
+
+    @Test
+    fun migrationDoesNotOverrideALaterConfirmation() {
+        migratePairingConfirmed(prefs)
+        storeUrl()
+        confirmPairing(prefs)
+        migratePairingConfirmed(prefs)
         assertTrue(isPaired(prefs))
     }
 
@@ -54,10 +100,11 @@ class PairingStatusTest {
     }
 
     @Test
-    fun pairedFlowFollowsTheStoredServerUrl() = runTest(UnconfinedTestDispatcher()) {
+    fun pairedFlowFollowsTheConfirmation() = runTest(UnconfinedTestDispatcher()) {
         val seen = mutableListOf<Boolean>()
         val job = launch { pairedFlow(prefs).take(2).toList(seen) }
-        prefs.edit().putString(BranchDamApplication.KEY_SERVER_URL, "https://dam.example.com").commit()
+        storeUrl() // URL alone: still unpaired, no new emission
+        confirmPairing(prefs)
         job.join()
         assertEquals(listOf(false, true), seen)
     }

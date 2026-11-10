@@ -12,21 +12,54 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-/**
- * Whether this device has been paired with a server: a server URL is
- * stored. The plain prefs hold it on every save path
- * ([ConnectionSettingsStore.save] writes it even when the Keystore is
- * unavailable), so they are the single source of truth. Read by
- * onboarding, the Sync tab, the Lineage tab and `MainActivity`'s
- * "onboarding done" default.
- */
-fun isPaired(prefs: SharedPreferences): Boolean =
+/** A server URL is stored (setup was done, whether or not the server answered). */
+fun hasServerUrl(prefs: SharedPreferences): Boolean =
     !prefs.getString(BranchDamApplication.KEY_SERVER_URL, null).isNullOrBlank()
 
-/** [isPaired] now and after every change to the stored server URL. */
+/**
+ * Whether this device has been paired with a server: a server URL is
+ * stored and a handshake with it has succeeded ([confirmPairing]). A URL
+ * that never answered (mistyped, wrong key) leaves the device unpaired, so
+ * the Sync and Lineage "Pair this device" prompts stay. The plain prefs
+ * hold the URL on every save path ([ConnectionSettingsStore.save] writes
+ * it even when the Keystore is unavailable), so they are the single source
+ * of truth. Read by onboarding, the Sync tab and the Lineage tab.
+ */
+fun isPaired(prefs: SharedPreferences): Boolean =
+    hasServerUrl(prefs) && prefs.getBoolean(BranchDamKeys.PAIRED_CONFIRMED, false)
+
+/**
+ * Records a successful handshake with the stored server. A no-op while no
+ * URL is stored, so the cold-start check against the default URL on a
+ * fresh install cannot confirm a pairing that was never made.
+ */
+fun confirmPairing(prefs: SharedPreferences) {
+    if (hasServerUrl(prefs) && !prefs.getBoolean(BranchDamKeys.PAIRED_CONFIRMED, false)) {
+        prefs.edit().putBoolean(BranchDamKeys.PAIRED_CONFIRMED, true).apply()
+    }
+}
+
+/**
+ * Once, on the first launch of the version that added [BranchDamKeys.PAIRED_CONFIRMED]:
+ * an install that already has a stored URL was set up before the flag
+ * existed and keeps working, so it counts as confirmed. On a fresh install
+ * no URL is stored yet, so nothing is confirmed and the marker just stops
+ * the migration from confirming a later, unanswered URL.
+ */
+fun migratePairingConfirmed(prefs: SharedPreferences) {
+    if (prefs.getBoolean(BranchDamKeys.PAIRED_CONFIRMED_MIGRATED, false)) return
+    prefs.edit()
+        .apply { if (hasServerUrl(prefs)) putBoolean(BranchDamKeys.PAIRED_CONFIRMED, true) }
+        .putBoolean(BranchDamKeys.PAIRED_CONFIRMED_MIGRATED, true)
+        .commit()
+}
+
+/** [isPaired] now and after every change to the stored server URL or the confirmation. */
 fun pairedFlow(prefs: SharedPreferences): Flow<Boolean> = callbackFlow {
     val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == BranchDamApplication.KEY_SERVER_URL) trySend(isPaired(prefs))
+        if (key == BranchDamApplication.KEY_SERVER_URL || key == BranchDamKeys.PAIRED_CONFIRMED) {
+            trySend(isPaired(prefs))
+        }
     }
     prefs.registerOnSharedPreferenceChangeListener(listener)
     trySend(isPaired(prefs))
