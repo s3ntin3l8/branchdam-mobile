@@ -16,7 +16,6 @@ import com.branchdam.mobile.mapPairingResult
 import com.branchdam.mobile.R
 import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.confirmPairing
-import com.branchdam.mobile.invalidatePairingIfServerChanged
 import com.branchdam.mobile.defaultEngineDbPath
 import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncLogger
@@ -347,9 +346,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _isConnecting.value = false
                 return@launch
             }
-            // The saved URL now being a different server voids an earlier
-            // confirmation until this one answers.
-            invalidatePairingIfServerChanged(nonSecretPrefs, _serverUrl.value)
             val context = getApplication<Application>()
             val dbPath = defaultEngineDbPath(context.filesDir)
             val devHosts = UrlValidator.cleartextHostsCsv(BuildConfig.DEBUG)

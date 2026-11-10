@@ -48,6 +48,7 @@ object ConnectionSettingsStore {
             // No encrypted copy exists to diverge from. The non-secret
             // fields are still saved (and a legacy plaintext key removed)
             // even when the key itself has to be refused.
+            invalidatePairingIfServerChanged(plain, serverUrl)
             val plainOk = writePlain(plain, serverUrl, agentId)
             return when {
                 apiKey.isNotEmpty() -> SaveResult.KEY_STORAGE_UNAVAILABLE
@@ -61,6 +62,10 @@ object ConnectionSettingsStore {
             .putString(BranchDamApplication.KEY_AGENT_ID, agentId)
             .commit()
         if (!secureOk) return SaveResult.WRITE_FAILED
+        // The configured server changed with this write; an earlier
+        // confirmation was for another one. Here, where the URL is written,
+        // so no save path can leave the old confirmation standing.
+        invalidatePairingIfServerChanged(plain, serverUrl)
         return if (writePlain(plain, serverUrl, agentId)) SaveResult.SAVED else SaveResult.WRITE_FAILED
     }
 

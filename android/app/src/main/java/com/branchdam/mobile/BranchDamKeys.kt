@@ -154,7 +154,7 @@ object BranchDamKeys {
      */
     const val PAIRED_SERVER_URL = "branchdam_paired_server_url"
 
-    /** Set once [migratePairingConfirmed] has run, so it only ever runs on the first launch of the version that added [PAIRED_CONFIRMED]. */
+    /** Set once [migratePairingConfirmed] has run, so it only ever runs on the first launch of the version that added [PAIRED_SERVER_URL]. */
     const val PAIRED_CONFIRMED_MIGRATED = "branchdam_paired_confirmed_migrated"
 
     /** Default background sync interval in minutes. */

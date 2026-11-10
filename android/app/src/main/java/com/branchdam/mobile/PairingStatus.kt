@@ -19,14 +19,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * encrypted prefs and removes it from the plain ones, so the plain prefs
  * alone are not enough.
  */
-fun storedServerUrl(secure: SharedPreferences?, plain: SharedPreferences): String? =
+fun storedServerUrl(plain: SharedPreferences, secure: SharedPreferences?): String? =
     (secure?.getString(BranchDamApplication.KEY_SERVER_URL, null)
         ?: plain.getString(BranchDamApplication.KEY_SERVER_URL, null))
         ?.takeIf { it.isNotBlank() }
 
 /** A server URL is stored (setup was done, whether or not the server answered). */
 fun hasServerUrl(plain: SharedPreferences, secure: SharedPreferences?): Boolean =
-    storedServerUrl(secure, plain) != null
+    storedServerUrl(plain, secure) != null
 
 /**
  * Whether this device has been paired with a server: a handshake has
@@ -45,7 +45,7 @@ fun isPaired(plain: SharedPreferences): Boolean =
  * fresh install cannot confirm a pairing that was never made.
  */
 fun confirmPairing(plain: SharedPreferences, secure: SharedPreferences?) {
-    val url = storedServerUrl(secure, plain) ?: return
+    val url = storedServerUrl(plain, secure) ?: return
     if (plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null) != url) {
         plain.edit().putString(BranchDamKeys.PAIRED_SERVER_URL, url).apply()
     }
@@ -75,7 +75,7 @@ fun invalidatePairingIfServerChanged(plain: SharedPreferences, serverUrl: String
  */
 fun migratePairingConfirmed(plain: SharedPreferences, secure: SharedPreferences?) {
     if (plain.getBoolean(BranchDamKeys.PAIRED_CONFIRMED_MIGRATED, false)) return
-    val url = storedServerUrl(secure, plain)
+    val url = storedServerUrl(plain, secure)
     plain.edit()
         .apply { if (url != null) putString(BranchDamKeys.PAIRED_SERVER_URL, url) }
         .putBoolean(BranchDamKeys.PAIRED_CONFIRMED_MIGRATED, true)

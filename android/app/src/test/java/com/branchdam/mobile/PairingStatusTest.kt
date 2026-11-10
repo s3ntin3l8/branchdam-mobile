@@ -67,7 +67,7 @@ class PairingStatusTest {
         save(urlA)
         PrefKeyMigration.migrate(prefs, secure)
         assertFalse(prefs.contains(BranchDamApplication.KEY_SERVER_URL))
-        assertEquals(urlA, storedServerUrl(secure, prefs))
+        assertEquals(urlA, storedServerUrl(prefs, secure))
     }
 
     @Test
