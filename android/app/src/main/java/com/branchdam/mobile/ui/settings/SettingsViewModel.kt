@@ -11,6 +11,8 @@ import com.branchdam.mobile.BuildConfig
 import com.branchdam.mobile.ConnectionSettingsStore
 import com.branchdam.mobile.EncryptedPrefs
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.PairingResult
+import com.branchdam.mobile.mapPairingResult
 import com.branchdam.mobile.R
 import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.defaultEngineDbPath
@@ -22,7 +24,10 @@ import com.branchdam.mobile.ui.theme.ThemeMode
 import com.branchdam.mobile.ui.theme.ThemePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -145,6 +150,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _repairDeadlineUnix = MutableStateFlow(0L)
     val repairDeadlineUnix: StateFlow<Long> = _repairDeadlineUnix.asStateFlow()
 
+    /** True once [connect] has run: the cold-start check is not a pairing attempt. */
+    private val _pairingAttempted = MutableStateFlow(false)
+
     private val _urlError = MutableStateFlow<String?>(null)
     val urlError: StateFlow<String?> = _urlError.asStateFlow()
 
@@ -157,6 +165,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         if (securePrefs == null) application.getString(R.string.connection_key_storage_unavailable) else null,
     )
     val keyStorageError: StateFlow<String?> = _keyStorageError.asStateFlow()
+
+    /** The outcome of the last pairing attempt, for onboarding's pairing page. */
+    val pairingResult: StateFlow<PairingResult> = combine(
+        _pairingAttempted,
+        _isConnecting,
+        _isConnected,
+        combine(_connectionError, _urlError) { connection, url -> connection ?: url },
+        _serverUrl,
+    ) { attempted, connecting, connected, error, url ->
+        mapPairingResult(attempted, connecting, connected, error, url)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, PairingResult.Idle)
 
     init {
         // Cold-start refresh. The SettingsScreen also re-fires this
@@ -302,10 +321,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun connect() {
         val urlError = validateUrl(_serverUrl.value, BuildConfig.DEBUG)
+        _pairingAttempted.value = true
         if (urlError != null) {
+            // A rejected URL is a failed attempt; the pairing page reads it
+            // from urlError, and the connection screen shows it once, on the field.
             _urlError.value = urlError
+            _isConnected.value = false
             return
         }
+        _urlError.value = null
         _isConnecting.value = true
         _connectionError.value = null
         viewModelScope.launch(testIoDispatcher) {
@@ -315,9 +339,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 // background sync reads it from secure storage and would
                 // fail later with no explanation.
                 _isConnected.value = false
-                _isConnecting.value = false
                 _connectionError.value = ConnectionSettingsStore.messageResFor(saved)
                     ?.let { getApplication<Application>().getString(it) }
+                _isConnecting.value = false
                 return@launch
             }
             val context = getApplication<Application>()
@@ -338,10 +362,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 } ?: false
 
                 _isConnected.value = isReachable
-                _isConnecting.value = false
                 _repairDeadlineUnix.value = repairDeadlineFn()
                 if (isReachable) {
                     _connectionError.value = null
+                    _isConnecting.value = false
                     EngineHolder.resetFailedUploads()
                     SyncScheduler.triggerImmediateSync(context)
                     val template = EngineHolder.fetchNamingTemplate()
@@ -358,11 +382,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
                         else -> rawError
                     }
+                    // Only now: until the error is recorded the attempt is
+                    // still running, and the pairing page must keep showing
+                    // "Connecting" rather than fall back to its idle actions.
+                    _isConnecting.value = false
                 }
             } else {
                 _isConnected.value = false
-                _isConnecting.value = false
                 _connectionError.value = "Engine initialization failed"
+                _isConnecting.value = false
             }
         }
     }

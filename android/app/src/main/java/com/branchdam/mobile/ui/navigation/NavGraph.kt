@@ -7,9 +7,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -25,6 +27,7 @@ import com.branchdam.mobile.ui.lineage.LineageScreen
 import com.branchdam.mobile.ui.onboarding.OnboardingScreen
 import com.branchdam.mobile.ui.qrscan.QrScanScreen
 import com.branchdam.mobile.ui.safespace.SafeSpaceScreen
+import com.branchdam.mobile.ui.settings.ConnectionSettingsScreen
 import com.branchdam.mobile.ui.settings.SettingsScreen
 import com.branchdam.mobile.ui.settings.SettingsViewModel
 import com.branchdam.mobile.ui.sync.SyncStatusScreen
@@ -45,6 +48,10 @@ fun AppNavGraph(
     // viewModel() call) so that fields populated by the QR scan
     // flow are visible on the Settings screen after pop.
     val settingsViewModel: SettingsViewModel = viewModel()
+
+    val openConnection = {
+        navController.navigate(Screen.Connection.route) { launchSingleTop = true }
+    }
 
     val routes = listOf(
         Screen.Lineage.route,
@@ -122,6 +129,7 @@ fun AppNavGraph(
                         launchSingleTop = true
                     }
                 },
+                onPairDevice = openConnection,
             )
         }
         composable(Screen.Gallery.route) {
@@ -161,10 +169,21 @@ fun AppNavGraph(
             )
         }
         composable(Screen.Sync.route) {
-            SyncStatusScreen()
+            SyncStatusScreen(onPairDevice = openConnection)
         }
         composable(Screen.Settings.route) {
             SettingsScreen(
+                onScanQr = {
+                    navController.navigate(Screen.QrScan.route) {
+                        launchSingleTop = true
+                    }
+                },
+                viewModel = settingsViewModel,
+            )
+        }
+        composable(Screen.Connection.route) {
+            ConnectionSettingsScreen(
+                onNavigateBack = { navController.navigateUp() },
                 onScanQr = {
                     navController.navigate(Screen.QrScan.route) {
                         launchSingleTop = true
@@ -188,6 +207,9 @@ fun AppNavGraph(
             )
         }
         composable(Screen.Onboarding.route) {
+            // Collected here, not at graph level, so a pairing emission
+            // recomposes only this screen and stops while the app is stopped.
+            val pairingResult by settingsViewModel.pairingResult.collectAsStateWithLifecycle()
             OnboardingScreen(
                 onOnboardingComplete = {
                     navController.navigate(Screen.Lineage.route) {
@@ -197,6 +219,12 @@ fun AppNavGraph(
                 onRequestPermissions = onRequestPermissions,
                 access = onboardingAccess,
                 onSelectMorePhotos = onSelectMorePhotos,
+                pairingResult = pairingResult,
+                onScanQr = {
+                    navController.navigate(Screen.QrScan.route) { launchSingleTop = true }
+                },
+                onEnterManually = openConnection,
+                onRetryPairing = { settingsViewModel.connect() },
             )
         }
     }

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,16 +29,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.branchdam.mobile.R
+import com.branchdam.mobile.rememberIsPaired
 import com.branchdam.mobile.ui.components.quantityStringResource
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncStatusScreen(
+    onPairDevice: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SyncStatusViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val paired by rememberIsPaired()
 
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.sync_title)) }) },
@@ -57,8 +61,47 @@ fun SyncStatusScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (!paired) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                        )
+                    ) {
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    stringResource(R.string.unpaired_title),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    stringResource(R.string.unpaired_sync_body),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            },
+                            leadingContent = {
+                                Icon(
+                                    Icons.Filled.LinkOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                        FilledTonalButton(
+                            onClick = onPairDevice,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp).fillMaxWidth(),
+                        ) { Text(stringResource(R.string.unpaired_action)) }
+                    }
+                }
+
                 // Connection Status Hero Card
-                Card(
+                if (paired) Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     colors = CardDefaults.cardColors(

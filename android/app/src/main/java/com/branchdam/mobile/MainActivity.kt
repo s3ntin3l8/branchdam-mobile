@@ -189,8 +189,7 @@ class MainActivity : ComponentActivity() {
                     android.content.Context.MODE_PRIVATE,
                 )
                 val isOnboardingCompleted = remember {
-                    val serverUrlSet = sharedPrefs.getString(BranchDamApplication.KEY_SERVER_URL, null) != null
-                    sharedPrefs.getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, serverUrlSet)
+                    sharedPrefs.getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, isPaired(sharedPrefs))
                 }
 
                 val permissionBatch by permissionFlow.batch.collectAsState()

@@ -17,11 +17,13 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.branchdam.mobile.R
+import com.branchdam.mobile.rememberIsPaired
 import com.branchdam.mobile.ui.AuditQueueScreen
 import com.branchdam.mobile.ui.theme.BranchDamTheme
 
@@ -30,9 +32,11 @@ import com.branchdam.mobile.ui.theme.BranchDamTheme
 fun LineageScreen(
     windowSizeClass: WindowSizeClass,
     onNavigateToSafeSpace: () -> Unit = {},
+    onPairDevice: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: LineageViewModel = viewModel(),
 ) {
+    val paired by rememberIsPaired()
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
@@ -109,6 +113,8 @@ fun LineageScreen(
                         candidates = candidates,
                         onConfirm = viewModel::confirm,
                         onReject = viewModel::reject,
+                        paired = paired,
+                        onPairDevice = onPairDevice,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -121,6 +127,8 @@ fun LineageScreen(
                 candidates = candidates,
                 onConfirm = viewModel::confirm,
                 onReject = viewModel::reject,
+                paired = paired,
+                onPairDevice = onPairDevice,
                 modifier = Modifier.padding(padding)
             )
         }
@@ -135,6 +143,8 @@ private fun LineageContent(
     candidates: List<com.branchdam.mobile.ui.AuditCandidate>,
     onConfirm: (com.branchdam.mobile.ui.AuditCandidate) -> Unit,
     onReject: (com.branchdam.mobile.ui.AuditCandidate) -> Unit,
+    paired: Boolean,
+    onPairDevice: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -163,11 +173,22 @@ private fun LineageContent(
                 modifier = modifier.fillMaxSize().padding(16.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    stringResource(R.string.lineage_empty),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(
+                        stringResource(if (paired) R.string.lineage_empty else R.string.unpaired_lineage_body),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    if (!paired) {
+                        FilledTonalButton(onClick = onPairDevice) {
+                            Text(stringResource(R.string.unpaired_action))
+                        }
+                    }
+                }
             }
         }
         else -> {
