@@ -7,11 +7,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -49,7 +49,6 @@ fun AppNavGraph(
     // flow are visible on the Settings screen after pop.
     val settingsViewModel: SettingsViewModel = viewModel()
 
-    val pairingResult by settingsViewModel.pairingResult.collectAsState()
     val openConnection = {
         navController.navigate(Screen.Connection.route) { launchSingleTop = true }
     }
@@ -208,6 +207,9 @@ fun AppNavGraph(
             )
         }
         composable(Screen.Onboarding.route) {
+            // Collected here, not at graph level, so a pairing emission
+            // recomposes only this screen and stops while the app is stopped.
+            val pairingResult by settingsViewModel.pairingResult.collectAsStateWithLifecycle()
             OnboardingScreen(
                 onOnboardingComplete = {
                     navController.navigate(Screen.Lineage.route) {

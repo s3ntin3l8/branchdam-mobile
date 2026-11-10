@@ -67,7 +67,7 @@ class PairingStatusTest {
         // The cold-start check against the default URL fails on a fresh install.
         assertEquals(
             PairingResult.Idle,
-            pairingResult(attempted = false, isConnecting = false, isConnected = false, error = "boom", serverUrl = "u"),
+            mapPairingResult(attempted = false, isConnecting = false, isConnected = false, error = "boom", serverUrl = "u"),
         )
     }
 
@@ -75,7 +75,7 @@ class PairingStatusTest {
     fun connectingWinsOverAStaleResult() {
         assertEquals(
             PairingResult.Connecting,
-            pairingResult(attempted = true, isConnecting = true, isConnected = true, error = "old", serverUrl = "u"),
+            mapPairingResult(attempted = true, isConnecting = true, isConnected = true, error = "old", serverUrl = "u"),
         )
     }
 
@@ -83,7 +83,7 @@ class PairingStatusTest {
     fun handshakeSuccessIsConnectedToTheServer() {
         assertEquals(
             PairingResult.Connected("https://dam.example.com"),
-            pairingResult(true, false, true, null, "https://dam.example.com"),
+            mapPairingResult(true, false, true, null, "https://dam.example.com"),
         )
     }
 
@@ -91,12 +91,12 @@ class PairingStatusTest {
     fun handshakeFailureCarriesTheMessage() {
         assertEquals(
             PairingResult.Failed("Authentication Failed (HTTP 401) — Check API Key"),
-            pairingResult(true, false, false, "Authentication Failed (HTTP 401) — Check API Key", "u"),
+            mapPairingResult(true, false, false, "Authentication Failed (HTTP 401) — Check API Key", "u"),
         )
     }
 
     @Test
     fun finishedWithNeitherSuccessNorErrorIsIdle() {
-        assertEquals(PairingResult.Idle, pairingResult(true, false, false, null, "u"))
+        assertEquals(PairingResult.Idle, mapPairingResult(true, false, false, null, "u"))
     }
 }

@@ -64,7 +64,7 @@ sealed interface PairingResult {
  * [attempted] guards the cold-start check against the default server
  * URL on a fresh install, whose failure is not a pairing failure.
  */
-internal fun pairingResult(
+internal fun mapPairingResult(
     attempted: Boolean,
     isConnecting: Boolean,
     isConnected: Boolean,

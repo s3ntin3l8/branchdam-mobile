@@ -12,7 +12,7 @@ import com.branchdam.mobile.ConnectionSettingsStore
 import com.branchdam.mobile.EncryptedPrefs
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.PairingResult
-import com.branchdam.mobile.pairingResult
+import com.branchdam.mobile.mapPairingResult
 import com.branchdam.mobile.R
 import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.defaultEngineDbPath
@@ -174,7 +174,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _connectionError,
         _serverUrl,
     ) { attempted, connecting, connected, error, url ->
-        pairingResult(attempted, connecting, connected, error, url)
+        mapPairingResult(attempted, connecting, connected, error, url)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PairingResult.Idle)
 
     init {
@@ -321,11 +321,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun connect() {
         val urlError = validateUrl(_serverUrl.value, BuildConfig.DEBUG)
+        _pairingAttempted.value = true
         if (urlError != null) {
             _urlError.value = urlError
+            // A rejected URL is a failed attempt: the pairing page shows it.
+            _isConnected.value = false
+            _connectionError.value = urlError
             return
         }
-        _pairingAttempted.value = true
         _isConnecting.value = true
         _connectionError.value = null
         viewModelScope.launch(testIoDispatcher) {
@@ -358,10 +361,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 } ?: false
 
                 _isConnected.value = isReachable
-                _isConnecting.value = false
                 _repairDeadlineUnix.value = repairDeadlineFn()
                 if (isReachable) {
                     _connectionError.value = null
+                    _isConnecting.value = false
                     EngineHolder.resetFailedUploads()
                     SyncScheduler.triggerImmediateSync(context)
                     val template = EngineHolder.fetchNamingTemplate()
@@ -378,6 +381,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         rawError.contains("404") -> "Endpoint Not Found (HTTP 404) — Check Server URL"
                         else -> rawError
                     }
+                    // Only now: until the error is recorded the attempt is
+                    // still running, and the pairing page must keep showing
+                    // "Connecting" rather than fall back to its idle actions.
+                    _isConnecting.value = false
                 }
             } else {
                 _isConnected.value = false
