@@ -17,6 +17,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.branchdam.mobile.MediaAccessLevel
+import com.branchdam.mobile.OnboardingAccess
 import com.branchdam.mobile.ui.gallery.GalleryDetailScreen
 import com.branchdam.mobile.ui.gallery.GalleryScreen
 import com.branchdam.mobile.ui.gallery.GalleryViewModel
@@ -37,6 +38,7 @@ fun AppNavGraph(
     mediaAccess: MediaAccessLevel = MediaAccessLevel.FULL,
     mediaAccessGeneration: Int = 0,
     onSelectMorePhotos: () -> Unit = {},
+    onboardingAccess: OnboardingAccess = OnboardingAccess.PENDING,
     modifier: Modifier = Modifier,
 ) {
     // SettingsViewModel is scoped to the activity (top-level
@@ -192,7 +194,9 @@ fun AppNavGraph(
                         popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }
                 },
-                onRequestPermissions = onRequestPermissions
+                onRequestPermissions = onRequestPermissions,
+                access = onboardingAccess,
+                onSelectMorePhotos = onSelectMorePhotos,
             )
         }
     }

@@ -62,6 +62,7 @@ import com.branchdam.mobile.ui.theme.ThemePreferences
 @Composable
 internal fun DrivePermissionFlow(
     flow: PermissionFlowState,
+    autoStart: Boolean,
     notificationsBatch: List<String>,
     mediaBatch: List<String>,
     hasPermission: (String) -> Boolean,
@@ -70,6 +71,9 @@ internal fun DrivePermissionFlow(
 ) {
     val batch by flow.batch.collectAsState()
     LaunchedEffect(batch) {
+        // Onboarding holds the sequence at NONE; its Grant Access button
+        // starts it (PermissionFlowState.start()).
+        if (batch == PermissionBatch.NONE && !autoStart) return@LaunchedEffect
         when (
             val action = nextPermissionAction(
                 batch,
@@ -180,8 +184,19 @@ class MainActivity : ComponentActivity() {
                     permissionFlow.nextBatch()
                 }
 
+                val sharedPrefs = applicationContext.getSharedPreferences(
+                    BranchDamKeys.PREFS_NAME,
+                    android.content.Context.MODE_PRIVATE,
+                )
+                val isOnboardingCompleted = remember {
+                    val serverUrlSet = sharedPrefs.getString(BranchDamApplication.KEY_SERVER_URL, null) != null
+                    sharedPrefs.getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, serverUrlSet)
+                }
+
+                val permissionBatch by permissionFlow.batch.collectAsState()
                 DrivePermissionFlow(
                     flow = permissionFlow,
+                    autoStart = isOnboardingCompleted,
                     notificationsBatch = notificationsBatch,
                     mediaBatch = mediaBatch,
                     hasPermission = hasPermission,
@@ -192,15 +207,6 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
-
-                val sharedPrefs = applicationContext.getSharedPreferences(
-                    BranchDamKeys.PREFS_NAME,
-                    android.content.Context.MODE_PRIVATE,
-                )
-                val isOnboardingCompleted = remember {
-                    val serverUrlSet = sharedPrefs.getString(BranchDamApplication.KEY_SERVER_URL, null) != null
-                    sharedPrefs.getBoolean(BranchDamKeys.ONBOARDING_COMPLETED, serverUrlSet)
-                }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
                     NavigationSuiteScaffold(
@@ -228,11 +234,8 @@ class MainActivity : ComponentActivity() {
                                     mediaReselectPermissions(mediaBatch).toTypedArray(),
                                 )
                             },
-                            onRequestPermissions = {
-                                if (permissionFlow.batch.value == PermissionBatch.NONE) {
-                                    permissionFlow.nextBatch()
-                                }
-                            }
+                            onboardingAccess = onboardingAccess(mediaAccess, permissionBatch),
+                            onRequestPermissions = permissionFlow::start
                         )
                     }
 

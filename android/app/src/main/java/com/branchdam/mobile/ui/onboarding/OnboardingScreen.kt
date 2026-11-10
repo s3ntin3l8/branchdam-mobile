@@ -1,5 +1,8 @@
 package com.branchdam.mobile.ui.onboarding
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -24,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.branchdam.mobile.OnboardingAccess
 import com.branchdam.mobile.R
 import kotlinx.coroutines.launch
 import com.branchdam.mobile.ui.theme.BranchDamTheme
@@ -32,9 +37,18 @@ import com.branchdam.mobile.ui.theme.BranchDamTheme
 fun OnboardingScreen(
     onOnboardingComplete: () -> Unit,
     onRequestPermissions: () -> Unit,
+    access: OnboardingAccess = OnboardingAccess.PENDING,
+    onSelectMorePhotos: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
+
+    // Full access granted from the Access page: move on to the next page.
+    LaunchedEffect(access) {
+        if (access == OnboardingAccess.GRANTED && pagerState.currentPage == 2) {
+            pagerState.animateScrollToPage(3)
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -58,7 +72,7 @@ fun OnboardingScreen(
             when (page) {
                 0 -> WelcomePage()
                 1 -> SecurityPage()
-                2 -> PermissionsRationalePage(onRequestPermissions)
+                2 -> PermissionsRationalePage(access, onRequestPermissions, onSelectMorePhotos)
                 3 -> SetupPage(onOnboardingComplete)
             }
         }
@@ -84,7 +98,12 @@ private fun SecurityPage() {
 }
 
 @Composable
-private fun PermissionsRationalePage(onRequestPermissions: () -> Unit) {
+private fun PermissionsRationalePage(
+    access: OnboardingAccess,
+    onRequestPermissions: () -> Unit,
+    onSelectMorePhotos: () -> Unit,
+) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -110,11 +129,49 @@ private fun PermissionsRationalePage(onRequestPermissions: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(32.dp))
-        Button(
-            onClick = onRequestPermissions,
-            shape = MaterialTheme.shapes.large
-        ) {
-            Text(stringResource(R.string.onboarding_grant_access))
+        when (access) {
+            OnboardingAccess.PENDING -> Button(
+                onClick = onRequestPermissions,
+                shape = MaterialTheme.shapes.large
+            ) {
+                Text(stringResource(R.string.onboarding_grant_access))
+            }
+            OnboardingAccess.GRANTED -> Text(
+                stringResource(R.string.onboarding_access_granted),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            OnboardingAccess.LIMITED -> {
+                Text(
+                    stringResource(R.string.onboarding_access_limited),
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onSelectMorePhotos, shape = MaterialTheme.shapes.large) {
+                    Text(stringResource(R.string.onboarding_select_photos))
+                }
+            }
+            OnboardingAccess.DENIED -> {
+                Text(
+                    stringResource(R.string.onboarding_access_denied),
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        val intent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null),
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    },
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(stringResource(R.string.onboarding_open_settings))
+                }
+            }
         }
     }
 }

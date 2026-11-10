@@ -162,8 +162,13 @@
     <string name="onboarding_security_title">Security First</string>
     <string name="onboarding_security_body">Every asset is hashed with BLAKE3. We track lineage and ensure your media is safely archived before you reclaim space.</string>
     <string name="onboarding_access_title">Access Needed</string>
-    <string name="onboarding_access_body">To pair with your server and sync your media, we need Camera and Media access. We respect your privacy and only access what\'s necessary.</string>
+    <string name="onboarding_access_body">To pair with your server and sync your media, we need media and notification access. We respect your privacy and only access what\'s necessary.</string>
     <string name="onboarding_grant_access">Grant Access</string>
+    <string name="onboarding_access_granted">Access granted</string>
+    <string name="onboarding_access_limited">You allowed only some photos. branchDAM can back up just those.</string>
+    <string name="onboarding_select_photos">Select photos</string>
+    <string name="onboarding_access_denied">Media access was not granted. You can allow it in Settings.</string>
+    <string name="onboarding_open_settings">Open Settings</string>
     <string name="onboarding_ready_title">Ready to Sync</string>
     <string name="onboarding_ready_body">You\'re all set. The next step is to pair this device with your branchDAM server using a QR code.</string>
     <string name="onboarding_get_started">Get Started</string>

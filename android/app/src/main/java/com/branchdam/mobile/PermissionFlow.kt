@@ -51,6 +51,58 @@ class PermissionFlowState {
     fun markDone() {
         _batch.value = PermissionBatch.DONE
     }
+
+    /**
+     * Starts (or, after a finished run, restarts) the sequence from the
+     * first batch when [shouldStartPermissionSequence] allows it. A
+     * sequence that is already running is left alone so a second tap
+     * cannot cut a pending dialog short.
+     */
+    fun start() {
+        if (shouldStartPermissionSequence(_batch.value)) {
+            _batch.value = PermissionBatch.NOTIFICATIONS
+        }
+    }
+}
+
+/**
+ * Whether the "Grant Access" button may start the batch sequence: true
+ * unless a run is in flight ([PermissionBatch.NOTIFICATIONS] or
+ * [PermissionBatch.MEDIA], a dialog is pending). `NONE` is a run that
+ * has not begun (onboarding holds it back at launch) and `DONE` is a
+ * finished run, which a retry after a denial must be able to repeat.
+ */
+internal fun shouldStartPermissionSequence(batch: PermissionBatch): Boolean = when (batch) {
+    PermissionBatch.NONE, PermissionBatch.DONE -> true
+    PermissionBatch.NOTIFICATIONS, PermissionBatch.MEDIA -> false
+}
+
+/** What onboarding page 2 shows for the outcome of the permission sequence. */
+enum class OnboardingAccess {
+    /** No outcome yet: the button has not been used or a dialog is pending. */
+    PENDING,
+
+    /** Full media access. */
+    GRANTED,
+
+    /** "Select photos" partial grant (API 34+). */
+    LIMITED,
+
+    /** The sequence finished without media access. */
+    DENIED,
+}
+
+/**
+ * Pure mapping from the current media grant and sequence state to the
+ * onboarding outcome. Access that is already there counts at once; a
+ * missing grant is only a denial once the sequence has run to
+ * [PermissionBatch.DONE] (and not merely because it has not started).
+ */
+internal fun onboardingAccess(level: MediaAccessLevel, batch: PermissionBatch): OnboardingAccess = when {
+    level == MediaAccessLevel.FULL -> OnboardingAccess.GRANTED
+    level == MediaAccessLevel.LIMITED -> OnboardingAccess.LIMITED
+    batch == PermissionBatch.DONE -> OnboardingAccess.DENIED
+    else -> OnboardingAccess.PENDING
 }
 
 /**
