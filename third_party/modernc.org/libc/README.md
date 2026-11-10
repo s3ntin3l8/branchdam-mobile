@@ -1,6 +1,6 @@
 # modernc.org/libc (branchDAM Mobile Overlay)
 
-This directory contains a vendored overlay of `modernc.org/libc` `v1.79.0` (Git commit `02bd2316433516d22b0cc2946cbd2ebc08fbd44f`).
+This directory contains a vendored overlay of `modernc.org/libc` `v1.80.1` (Git commit `612e8b0f2f1b1923d5c24c08bc233722500499cd`).
 Regenerate it with `scripts/update-libc-overlay.sh <version>`; the patch lives in `third_party/modernc.org/libc.patch`.
 
 ## Patch Details (x86_64 Android Seccomp Fix - #211)
