@@ -58,7 +58,7 @@ class SettingsViewModelPairingResultTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        SettingsViewModel.testConnectionFn = { EngineHolder.testConnection() }
+        SettingsViewModel.testConnectionFn = { SettingsViewModel.testConnectionDetailedFn() == null }
         SettingsViewModel.testConnectionDetailedFn = { EngineHolder.testConnectionDetailed() }
         SettingsViewModel.reachabilityTimeoutMs = 5_000L
         SettingsViewModel.repairDeadlineFn = { EngineHolder.repairDeadlineUnix() }

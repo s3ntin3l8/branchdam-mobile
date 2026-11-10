@@ -171,7 +171,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _pairingAttempted,
         _isConnecting,
         _isConnected,
-        _connectionError,
+        combine(_connectionError, _urlError) { connection, url -> connection ?: url },
         _serverUrl,
     ) { attempted, connecting, connected, error, url ->
         mapPairingResult(attempted, connecting, connected, error, url)
@@ -323,12 +323,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val urlError = validateUrl(_serverUrl.value, BuildConfig.DEBUG)
         _pairingAttempted.value = true
         if (urlError != null) {
+            // A rejected URL is a failed attempt; the pairing page reads it
+            // from urlError, and the connection screen shows it once, on the field.
             _urlError.value = urlError
-            // A rejected URL is a failed attempt: the pairing page shows it.
             _isConnected.value = false
-            _connectionError.value = urlError
             return
         }
+        _urlError.value = null
         _isConnecting.value = true
         _connectionError.value = null
         viewModelScope.launch(testIoDispatcher) {
@@ -338,9 +339,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 // background sync reads it from secure storage and would
                 // fail later with no explanation.
                 _isConnected.value = false
-                _isConnecting.value = false
                 _connectionError.value = ConnectionSettingsStore.messageResFor(saved)
                     ?.let { getApplication<Application>().getString(it) }
+                _isConnecting.value = false
                 return@launch
             }
             val context = getApplication<Application>()
@@ -388,8 +389,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 }
             } else {
                 _isConnected.value = false
-                _isConnecting.value = false
                 _connectionError.value = "Engine initialization failed"
+                _isConnecting.value = false
             }
         }
     }
