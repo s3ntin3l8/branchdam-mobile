@@ -11,6 +11,8 @@ import com.branchdam.mobile.BuildConfig
 import com.branchdam.mobile.ConnectionSettingsStore
 import com.branchdam.mobile.EncryptedPrefs
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.PairingResult
+import com.branchdam.mobile.pairingResult
 import com.branchdam.mobile.R
 import com.branchdam.mobile.UrlValidator
 import com.branchdam.mobile.defaultEngineDbPath
@@ -22,7 +24,10 @@ import com.branchdam.mobile.ui.theme.ThemeMode
 import com.branchdam.mobile.ui.theme.ThemePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -145,6 +150,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _repairDeadlineUnix = MutableStateFlow(0L)
     val repairDeadlineUnix: StateFlow<Long> = _repairDeadlineUnix.asStateFlow()
 
+    /** True once [connect] has run: the cold-start check is not a pairing attempt. */
+    private val _pairingAttempted = MutableStateFlow(false)
+
     private val _urlError = MutableStateFlow<String?>(null)
     val urlError: StateFlow<String?> = _urlError.asStateFlow()
 
@@ -157,6 +165,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         if (securePrefs == null) application.getString(R.string.connection_key_storage_unavailable) else null,
     )
     val keyStorageError: StateFlow<String?> = _keyStorageError.asStateFlow()
+
+    /** The outcome of the last pairing attempt, for onboarding's pairing page. */
+    val pairingResult: StateFlow<PairingResult> = combine(
+        _pairingAttempted,
+        _isConnecting,
+        _isConnected,
+        _connectionError,
+        _serverUrl,
+    ) { attempted, connecting, connected, error, url ->
+        pairingResult(attempted, connecting, connected, error, url)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, PairingResult.Idle)
 
     init {
         // Cold-start refresh. The SettingsScreen also re-fires this
@@ -306,6 +325,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             _urlError.value = urlError
             return
         }
+        _pairingAttempted.value = true
         _isConnecting.value = true
         _connectionError.value = null
         viewModelScope.launch(testIoDispatcher) {

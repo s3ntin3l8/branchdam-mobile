@@ -4,15 +4,22 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,12 +30,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.branchdam.mobile.OnboardingAccess
+import com.branchdam.mobile.PairingResult
 import com.branchdam.mobile.R
 import kotlinx.coroutines.launch
 import com.branchdam.mobile.ui.theme.BranchDamTheme
@@ -39,6 +50,10 @@ fun OnboardingScreen(
     onRequestPermissions: () -> Unit,
     access: OnboardingAccess = OnboardingAccess.PENDING,
     onSelectMorePhotos: () -> Unit = {},
+    pairingResult: PairingResult = PairingResult.Idle,
+    onScanQr: () -> Unit = {},
+    onEnterManually: () -> Unit = {},
+    onRetryPairing: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
@@ -73,7 +88,7 @@ fun OnboardingScreen(
                 0 -> WelcomePage()
                 1 -> SecurityPage()
                 2 -> PermissionsRationalePage(access, onRequestPermissions, onSelectMorePhotos)
-                3 -> SetupPage(onOnboardingComplete)
+                3 -> PairPage(pairingResult, onScanQr, onEnterManually, onRetryPairing, onOnboardingComplete)
             }
         }
     }
@@ -177,21 +192,119 @@ private fun PermissionsRationalePage(
 }
 
 @Composable
-private fun SetupPage(onComplete: () -> Unit) {
+private fun PairPage(
+    result: PairingResult,
+    onScanQr: () -> Unit,
+    onEnterManually: () -> Unit,
+    onRetry: () -> Unit,
+    onComplete: () -> Unit,
+) {
     OnboardingPageContent(
-        title = stringResource(R.string.onboarding_ready_title),
-        description = stringResource(R.string.onboarding_ready_body),
-        icon = Icons.AutoMirrored.Filled.ArrowForward,
+        title = stringResource(R.string.onboarding_pair_title),
+        description = stringResource(R.string.onboarding_pair_body),
+        icon = Icons.Filled.QrCodeScanner,
         cta = {
-            Button(
-                onClick = onComplete,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = MaterialTheme.shapes.large
-            ) {
-                Text(stringResource(R.string.onboarding_get_started))
+            AnimatedContent(
+                targetState = result,
+                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+                contentKey = { it::class },
+                label = "pairing-result",
+            ) { state ->
+                Column(
+                    modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    when (state) {
+                        is PairingResult.Idle -> PairActions(onScanQr, onEnterManually, onComplete)
+                        is PairingResult.Connecting -> {
+                            CircularProgressIndicator()
+                            Text(
+                                stringResource(R.string.connection_connecting),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        }
+                        is PairingResult.Connected -> {
+                            PairStatus(
+                                icon = Icons.Filled.CheckCircle,
+                                tint = MaterialTheme.colorScheme.primary,
+                                text = stringResource(R.string.onboarding_pair_connected, state.serverUrl),
+                                textColor = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Button(
+                                onClick = onComplete,
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = MaterialTheme.shapes.large,
+                            ) { Text(stringResource(R.string.onboarding_get_started)) }
+                        }
+                        is PairingResult.Failed -> {
+                            PairStatus(
+                                icon = Icons.Filled.ErrorOutline,
+                                tint = MaterialTheme.colorScheme.error,
+                                text = stringResource(R.string.onboarding_pair_failed, state.message),
+                                textColor = MaterialTheme.colorScheme.error,
+                            )
+                            Button(
+                                onClick = onRetry,
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = MaterialTheme.shapes.large,
+                            ) { Text(stringResource(R.string.onboarding_pair_retry)) }
+                            PairActions(onScanQr, onEnterManually, onComplete, scanIsPrimary = false)
+                        }
+                    }
+                }
             }
         }
     )
+}
+
+@Composable
+private fun PairActions(
+    onScanQr: () -> Unit,
+    onEnterManually: () -> Unit,
+    onLater: () -> Unit,
+    scanIsPrimary: Boolean = true,
+) {
+    val scanContent: @Composable RowScope.() -> Unit = {
+        Icon(Icons.Filled.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.onboarding_pair_scan))
+    }
+    val scanModifier = Modifier.fillMaxWidth().height(56.dp)
+    if (scanIsPrimary) {
+        Button(onClick = onScanQr, modifier = scanModifier, shape = MaterialTheme.shapes.large, content = scanContent)
+    } else {
+        OutlinedButton(onClick = onScanQr, modifier = scanModifier, shape = MaterialTheme.shapes.large, content = scanContent)
+    }
+    OutlinedButton(
+        onClick = onEnterManually,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.onboarding_pair_manual))
+    }
+    TextButton(onClick = onLater) { Text(stringResource(R.string.onboarding_pair_later)) }
+}
+
+/** Icon plus text, so the outcome is not conveyed by colour alone; announced by TalkBack. */
+@Composable
+private fun PairStatus(
+    icon: ImageVector,
+    tint: androidx.compose.ui.graphics.Color,
+    text: String,
+    textColor: androidx.compose.ui.graphics.Color,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Icon(icon, contentDescription = null, tint = tint)
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = textColor)
+    }
 }
 
 @Composable
@@ -202,7 +315,7 @@ private fun OnboardingPageContent(
     cta: @Composable (() -> Unit)? = null
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -295,4 +408,25 @@ fun OnboardingPreview() {
     BranchDamTheme {
         OnboardingScreen(onOnboardingComplete = {}, onRequestPermissions = {})
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PairPageIdlePreview() = PairPagePreview(PairingResult.Idle)
+
+@Preview(showBackground = true)
+@Composable
+private fun PairPageConnectingPreview() = PairPagePreview(PairingResult.Connecting)
+
+@Preview(showBackground = true)
+@Composable
+private fun PairPageConnectedPreview() = PairPagePreview(PairingResult.Connected("https://dam.example.com"))
+
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun PairPageFailedDarkPreview() = PairPagePreview(PairingResult.Failed("HTTP 401"))
+
+@Composable
+private fun PairPagePreview(result: PairingResult) {
+    BranchDamTheme { PairPage(result, {}, {}, {}, {}) }
 }
