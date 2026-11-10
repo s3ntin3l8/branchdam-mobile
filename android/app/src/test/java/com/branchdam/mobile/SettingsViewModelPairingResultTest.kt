@@ -112,7 +112,7 @@ class SettingsViewModelPairingResultTest {
         advanceUntilIdle()
 
         val prefs = appPrefs()
-        assertTrue("the URL is saved", hasServerUrl(prefs))
+        assertTrue("the URL is saved", hasServerUrl(prefs, secureAppPrefs()))
         assertFalse("but never answered, so not paired", isPaired(prefs))
     }
 
@@ -132,6 +132,26 @@ class SettingsViewModelPairingResultTest {
 
         assertTrue(isPaired(appPrefs()))
     }
+
+    @Test
+    fun repointingAPairedDeviceAtAnUnreachableServerUnpairsIt() = runTest(testDispatcher) {
+        SettingsViewModel.testConnectionFn = { true }
+        val viewModel = SettingsViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.applyPairingConfig(config)
+        advanceUntilIdle()
+        assertTrue(isPaired(appPrefs()))
+
+        SettingsViewModel.testConnectionFn = { false }
+        SettingsViewModel.testConnectionDetailedFn = { "connection refused" }
+        viewModel.applyPairingConfig(config.copy(serverUrl = "https://mistyped.example.com"))
+        advanceUntilIdle()
+
+        assertFalse("the new server never answered", isPaired(appPrefs()))
+    }
+
+    private fun secureAppPrefs() = ApplicationProvider.getApplicationContext<android.content.Context>()
+        .getSharedPreferences("test_secure_prefs", android.content.Context.MODE_PRIVATE)
 
     private fun appPrefs() = ApplicationProvider.getApplicationContext<android.content.Context>()
         .getSharedPreferences(BranchDamKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
