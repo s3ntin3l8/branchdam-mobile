@@ -221,5 +221,5 @@ dependencies {
     // registers a synchronous WorkManager against the test
     // Application so SyncStatusViewModel can be instantiated without
     // the production WorkManagerInitializer firing.
-    testImplementation("androidx.work:work-testing:2.10.0")
+    testImplementation("androidx.work:work-testing:2.12.0")
 }
