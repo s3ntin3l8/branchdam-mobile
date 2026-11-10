@@ -204,7 +204,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("org.mockito:mockito-core:5.12.0")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:6.4.0")
     // Robolectric is only used by tests that exercise real Bundle /
     // ContentResolver / ApplicationProvider / WorkManager behavior
     // (PR #130 MediaScannerTest, PR #131 SyncStatusViewModelTest,
