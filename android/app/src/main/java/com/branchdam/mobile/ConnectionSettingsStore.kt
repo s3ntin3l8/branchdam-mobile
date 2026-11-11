@@ -48,8 +48,10 @@ object ConnectionSettingsStore {
             // No encrypted copy exists to diverge from. The non-secret
             // fields are still saved (and a legacy plaintext key removed)
             // even when the key itself has to be refused.
-            invalidatePairingIfServerChanged(plain, serverUrl)
             val plainOk = writePlain(plain, serverUrl, agentId)
+            // Only once the new URL is really written: a failed commit leaves
+            // the old URL, and its confirmation, in place.
+            if (plainOk) invalidatePairingIfServerChanged(plain, serverUrl)
             return when {
                 apiKey.isNotEmpty() -> SaveResult.KEY_STORAGE_UNAVAILABLE
                 plainOk -> SaveResult.SAVED
