@@ -15,6 +15,7 @@ import com.branchdam.mobile.PairingResult
 import com.branchdam.mobile.mapPairingResult
 import com.branchdam.mobile.R
 import com.branchdam.mobile.UrlValidator
+import com.branchdam.mobile.confirmPairing
 import com.branchdam.mobile.defaultEngineDbPath
 import com.branchdam.mobile.service.ImportConfirmationNotifier
 import com.branchdam.mobile.service.SyncLogger
@@ -202,6 +203,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 } ?: false
             }
             _isConnected.value = isReachable
+            if (isReachable) confirmPairing(nonSecretPrefs, securePrefs)
             _repairDeadlineUnix.value = withContext(testIoDispatcher) { repairDeadlineFn() }
             _connectionError.value = if (!isReachable) {
                 val rawError = withContext(testIoDispatcher) {
@@ -364,6 +366,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _isConnected.value = isReachable
                 _repairDeadlineUnix.value = repairDeadlineFn()
                 if (isReachable) {
+                    confirmPairing(nonSecretPrefs, securePrefs)
                     _connectionError.value = null
                     _isConnecting.value = false
                     EngineHolder.resetFailedUploads()

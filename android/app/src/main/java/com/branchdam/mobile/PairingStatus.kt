@@ -13,24 +13,83 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
- * Whether this device has been paired with a server: a server URL is
- * stored. The plain prefs hold it on every save path
- * ([ConnectionSettingsStore.save] writes it even when the Keystore is
- * unavailable), so they are the single source of truth. Read by
- * onboarding, the Sync tab, the Lineage tab and `MainActivity`'s
- * "onboarding done" default.
+ * The server URL the app is configured with, resolved the way
+ * [BranchDamApplication.readSecureEngineConfig] does: the encrypted prefs
+ * first, then the plain copy. [PrefKeyMigration] moves the URL into the
+ * encrypted prefs and removes it from the plain ones, so the plain prefs
+ * alone are not enough.
  */
-fun isPaired(prefs: SharedPreferences): Boolean =
-    !prefs.getString(BranchDamApplication.KEY_SERVER_URL, null).isNullOrBlank()
+fun storedServerUrl(plain: SharedPreferences, secure: SharedPreferences?): String? =
+    (secure?.getString(BranchDamApplication.KEY_SERVER_URL, null)
+        ?: plain.getString(BranchDamApplication.KEY_SERVER_URL, null))
+        ?.takeIf { it.isNotBlank() }
 
-/** [isPaired] now and after every change to the stored server URL. */
-fun pairedFlow(prefs: SharedPreferences): Flow<Boolean> = callbackFlow {
-    val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == BranchDamApplication.KEY_SERVER_URL) trySend(isPaired(prefs))
+/** A server URL is stored (setup was done, whether or not the server answered). */
+fun hasServerUrl(plain: SharedPreferences, secure: SharedPreferences?): Boolean =
+    storedServerUrl(plain, secure) != null
+
+/**
+ * Whether this device has been paired with a server: a handshake has
+ * succeeded against the URL it is configured with ([confirmPairing]). A
+ * URL that never answered (mistyped, wrong key) leaves the device
+ * unpaired, so the Sync and Lineage "Pair this device" prompts stay.
+ * Reads only the plain prefs, where the confirmed URL is kept. Used by
+ * the Sync and Lineage tabs.
+ */
+fun isPaired(plain: SharedPreferences): Boolean =
+    !plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null).isNullOrBlank()
+
+/**
+ * Records a successful handshake with the configured server. A no-op while
+ * no URL is stored, so the cold-start check against the default URL on a
+ * fresh install cannot confirm a pairing that was never made.
+ */
+fun confirmPairing(plain: SharedPreferences, secure: SharedPreferences?) {
+    val url = storedServerUrl(plain, secure) ?: return
+    if (plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null) != url) {
+        plain.edit().putString(BranchDamKeys.PAIRED_SERVER_URL, url).apply()
     }
-    prefs.registerOnSharedPreferenceChangeListener(listener)
-    trySend(isPaired(prefs))
-    awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+}
+
+/**
+ * Called when [serverUrl] has just been saved as the configured server: a
+ * confirmation made for a different server no longer holds, so a device
+ * re-pointed at a mistyped URL is unpaired until that URL answers.
+ */
+fun invalidatePairingIfServerChanged(plain: SharedPreferences, serverUrl: String) {
+    val confirmed = plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null)
+    if (confirmed != null && confirmed != serverUrl) {
+        plain.edit().remove(BranchDamKeys.PAIRED_SERVER_URL).apply()
+    }
+}
+
+/**
+ * Once, on the first launch of the version that added
+ * [BranchDamKeys.PAIRED_SERVER_URL]: an install that already has a
+ * configured URL was set up before the confirmation existed and keeps
+ * working, so that URL counts as confirmed (this includes an install whose
+ * URL never answered; there is no way to tell those apart). On a fresh
+ * install nothing is configured yet, so only the marker is written and a
+ * later unanswered URL stays unpaired. Independent of the order against
+ * [PrefKeyMigration] because the URL is resolved from both prefs.
+ */
+fun migratePairingConfirmed(plain: SharedPreferences, secure: SharedPreferences?) {
+    if (plain.getBoolean(BranchDamKeys.PAIRED_CONFIRMED_MIGRATED, false)) return
+    val url = storedServerUrl(plain, secure)
+    plain.edit()
+        .apply { if (url != null) putString(BranchDamKeys.PAIRED_SERVER_URL, url) }
+        .putBoolean(BranchDamKeys.PAIRED_CONFIRMED_MIGRATED, true)
+        .apply()
+}
+
+/** [isPaired] now and after every change to the confirmed server URL. */
+fun pairedFlow(plain: SharedPreferences): Flow<Boolean> = callbackFlow {
+    val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == BranchDamKeys.PAIRED_SERVER_URL) trySend(isPaired(plain))
+    }
+    plain.registerOnSharedPreferenceChangeListener(listener)
+    trySend(isPaired(plain))
+    awaitClose { plain.unregisterOnSharedPreferenceChangeListener(listener) }
 }.distinctUntilChanged()
 
 /** [isPaired] as Compose state, kept current while the caller is composed. */

@@ -39,6 +39,7 @@ open class BranchDamApplication : Application(), ImageLoaderFactory {
         val nonSecretPrefs = getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
         val securePrefs = EncryptedPrefs.get(this)
         PrefKeyMigration.migrate(nonSecretPrefs, securePrefs)
+        migratePairingConfirmed(nonSecretPrefs, securePrefs)
         // Once, before any screen reads the Gallery folder filter: the
         // getter (GalleryFolderPrefs.read) never writes.
         GalleryFolderPrefs.migrateLegacy(nonSecretPrefs)

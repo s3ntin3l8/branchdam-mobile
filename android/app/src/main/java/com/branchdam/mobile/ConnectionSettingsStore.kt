@@ -49,6 +49,9 @@ object ConnectionSettingsStore {
             // fields are still saved (and a legacy plaintext key removed)
             // even when the key itself has to be refused.
             val plainOk = writePlain(plain, serverUrl, agentId)
+            // Only once the new URL is really written: a failed commit leaves
+            // the old URL, and its confirmation, in place.
+            if (plainOk) invalidatePairingIfServerChanged(plain, serverUrl)
             return when {
                 apiKey.isNotEmpty() -> SaveResult.KEY_STORAGE_UNAVAILABLE
                 plainOk -> SaveResult.SAVED
@@ -61,6 +64,10 @@ object ConnectionSettingsStore {
             .putString(BranchDamApplication.KEY_AGENT_ID, agentId)
             .commit()
         if (!secureOk) return SaveResult.WRITE_FAILED
+        // The configured server changed with this write; an earlier
+        // confirmation was for another one. Here, where the URL is written,
+        // so no save path can leave the old confirmation standing.
+        invalidatePairingIfServerChanged(plain, serverUrl)
         return if (writePlain(plain, serverUrl, agentId)) SaveResult.SAVED else SaveResult.WRITE_FAILED
     }
 

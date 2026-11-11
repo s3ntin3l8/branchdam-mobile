@@ -127,4 +127,64 @@ class ConnectionSettingsStoreTest {
         val result = ConnectionSettingsStore.save(null, plain, "https://dam.example.com", "", "pixel-10")
         assertEquals(ConnectionSettingsStore.SaveResult.WRITE_FAILED, result)
     }
+
+    @Test
+    fun savingADifferentServerVoidsTheEarlierPairingConfirmation() {
+        whenever(plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null)).thenReturn("https://old.example.com")
+
+        // Even when the key is refused (Keystore unavailable) the plain URL is written.
+        ConnectionSettingsStore.save(
+            secure = null,
+            plain = plain,
+            serverUrl = "https://new.example.com",
+            apiKey = "bdam_secret", // pragma: allowlist secret
+            agentId = "pixel-10",
+        )
+        verify(plainEditor).remove(BranchDamKeys.PAIRED_SERVER_URL)
+    }
+
+    @Test
+    fun savingTheSameServerKeepsThePairingConfirmation() {
+        whenever(plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null)).thenReturn("https://dam.example.com")
+
+        ConnectionSettingsStore.save(
+            secure = secure,
+            plain = plain,
+            serverUrl = "https://dam.example.com",
+            apiKey = "bdam_secret", // pragma: allowlist secret
+            agentId = "pixel-10",
+        )
+        verify(plainEditor, never()).remove(BranchDamKeys.PAIRED_SERVER_URL)
+    }
+
+    @Test
+    fun savingADifferentServerWithTheKeystoreVoidsTheConfirmationToo() {
+        // The production path: a healthy device re-pointed by connect().
+        whenever(plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null)).thenReturn("https://old.example.com")
+
+        val result = ConnectionSettingsStore.save(
+            secure = secure,
+            plain = plain,
+            serverUrl = "https://new.example.com",
+            apiKey = "bdam_secret", // pragma: allowlist secret
+            agentId = "pixel-10",
+        )
+        assertEquals(ConnectionSettingsStore.SaveResult.SAVED, result)
+        verify(plainEditor).remove(BranchDamKeys.PAIRED_SERVER_URL)
+    }
+
+    @Test
+    fun aFailedPlainWriteKeepsTheConfirmation() {
+        whenever(plain.getString(BranchDamKeys.PAIRED_SERVER_URL, null)).thenReturn("https://old.example.com")
+        whenever(plainEditor.commit()).thenReturn(false)
+
+        ConnectionSettingsStore.save(
+            secure = null,
+            plain = plain,
+            serverUrl = "https://new.example.com",
+            apiKey = "",
+            agentId = "pixel-10",
+        )
+        verify(plainEditor, never()).remove(BranchDamKeys.PAIRED_SERVER_URL)
+    }
 }
