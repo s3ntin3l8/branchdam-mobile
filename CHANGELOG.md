@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.14](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.13...branchdam-mobile-v0.7.14) (2026-11-11)
+
+
+### Features
+
+* **android:** keep the not-paired prompt after a failed first handshake ([#287](https://github.com/s3ntin3l8/branchdam-mobile/issues/287)) ([2478850](https://github.com/s3ntin3l8/branchdam-mobile/commit/2478850e619abd96e09fcf37491b1eb8d1117d96)), closes [#286](https://github.com/s3ntin3l8/branchdam-mobile/issues/286)
+* **android:** pair with the server from onboarding and prompt unpaired users ([#285](https://github.com/s3ntin3l8/branchdam-mobile/issues/285)) ([922c486](https://github.com/s3ntin3l8/branchdam-mobile/commit/922c486a40c57f8d0c1ce1c2aac164d38537e05b)), closes [#275](https://github.com/s3ntin3l8/branchdam-mobile/issues/275)
+
+
+### Bug Fixes
+
+* **android:** make onboarding "Grant Access" request permissions and show the result ([b5dde8a](https://github.com/s3ntin3l8/branchdam-mobile/commit/b5dde8a8113bfc0926b9a47ca8cab50435808e23))
+* **security:** remediate the 2026-10-20 audit findings ([3a55fb8](https://github.com/s3ntin3l8/branchdam-mobile/commit/3a55fb81aa1c93944059dd3b49e794c329053ed3))
+
 ## [0.7.13](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.12...branchdam-mobile-v0.7.13) (2026-10-17)
 
 
