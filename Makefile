@@ -1,10 +1,28 @@
-.PHONY: all check test lint check-libc-overlay contract-sync android android-test ios-framework ios-test mobile-build mobile-build-android mobile-build-ios screenshots screenshots-landing clean
+.PHONY: all check test lint check-libc-overlay contract-sync android android-test ios-test mobile-build mobile-build-android mobile-build-ios screenshots screenshots-landing clean
 
 UNAME_S := $(shell uname -s)
 IOS_DEST := $(shell xcodebuild -showdestinations -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp 2>/dev/null | grep 'platform:iOS Simulator' | grep 'iPhone' | grep -v 'Placeholder' | head -1 | sed -n 's/.*id:\([^,]*\).*/id=\1/p')
 ifeq ($(IOS_DEST),)
 IOS_DEST := platform=iOS Simulator,name=iPhone 16
 endif
+
+# The iOS app links the gomobile-bound Go core. It is gitignored, so a fresh
+# checkout or worktree has none and `xcodebuild test` cannot link without it.
+# Declared as a file target so the iOS test steps below build it once when it
+# is missing and rebuild it only when a Go input is newer (tests excluded).
+IOS_XCFRAMEWORK := ios/Frameworks/branchdam.xcframework
+IOS_XCFRAMEWORK_SRC := $(filter-out %_test.go,$(wildcard *.go core/*/*.go) $(shell find third_party -name '*.go' 2>/dev/null)) go.mod go.sum core/go.mod core/go.sum scripts/build-mobile.sh
+
+$(IOS_XCFRAMEWORK): $(IOS_XCFRAMEWORK_SRC)
+	./scripts/build-mobile.sh --ios-only
+
+# Recipe line shared by the two iOS test steps. third_party/ is in the inputs
+# because the vendored modernc libc overlay compiles into the framework (go.mod
+# `replace`), so re-running scripts/update-libc-overlay.sh must rebuild it.
+# The leading `+` matters: make only recognises a recursive line by the literal
+# $(MAKE) in the unexpanded recipe, and a variable hides it, so without `+`
+# `make -j` loses the jobserver and `make -n` stops descending into this step.
+BUILD_IOS_XCFRAMEWORK = +@$(MAKE) --no-print-directory $(IOS_XCFRAMEWORK)
 
 all: check
 
@@ -15,6 +33,7 @@ test:
 	cd . && go test -race -v ./.
 ifeq ($(UNAME_S),Darwin)
 	@echo "==> Running iOS unit tests..."
+	$(BUILD_IOS_XCFRAMEWORK)
 	xcodebuild test -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp -destination '$(IOS_DEST)' CODE_SIGNING_ALLOWED=NO
 else
 	@echo "==> Linux detected: Skipping iOS xcodebuild tests."
@@ -87,6 +106,7 @@ screenshots-landing:
 
 ios-test:
 ifeq ($(UNAME_S),Darwin)
+	$(BUILD_IOS_XCFRAMEWORK)
 	xcodebuild test -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp -destination '$(IOS_DEST)' CODE_SIGNING_ALLOWED=NO
 else
 	@echo "==> Linux detected: xcodebuild is unavailable on Linux."
