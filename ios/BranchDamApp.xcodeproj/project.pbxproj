@@ -63,6 +63,7 @@
 		D7A60E1300000000000000A1 /* ImportNotificationDelegateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A60E1300000000000000F1 /* ImportNotificationDelegateTests.swift */; };
 		A100010C /* AppleEditCorrelatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010C /* AppleEditCorrelatorTests.swift */; };
 		A100010D /* PhotoAuthorizationBannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010D /* PhotoAuthorizationBannerTests.swift */; };
+		A1000114 /* WelcomeViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000114 /* WelcomeViewTests.swift */; };
 		A100010E /* QrPairingViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010E /* QrPairingViewTests.swift */; };
 		A100010F /* BackgroundSyncManagerCancelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200010F /* BackgroundSyncManagerCancelTests.swift */; };
 		A1000110 /* AppleSafeSpaceManagerEligibleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */; };
@@ -155,6 +156,7 @@
 		D7A60E1300000000000000F1 /* ImportNotificationDelegateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportNotificationDelegateTests.swift; sourceTree = "<group>"; };
 		A200010C /* AppleEditCorrelatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleEditCorrelatorTests.swift; sourceTree = "<group>"; };
 		A200010D /* PhotoAuthorizationBannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAuthorizationBannerTests.swift; sourceTree = "<group>"; };
+		A2000114 /* WelcomeViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewTests.swift; sourceTree = "<group>"; };
 		A200010E /* QrPairingViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrPairingViewTests.swift; sourceTree = "<group>"; };
 		A200010F /* BackgroundSyncManagerCancelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManagerCancelTests.swift; sourceTree = "<group>"; };
 		A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSafeSpaceManagerEligibleTests.swift; sourceTree = "<group>"; };
@@ -312,6 +314,7 @@
 				D7A60E1300000000000000F1 /* ImportNotificationDelegateTests.swift */,
 				A200010C /* AppleEditCorrelatorTests.swift */,
 				A200010D /* PhotoAuthorizationBannerTests.swift */,
+				A2000114 /* WelcomeViewTests.swift */,
 				A200010E /* QrPairingViewTests.swift */,
 				A200010F /* BackgroundSyncManagerCancelTests.swift */,
 				A2000110 /* AppleSafeSpaceManagerEligibleTests.swift */,
@@ -475,6 +478,7 @@
 				D7A60E1300000000000000A1 /* ImportNotificationDelegateTests.swift in Sources */,
 				A100010C /* AppleEditCorrelatorTests.swift in Sources */,
 				A100010D /* PhotoAuthorizationBannerTests.swift in Sources */,
+				A1000114 /* WelcomeViewTests.swift in Sources */,
 				A100010E /* QrPairingViewTests.swift in Sources */,
 				A1000112 /* AppleKeychainTests.swift in Sources */,
 				A1000113 /* BranchDamKeysTests.swift in Sources */,

@@ -12,10 +12,19 @@ import UIKit
 public struct PhotoAuthorizationBanner: View {
     public let status: PHAuthorizationStatus
     private let onDismiss: (() -> Void)?
+    private let onAuthorizationChanged: ((PHAuthorizationStatus) -> Void)?
 
-    public init(status: PHAuthorizationStatus, onDismiss: (() -> Void)? = nil) {
+    /// - Parameter onAuthorizationChanged: called on the main queue with the
+    ///   re-read status once the Grant request returns, so the host can
+    ///   refresh its own copy instead of waiting for the next foreground.
+    public init(
+        status: PHAuthorizationStatus,
+        onDismiss: (() -> Void)? = nil,
+        onAuthorizationChanged: ((PHAuthorizationStatus) -> Void)? = nil
+    ) {
         self.status = status
         self.onDismiss = onDismiss
+        self.onAuthorizationChanged = onAuthorizationChanged
     }
 
     /// Whether ContentView shows the banner for [status]. `.limited` is a
@@ -120,6 +129,7 @@ public struct PhotoAuthorizationBanner: View {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in
             DispatchQueue.main.async {
                 let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+                onAuthorizationChanged?(status)
                 if status == .authorized || status == .limited {
                     // Opening the engine blocks; do it off the main actor.
                     Task {

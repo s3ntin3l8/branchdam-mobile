@@ -57,7 +57,8 @@ public struct ContentView: View {
                 VStack {
                     PhotoAuthorizationBanner(
                         status: authorizationStatus,
-                        onDismiss: authorizationStatus == .limited ? { limitedBannerDismissed = true } : nil
+                        onDismiss: authorizationStatus == .limited ? { limitedBannerDismissed = true } : nil,
+                        onAuthorizationChanged: { authorizationStatus = $0 }
                     )
                     Spacer()
                 }
