@@ -19,7 +19,10 @@ $(IOS_XCFRAMEWORK): $(IOS_XCFRAMEWORK_SRC)
 # Recipe line shared by the two iOS test steps. third_party/ is in the inputs
 # because the vendored modernc libc overlay compiles into the framework (go.mod
 # `replace`), so re-running scripts/update-libc-overlay.sh must rebuild it.
-BUILD_IOS_XCFRAMEWORK = @$(MAKE) --no-print-directory $(IOS_XCFRAMEWORK)
+# The leading `+` matters: make only recognises a recursive line by the literal
+# $(MAKE) in the unexpanded recipe, and a variable hides it, so without `+`
+# `make -j` loses the jobserver and `make -n` stops descending into this step.
+BUILD_IOS_XCFRAMEWORK = +@$(MAKE) --no-print-directory $(IOS_XCFRAMEWORK)
 
 all: check
 
