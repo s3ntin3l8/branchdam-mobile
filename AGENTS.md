@@ -20,6 +20,7 @@ make check           # lint + core tests (no Android build)
 make test            # Run go core unit tests
 make lint            # pre-commit check + go vet
 make android         # Assemble Android debug build
+make ios-test        # iOS XCTests (macOS only); builds ios/Frameworks/branchdam.xcframework first if missing or stale
 ```
 
 ## Architecture & Responsibilities

@@ -6,6 +6,16 @@ ifeq ($(IOS_DEST),)
 IOS_DEST := platform=iOS Simulator,name=iPhone 16
 endif
 
+# The iOS app links the gomobile-bound Go core. It is gitignored, so a fresh
+# checkout or worktree has none and `xcodebuild test` cannot link without it.
+# Declared as a file target so the iOS test steps below build it once when it
+# is missing and rebuild it only when a Go input is newer (tests excluded).
+IOS_XCFRAMEWORK := ios/Frameworks/branchdam.xcframework
+IOS_XCFRAMEWORK_SRC := $(filter-out %_test.go,$(wildcard *.go core/*/*.go)) go.mod go.sum core/go.mod core/go.sum scripts/build-mobile.sh
+
+$(IOS_XCFRAMEWORK): $(IOS_XCFRAMEWORK_SRC)
+	./scripts/build-mobile.sh --ios-only
+
 all: check
 
 check: lint test
@@ -15,6 +25,7 @@ test:
 	cd . && go test -race -v ./.
 ifeq ($(UNAME_S),Darwin)
 	@echo "==> Running iOS unit tests..."
+	@$(MAKE) --no-print-directory $(IOS_XCFRAMEWORK)
 	xcodebuild test -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp -destination '$(IOS_DEST)' CODE_SIGNING_ALLOWED=NO
 else
 	@echo "==> Linux detected: Skipping iOS xcodebuild tests."
@@ -87,6 +98,7 @@ screenshots-landing:
 
 ios-test:
 ifeq ($(UNAME_S),Darwin)
+	@$(MAKE) --no-print-directory $(IOS_XCFRAMEWORK)
 	xcodebuild test -project ios/BranchDamApp.xcodeproj -scheme BranchDamApp -destination '$(IOS_DEST)' CODE_SIGNING_ALLOWED=NO
 else
 	@echo "==> Linux detected: xcodebuild is unavailable on Linux."
