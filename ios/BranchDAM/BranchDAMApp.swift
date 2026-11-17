@@ -34,8 +34,16 @@ struct BranchDAMApp: App {
 
     var body: some Scene {
         WindowGroup {
-            WelcomeView()
-                .preferredColorScheme(resolvedColorScheme)
+            Group {
+                if OnboardingState.shouldSkipWelcome(
+                    status: PHPhotoLibrary.authorizationStatus(for: .readWrite)
+                ) {
+                    ContentView()
+                } else {
+                    WelcomeView()
+                }
+            }
+            .preferredColorScheme(resolvedColorScheme)
         }
         .onChange(of: scenePhase) { _, phase in
             // The background sync task only runs if one is scheduled;

@@ -90,6 +90,12 @@ public enum BranchDamKeys: String {
     /// Timestamp (seconds since epoch) of the last completed sync cycle.
     /// Written by `SyncStatusView` after a successful manual or background sync.
     case lastSyncTime = "branchdam_last_sync_time"
+
+    /// Whether the user has finished the first-run Welcome screen, by
+    /// granting camera-roll access or tapping "Set Up Later". Written by
+    /// `WelcomeView`, read by `BranchDAMApp` to skip the screen on launch.
+    /// iOS only: Android's onboarding is a separate flow.
+    case onboardingCompleted = "branchdam_onboarding_completed"
 }
 
 extension BranchDamKeys {

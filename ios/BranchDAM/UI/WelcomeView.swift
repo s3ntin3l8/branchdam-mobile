@@ -1,6 +1,47 @@
 import SwiftUI
 import Photos
 
+/// Persisted first-run state. `WelcomeView` writes it from both buttons;
+/// `BranchDAMApp` reads it at launch to pick the first screen.
+public enum OnboardingState {
+    public static func isCompleted(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: BranchDamKeys.onboardingCompleted.rawValue)
+    }
+
+    public static func markCompleted(defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: BranchDamKeys.onboardingCompleted.rawValue)
+    }
+
+    /// Whether launch goes straight to the main tabs: onboarding was
+    /// completed, or access is already granted (full or limited).
+    public static func shouldSkipWelcome(
+        status: PHAuthorizationStatus,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        isCompleted(defaults: defaults) || status == .authorized || status == .limited
+    }
+}
+
+/// What the Welcome screen shows for a photo authorization status.
+public enum WelcomeAccessState: Equatable {
+    case needsRequest
+    case denied
+    case restricted
+    case granted
+
+    public init(_ status: PHAuthorizationStatus) {
+        switch status {
+        case .denied: self = .denied
+        case .restricted: self = .restricted
+        case .authorized, .limited: self = .granted
+        default: self = .needsRequest
+        }
+    }
+
+    /// Denied and restricted both dead-end the system prompt; only Settings helps.
+    public var needsSettings: Bool { self == .denied || self == .restricted }
+}
+
 @MainActor
 public struct WelcomeView: View {
     @State private var authorizationStatus: PHAuthorizationStatus = .notDetermined
@@ -35,18 +76,45 @@ public struct WelcomeView: View {
 
                 Spacer()
 
-                Button(action: requestPhotoAccess) {
-                    Text("Grant Camera Roll Access")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(16)
-                }
-                .padding(.horizontal, 32)
+                if accessState.needsSettings {
+                    let banner = PhotoAuthorizationBanner(status: authorizationStatus)
+                    VStack(spacing: 8) {
+                        Label(banner.bannerTitle, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline.bold())
+                        Text(banner.bannerMessage)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 32)
 
-                Button(action: { showMainApp = true }) {
+                    Button(action: openSettings) {
+                        Text(banner.buttonLabel)
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.orange)
+                            .foregroundColor(.white)
+                            .cornerRadius(16)
+                    }
+                    .padding(.horizontal, 32)
+                } else {
+                    Button(action: requestPhotoAccess) {
+                        Text("Grant Camera Roll Access")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(16)
+                    }
+                    .padding(.horizontal, 32)
+                }
+
+                Button(action: {
+                    OnboardingState.markCompleted()
+                    showMainApp = true
+                }) {
                     Text("Set Up Later")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -54,12 +122,34 @@ public struct WelcomeView: View {
                 .padding(.bottom, 16)
             }
             .onAppear {
-                authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-                if authorizationStatus == .authorized || authorizationStatus == .limited {
-                    showMainApp = true
-                }
+                refreshAuthorization()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                // The user may have granted access in Settings.
+                refreshAuthorization()
             }
         }
+    }
+
+    private var accessState: WelcomeAccessState { WelcomeAccessState(authorizationStatus) }
+
+    private func refreshAuthorization() {
+        authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if accessState == .granted {
+            OnboardingState.markCompleted()
+            // ContentView's foreground handler starts the engine on a
+            // grant it sees; a grant made in Settings reaches here first.
+            Task {
+                await BranchDamCoreBridge.shared.startEngineIfNeededAsync()
+                PhotoKitObserver.shared.startObserving()
+            }
+            showMainApp = true
+        }
+    }
+
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     private func requestPhotoAccess() {
@@ -75,6 +165,7 @@ public struct WelcomeView: View {
                         await BranchDamCoreBridge.shared.startEngineIfNeededAsync()
                         PhotoKitObserver.shared.startObserving()
                     }
+                    OnboardingState.markCompleted()
                     showMainApp = true
                 }
             }
