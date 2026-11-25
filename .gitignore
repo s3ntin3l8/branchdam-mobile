@@ -92,8 +92,10 @@ tmp/
 docs/superpowers/
 .superpowers/
 
-# Claude Code session state / plans
-.claude/
+# Claude Code: local state (plans, settings.local.json, worktrees) stays ignored; shared skills/agents are committed
+.claude/*
+!.claude/skills/
+!.claude/agents/
 
 # Agent worktrees
 .worktrees/
