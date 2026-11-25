@@ -315,13 +315,26 @@ object UploadStaging {
     /**
      * Pure decision for [cleanup]: [status] is the engine's status for the
      * staged path (null when no upload row references it).
+     *
+     * [engineAnswered] is false when the status map came back empty:
+     * the engine is not initialised, the query threw, or the queue holds
+     * no media rows. An unknown status then means "not asked", not "no
+     * upload row": the copy may be the only one the phone holds of a
+     * pending upload, so it is kept (same guard as
+     * [OtgStaging.shouldDelete]).
      */
-    internal fun shouldDeleteStaged(fileName: String, status: String?, lastModifiedMs: Long, nowMs: Long): Boolean {
+    internal fun shouldDeleteStaged(
+        fileName: String,
+        status: String?,
+        lastModifiedMs: Long,
+        nowMs: Long,
+        engineAnswered: Boolean = true,
+    ): Boolean {
         val age = nowMs - lastModifiedMs
         return when {
             fileName.endsWith(PART_SUFFIX) -> age > PART_GRACE_MS
             status == "COMPLETED" || status == "OFFLOADED" -> true
-            status == null || status == "NOT_ENQUEUED" -> age > ORPHAN_GRACE_MS
+            status == null || status == "NOT_ENQUEUED" -> engineAnswered && age > ORPHAN_GRACE_MS
             // PENDING / IN_PROGRESS / FAILED: the bytes are still needed
             // for the upload or its retry.
             else -> false
@@ -333,16 +346,23 @@ object UploadStaging {
      * ones. Called after each sync batch. Also sweeps the OTG card
      * staging area (see [OtgStaging]) with the same status map. Returns
      * how many were removed.
+     *
+     * An empty [statuses] map means the status of every staged copy is
+     * unknown (the engine is not initialised, the query threw, or the
+     * queue holds no media rows). Nothing is reaped then: a copy whose
+     * row is still PENDING may be the only copy of that upload.
      */
     fun cleanup(
         context: Context,
         statuses: Map<String, String> = EngineHolder.getAllMediaStatuses(),
         nowMs: Long = System.currentTimeMillis(),
     ): Int {
+        val engineAnswered = statuses.isNotEmpty()
         var removed = 0
         for (file in stagingDir(context).listFiles().orEmpty()) {
             if (!file.isFile) continue
-            if (shouldDeleteStaged(file.name, statuses[file.absolutePath], file.lastModified(), nowMs) && file.delete()) {
+            val status = statuses[file.absolutePath]
+            if (shouldDeleteStaged(file.name, status, file.lastModified(), nowMs, engineAnswered) && file.delete()) {
                 removed++
             }
         }

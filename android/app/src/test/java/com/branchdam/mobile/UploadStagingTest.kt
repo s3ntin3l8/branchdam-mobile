@@ -329,6 +329,40 @@ class UploadStagingTest {
     }
 
     @Test
+    fun unreferencedCopiesAreKeptWhenTheEngineCannotAnswer() {
+        val now = 10L * UploadStaging.ORPHAN_GRACE_MS
+        val stale = now - UploadStaging.ORPHAN_GRACE_MS - 1L
+        // An empty status map is what a failed or uninitialised engine
+        // returns: the status of the copy is unknown, not "no row".
+        assertFalse(
+            "an unknown status must not cost the only copy of a pending upload",
+            UploadStaging.shouldDeleteStaged("1_a.jpg", null, stale, now, engineAnswered = false),
+        )
+        assertFalse(
+            UploadStaging.shouldDeleteStaged("1_a.jpg", "NOT_ENQUEUED", stale, now, engineAnswered = false),
+        )
+    }
+
+    @Test
+    fun stagedCopiesSurviveACleanupPassWithoutAnEngineStatus() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+        val staged = UploadStaging.microVideoFile(context, item)
+        staged.parentFile?.mkdirs()
+        staged.writeText("video")
+        // Older than the orphan grace: only the grace would remove it.
+        staged.setLastModified(System.currentTimeMillis() - UploadStaging.ORPHAN_GRACE_MS - 60_000L)
+
+        val removed = UploadStaging.cleanup(context, statuses = emptyMap())
+
+        assertEquals("no status means no safe answer: nothing may be reaped", 0, removed)
+        assertTrue(
+            "the staged micro video must survive an engine outage: it may be the only copy",
+            staged.exists(),
+        )
+    }
+
+    @Test
     fun microVideoIsStagedInsideTheStagingDir() {
         val context = stagingContext(ByteArray(0))
         val item = imageItem(id = 42L)
@@ -473,6 +507,10 @@ class UploadStagingTest {
         val context = mock<Context>()
         whenever(context.contentResolver).thenReturn(resolver)
         whenever(context.noBackupFilesDir).thenReturn(temporaryFolder.newFolder("staging"))
+        // The OTG sweep derives its legacy root from filesDir; keep it
+        // inside the test folder instead of a path relative to the
+        // working directory.
+        whenever(context.filesDir).thenReturn(temporaryFolder.newFolder("files"))
         return context
     }
 
