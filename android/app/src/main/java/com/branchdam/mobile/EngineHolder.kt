@@ -58,11 +58,13 @@ object EngineHolder {
     }
 
     /**
-     * The native library's availability as it was at startup (the init
-     * block above sets it), so [resetStateForTest] can put the holder
-     * back where it found it.
+     * The state the holder had at startup: the native library's
+     * availability (the init block above sets it) and whether the engine
+     * was open ([isInitialized] starts false). [resetStateForTest] puts
+     * both back.
      */
     private val nativeLibraryAvailable: Boolean = nativeAvailable.get()
+    private val initializedAtStartup: Boolean = isInitialized
 
     /**
      * Puts the holder into a chosen state so a test can exercise the
@@ -81,7 +83,7 @@ object EngineHolder {
     @androidx.annotation.VisibleForTesting
     internal fun resetStateForTest() {
         nativeAvailable.set(nativeLibraryAvailable)
-        isInitialized = false
+        isInitialized = initializedAtStartup
     }
 
     fun initialize(

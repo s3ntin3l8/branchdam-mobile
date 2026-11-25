@@ -289,13 +289,18 @@ class TrashSyncObserverTest {
         val store = ProcessedTrashStore(prefs)
 
         EngineHolder.setStateForTest(nativeAvailable = true, initialized = false)
-        val first = TrashSyncObserver.processNewlyTrashed(
-            items = listOf(item),
-            processed = store,
-            isOffloaded = EngineHolder::isMediaOffloaded,
-            enqueueDelete = { uri -> EngineHolder.enqueueDeleteEvent(uri).isNotEmpty() },
-        )
-        EngineHolder.resetStateForTest()
+        val first = try {
+            TrashSyncObserver.processNewlyTrashed(
+                items = listOf(item),
+                processed = store,
+                isOffloaded = EngineHolder::isMediaOffloaded,
+                enqueueDelete = { uri -> EngineHolder.enqueueDeleteEvent(uri).isNotEmpty() },
+            )
+        } finally {
+            // The holder is a process-wide singleton: put it back even
+            // when the assertions below fail.
+            EngineHolder.resetStateForTest()
+        }
 
         assertEquals(0, first)
         assertFalse(item.contentUri in store)

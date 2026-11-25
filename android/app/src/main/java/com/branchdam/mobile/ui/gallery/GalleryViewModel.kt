@@ -522,7 +522,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 if (EngineHolder.enqueueDeleteEvent(uri).isEmpty()) {
                     // The file is gone from the device, but the delete event
                     // was not recorded (the engine is not open yet): the
-                    // server keeps the copy. Nothing retries it, so say so.
+                    // server keeps the copy. A trashed item is picked up
+                    // again by the trash observer; nothing here retries the
+                    // rest, so say so.
                     Log.w(TAG, "delete event not recorded: $uri")
                 }
             }
