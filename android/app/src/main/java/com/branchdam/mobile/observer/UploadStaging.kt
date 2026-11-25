@@ -112,6 +112,9 @@ object UploadStaging {
     private const val DIR_NAME = "upload_staging"
     private const val PART_SUFFIX = ".part"
 
+    /** Suffix of the staged micro video of a motion photo. */
+    private const val MICRO_VIDEO_SUFFIX = "_microvideo.mp4"
+
     /** An interrupted copy is abandoned after this long. */
     internal const val PART_GRACE_MS = 60L * 60L * 1000L
 
@@ -212,6 +215,28 @@ object UploadStaging {
     }
 
     /**
+    /**
+     * Where the micro video of the motion photo [item] is staged: in the
+     * staging dir, so [cleanup] removes it once the engine reports the
+     * upload COMPLETED/OFFLOADED (or after the orphan grace period), and
+     * named after [stagedFileName], so two photos with the same display
+     * name in different folders never overwrite each other's video.
+     */
+    fun microVideoFile(context: Context, item: MediaItem): File =
+        File(stagingDir(context), stagedFileName(item) + MICRO_VIDEO_SUFFIX)
+
+    /**
+     * The `.part` file the micro video is written to before it is
+     * renamed onto [microVideoFile], so a crash mid-extraction leaves
+     * only a `.part` that [cleanup] already reaps.
+     */
+    fun microVideoPartFile(context: Context, item: MediaItem): File =
+        partFileOf(microVideoFile(context, item))
+
+    /** The `.part` sibling of [target]: a copy is written there first, then renamed onto [target]. */
+    private fun partFileOf(target: File): File = File(target.parentFile, target.name + PART_SUFFIX)
+
+    /**
      * Copies [item]'s bytes into the staging dir. Returns the staged file
      * and whether it holds the item's original bytes: only a successful
      * `setRequireOriginal` open does (#303).
@@ -235,7 +260,7 @@ object UploadStaging {
         val dir = stagingDir(context)
         if (!dir.exists() && !dir.mkdirs()) throw IOException("cannot create $dir")
         val target = File(dir, stagedFileName(item))
-        val part = File(dir, target.name + PART_SUFFIX)
+        val part = partFileOf(target)
 
         val uri = Uri.parse(item.contentUri)
         var originalRead = false

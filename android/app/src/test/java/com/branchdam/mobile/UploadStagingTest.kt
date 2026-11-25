@@ -16,6 +16,7 @@ import com.branchdam.mobile.observer.stagedUploadIsOriginal
 import com.branchdam.mobile.triage.LocalFileState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -327,7 +328,94 @@ class UploadStagingTest {
         )
     }
 
+    @Test
+    fun microVideoIsStagedInsideTheStagingDir() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+
+        val file = UploadStaging.microVideoFile(context, item)
+
+        assertEquals(
+            "the micro video must live in the staging dir, so the cleanup sweep finds it",
+            UploadStaging.stagingDir(context).absolutePath,
+            file.parentFile?.absolutePath,
+        )
+        assertEquals("42_IMG_0001.jpg_microvideo.mp4", file.name)
+    }
+
+    @Test
+    fun microVideoNamesAreUniquePerMediaStoreRow() {
+        val context = stagingContext(ByteArray(0))
+        // Same display name, different rows: the old per-stem file name
+        // made the second photo overwrite the first one's video.
+        val first = imageItem(id = 1L, displayName = "IMG_0001.jpg")
+        val second = imageItem(id = 2L, displayName = "IMG_0001.jpg")
+
+        assertNotEquals(
+            "two rows with the same display name must not share a micro video file",
+            UploadStaging.microVideoFile(context, first).name,
+            UploadStaging.microVideoFile(context, second).name,
+        )
+    }
+
+    @Test
+    fun microVideoNameDiffersFromTheStagedCopyOfTheSameItem() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+
+        assertNotEquals(
+            "the micro video must not overwrite the staged copy of the photo itself",
+            UploadStaging.stagedFileName(item),
+            UploadStaging.microVideoFile(context, item).name,
+        )
+    }
+
+    @Test
+    fun microVideoIsWrittenThroughAPartFile() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+
+        val part = UploadStaging.microVideoPartFile(context, item)
+
+        assertEquals(UploadStaging.stagingDir(context).absolutePath, part.parentFile?.absolutePath)
+        assertEquals(
+            "a crash mid-extraction must leave only a .part the cleanup reaps",
+            UploadStaging.microVideoFile(context, item).name + ".part",
+            part.name,
+        )
+    }
+
+    @Test
+    fun stagedMicroVideoIsRemovedOnceItsUploadCompleted() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+        val staged = UploadStaging.microVideoFile(context, item)
+        staged.parentFile?.mkdirs()
+        staged.writeText("video")
+
+        val removed = UploadStaging.cleanup(context, statuses = mapOf(staged.absolutePath to "COMPLETED"))
+
+        assertEquals(1, removed)
+        assertFalse("a completed micro video must not stay in the staging dir", staged.exists())
+    }
+
     // --- helpers ---
+
+    /**
+     * A camera-roll photo: the still a motion photo is split from. The
+     * micro video is staged next to the still's staged copy, under the
+     * same row id.
+     */
+    private fun imageItem(id: Long, displayName: String = "IMG_0001.jpg") = MediaItem(
+        id = id,
+        contentUri = "content://media/external/images/media/$id",
+        filePath = "",
+        displayName = displayName,
+        mimeType = "image/jpeg",
+        sizeBytes = 1L,
+        dateTakenUnix = 0L,
+        isRaw = false,
+    )
 
     private fun testItem(): MediaItem = MediaItem(
         id = 1L,

@@ -17,7 +17,6 @@ import com.branchdam.mobile.service.PendingImportAnnouncer
 import com.branchdam.mobile.service.SyncScheduler
 import com.branchdam.mobile.triage.ProcessedTrashStore
 import com.branchdam.mobile.triage.TrashSyncObserver
-import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -26,9 +25,27 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+/**
+ * Enqueues a local file for upload and returns the queue ID (> 0), or 0
+ * when the engine refused it. Injected into [MediaStoreObserver] so a
+ * unit test can see which path was enqueued; production code uses the
+ * engine.
+ */
+fun interface MediaEnqueuer {
+    fun enqueue(localPath: String, filename: String, capturedAtUnix: Long, localId: String): Long
+}
+
 class MediaStoreObserver(
     private val context: Context,
-    handler: Handler = Handler(HandlerThread("MediaStoreObserver").apply { start() }.looper)
+    handler: Handler = Handler(HandlerThread("MediaStoreObserver").apply { start() }.looper),
+    private val enqueueMedia: MediaEnqueuer = MediaEnqueuer { localPath, filename, capturedAtUnix, localId ->
+        EngineHolder.enqueueMedia(
+            localPath = localPath,
+            filename = filename,
+            capturedAtUnix = capturedAtUnix,
+            localId = localId,
+        )
+    },
 ) : ContentObserver(handler) {
 
     private val prefs = context.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)
@@ -267,40 +284,73 @@ class MediaStoreObserver(
         }
 
         // Motion photo detection -- DNG/HEIF/JPEG motion photos with embedded micro video.
-        val motionPhotoDir = File(context.cacheDir, "motion_photos")
+        enqueueMotionPhotoMicroVideos(newItems)
+    }
+
+    /**
+     * Extracts the micro video of every motion photo in [newItems] and
+     * enqueues it for upload.
+     *
+     * The micro video is staged in the upload staging dir (see
+     * [UploadStaging]) rather than the cache dir: the engine reopens the
+     * enqueued path at sync time, possibly long after the scan and after
+     * a process restart, so the copy has to survive until the upload
+     * runs -- and the staging cleanup removes it once the upload is
+     * done.
+     */
+    internal fun enqueueMotionPhotoMicroVideos(newItems: List<MediaItem>) {
         for (item in newItems.filter { !it.isVideo }) {
             val uri = Uri.parse(item.contentUri)
             val info = MotionPhotoExtractor.detectMotionPhoto(context, uri)
-            if (info.isMotionPhoto) {
-                val childLocalID = "${item.contentUri}/microvideo"
-                val stem = item.displayName.substringBeforeLast('.')
-                val videoFilename = "${stem}_microvideo.mp4"
-                val videoFile = File(motionPhotoDir, videoFilename)
+            if (!info.isMotionPhoto) continue
 
-                val extracted = MotionPhotoExtractor.extractMicroVideo(context, uri, videoFile)
-                if (extracted && ImportConfirmationNotifier.getAutoImportEnabled(context)) {
-                    val queueId = EngineHolder.enqueueMedia(
-                        localPath = videoFile.absolutePath,
-                        filename = videoFilename,
-                        capturedAtUnix = item.dateTakenUnix,
-                        localId = childLocalID
-                    )
-                    if (queueId > 0L) {
-                        val eventId = EngineHolder.enqueueLineageEvent(
-                            parentLocalID = item.contentUri,
-                            childLocalID = childLocalID,
-                            relationshipType = "MOTION_PHOTO_CONTAINS",
-                            resolver = "android_motion_photo_xmp",
-                            confidence = 1.00
-                        )
-                        if (eventId.isEmpty()) {
-                            // The edge was not recorded (the engine is not
-                            // open yet): the micro video is enqueued, but
-                            // the edge to its parent is missing.
-                            Log.w(TAG, "motion photo lineage not recorded: ${item.contentUri} -> $childLocalID")
-                        }
-                    }
+            val childLocalID = "${item.contentUri}/microvideo"
+            val stem = item.displayName.substringBeforeLast('.')
+            val videoFilename = "${stem}_microvideo.mp4"
+            val videoFile = UploadStaging.microVideoFile(context, item)
+            val partFile = UploadStaging.microVideoPartFile(context, item)
+
+            // Write through a .part file and rename it, so a crash
+            // mid-extraction leaves only a .part the staging cleanup
+            // already reaps.
+            val extracted = MotionPhotoExtractor.extractMicroVideo(context, uri, partFile)
+            if (!extracted || !partFile.renameTo(videoFile)) {
+                partFile.delete()
+                continue
+            }
+
+            if (!ImportConfirmationNotifier.getAutoImportEnabled(context)) {
+                // Auto-import is off: the still waits for the user's
+                // decision and the micro video is not uploaded. The
+                // staging cleanup reaps the orphaned copy.
+                continue
+            }
+
+            val queueId = enqueueMedia.enqueue(
+                localPath = videoFile.absolutePath,
+                filename = videoFilename,
+                capturedAtUnix = item.dateTakenUnix,
+                localId = childLocalID,
+            )
+            if (queueId > 0L) {
+                val eventId = EngineHolder.enqueueLineageEvent(
+                    parentLocalID = item.contentUri,
+                    childLocalID = childLocalID,
+                    relationshipType = "MOTION_PHOTO_CONTAINS",
+                    resolver = "android_motion_photo_xmp",
+                    confidence = 1.00
+                )
+                if (eventId.isEmpty()) {
+                    // The edge was not recorded (the engine is not
+                    // open yet): the micro video is enqueued, but
+                    // the edge to its parent is missing.
+                    Log.w(TAG, "motion photo lineage not recorded: ${item.contentUri} -> $childLocalID")
                 }
+            } else {
+                // The engine refused the row: the staged copy is dead
+                // weight, so drop it now instead of waiting for the
+                // orphan grace period.
+                UploadStaging.discardIfStaged(context, videoFile.absolutePath)
             }
         }
     }
