@@ -230,7 +230,8 @@ class MediaStoreObserver(
             if (ImportConfirmationNotifier.isItemSuppressed(item.contentUri)) {
                 return NewMediaIntake.Outcome.ALREADY_DECIDED
             }
-            // Reads the original (unredacted) bytes on API 29+.
+            // Reads the original bytes where the platform allows it; a
+            // location-redacted copy is never reclaimable (#303).
             val queueId = UploadStaging.enqueue(context, item)
             if (queueId > 0L) return NewMediaIntake.Outcome.ENQUEUED
         }

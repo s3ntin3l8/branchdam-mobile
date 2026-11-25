@@ -10,10 +10,12 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.otg.OtgStaging
+import com.branchdam.mobile.triage.LocalFileState
 import com.branchdam.mobile.triage.queryLocalFileState
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 
 /** Where the bytes the Go engine hashes and uploads come from. */
 enum class UploadSource {
@@ -42,6 +44,53 @@ fun chooseUploadSource(sdkInt: Int, hasMediaLocation: Boolean): UploadSource = w
 }
 
 /**
+ * A path the Go engine can open for an item, and whether the bytes
+ * behind it are the item's *original* content.
+ *
+ * A location-redacted copy is not the original: the server archives the
+ * stripped bytes, so a hash match says nothing about the original and
+ * the item must never be reclaimed (#303).
+ */
+data class UploadPath(val path: String, val isOriginal: Boolean)
+
+/**
+ * A staged copy of an item's bytes and whether it holds the item's
+ * original bytes (#303).
+ */
+internal data class StagedFile(val file: File, val isOriginal: Boolean)
+
+/**
+ * Pure decision: does a staged copy hold the item's original bytes?
+ *
+ * [requireOriginal] is true when the staging asked for the unredacted
+ * original (`MediaStore.setRequireOriginal`), and [originalRead] is true
+ * only when that open actually succeeded. A refused original (the
+ * permission was revoked between the check and the open) falls back to
+ * the redacted bytes, so the copy is not the original.
+ */
+internal fun stagedUploadIsOriginal(requireOriginal: Boolean, originalRead: Boolean): Boolean =
+    requireOriginal && originalRead
+
+/**
+ * Pure decision: the legacy (API < 29) DATA path. Nothing redacts the
+ * location metadata before API 29, so the path holds the original bytes.
+ */
+internal fun legacyDataPath(filePath: String): UploadPath? =
+    filePath.takeIf { it.isNotEmpty() }?.let { UploadPath(it, isOriginal = true) }
+
+/**
+ * Pure decision: the fallback to the DATA path used when staging failed
+ * on API 30+ (FUSE makes the path readable there). Its location metadata
+ * is redacted, so it never holds the original bytes.
+ */
+internal fun redactedDataPathFallback(sdkInt: Int, filePath: String): UploadPath? =
+    if (sdkInt >= Build.VERSION_CODES.R && filePath.isNotEmpty()) {
+        UploadPath(filePath, isOriginal = false)
+    } else {
+        null
+    }
+
+/**
  * Produces a file path the Go engine can `os.Open` for a MediaStore item.
  *
  * Since API 29 a camera-roll file read through its DATA path (or a plain
@@ -52,6 +101,11 @@ fun chooseUploadSource(sdkInt: Int, hasMediaLocation: Boolean): UploadSource = w
  * original bytes are copied into `noBackupFilesDir/upload_staging` and
  * that path is enqueued; [cleanup] deletes each copy once the engine
  * reports its upload COMPLETED.
+ *
+ * A copy that is not the original (a redacted stage, a refused original,
+ * the DATA-path fallback) is reported as such: the reclaim baseline of
+ * such an item must be dropped, because the archived bytes are not the
+ * original's and the original may never be reclaimed (#303).
  */
 object UploadStaging {
     private const val TAG = "UploadStaging"
@@ -78,21 +132,46 @@ object UploadStaging {
     /**
      * Enqueues [item] for upload, reading its original bytes where the
      * platform allows. Returns the queue ID (> 0) or 0 on failure.
+     *
+     * The reclaim baseline is only recorded for an original upload: a
+     * location-redacted copy proves nothing about the original's bytes,
+     * so the item must never be reclaimed (#303).
      */
-    fun enqueue(context: Context, item: MediaItem): Long {
+    internal fun enqueue(
+        context: Context,
+        item: MediaItem,
+        resolvePath: (Context, MediaItem) -> UploadPath? = ::pathForUpload,
+        enqueueMedia: (
+            localPath: String,
+            filename: String,
+            capturedAtUnix: Long,
+            localId: String,
+            baseline: LocalFileState,
+        ) -> Long = EngineHolder::enqueueMedia,
+    ): Long {
         // Read the reclaim baseline before the bytes are copied: a change
         // in between leaves it describing the older bytes, so the reclaim
         // sees a mismatch and keeps the item (fail-safe, #229).
         val baseline = queryLocalFileState(context, item.contentUri)
-        val path = pathForUpload(context, item) ?: return 0L
-        val id = EngineHolder.enqueueMedia(
-            localPath = path,
-            filename = item.displayName,
-            capturedAtUnix = item.dateTakenUnix,
-            localId = item.contentUri,
-            baseline = baseline,
+        val upload = resolvePath(context, item) ?: return 0L
+        val recorded = if (upload.isOriginal) {
+            baseline
+        } else {
+            Log.w(
+                TAG,
+                "uploading a location-redacted copy of ${item.contentUri}; " +
+                    "the original was never archived, so the item cannot be reclaimed",
+            )
+            LocalFileState.UNKNOWN
+        }
+        val id = enqueueMedia(
+            upload.path,
+            item.displayName,
+            item.dateTakenUnix,
+            item.contentUri,
+            recorded,
         )
-        if (id <= 0L) discardIfStaged(context, path)
+        if (id <= 0L) discardIfStaged(context, upload.path)
         return id
     }
 
@@ -100,23 +179,28 @@ object UploadStaging {
      * The path to enqueue for [item], or null if it cannot be read at all.
      * Falls back to the DATA path on API 30+ when staging fails (for
      * example, not enough free space for a large video): FUSE makes it
-     * readable there, at the cost of redacted location.
+     * readable there, at the cost of redacted location -- so the fallback
+     * is reported as a non-original copy (#303).
      */
-    fun pathForUpload(context: Context, item: MediaItem): String? {
+    fun pathForUpload(context: Context, item: MediaItem): UploadPath? {
         val source = chooseUploadSource(Build.VERSION.SDK_INT, hasMediaLocationPermission(context))
-        if (source == UploadSource.DATA_PATH) return item.filePath.ifEmpty { null }
+        if (source == UploadSource.DATA_PATH) return legacyDataPath(item.filePath)
 
+        val requireOriginal = source == UploadSource.STAGE_ORIGINAL
         val staged = try {
-            stage(context, item, requireOriginal = source == UploadSource.STAGE_ORIGINAL)
+            stage(context, item, requireOriginal = requireOriginal)
         } catch (e: Exception) {
             Log.w(TAG, "staging ${item.contentUri} failed", e)
             null
         }
-        if (staged != null) return staged.absolutePath
+        if (staged != null) {
+            return UploadPath(staged.file.absolutePath, isOriginal = staged.isOriginal)
+        }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && item.filePath.isNotEmpty()) {
+        val fallback = redactedDataPathFallback(Build.VERSION.SDK_INT, item.filePath)
+        if (fallback != null) {
             Log.w(TAG, "falling back to the redacted DATA path for ${item.contentUri}")
-            return item.filePath
+            return fallback
         }
         return null
     }
@@ -127,20 +211,46 @@ object UploadStaging {
         return "${item.id}_$safeName"
     }
 
-    private fun stage(context: Context, item: MediaItem, requireOriginal: Boolean): File? {
+    /**
+     * Copies [item]'s bytes into the staging dir. Returns the staged file
+     * and whether it holds the item's original bytes: only a successful
+     * `setRequireOriginal` open does (#303).
+     *
+     * [openOriginal] opens the unredacted original and is a seam for the
+     * tests; it throws when the platform refuses the original.
+     */
+    internal fun stage(
+        context: Context,
+        item: MediaItem,
+        requireOriginal: Boolean,
+        openOriginal: (Uri) -> InputStream? = { uri ->
+            val readUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.setRequireOriginal(uri)
+            } else {
+                uri
+            }
+            context.contentResolver.openInputStream(readUri)
+        },
+    ): StagedFile? {
         val dir = stagingDir(context)
         if (!dir.exists() && !dir.mkdirs()) throw IOException("cannot create $dir")
         val target = File(dir, stagedFileName(item))
         val part = File(dir, target.name + PART_SUFFIX)
 
         val uri = Uri.parse(item.contentUri)
-        val readUri = if (requireOriginal && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.setRequireOriginal(uri)
-        } else {
-            uri
-        }
+        var originalRead = false
         val input = try {
-            context.contentResolver.openInputStream(readUri)
+            if (requireOriginal) {
+                val stream = openOriginal(uri)
+                // A provider that answers with no stream read no bytes:
+                // the original was not read, so it cannot be reported as
+                // the original.
+                if (stream == null) return null
+                originalRead = true
+                stream
+            } else {
+                context.contentResolver.openInputStream(uri)
+            }
         } catch (e: RuntimeException) {
             // MediaProvider refuses requireOriginal with a SecurityException
             // or UnsupportedOperationException when ACCESS_MEDIA_LOCATION was
@@ -148,6 +258,7 @@ object UploadStaging {
             // bytes rather than nothing.
             if (!requireOriginal || (e !is SecurityException && e !is UnsupportedOperationException)) throw e
             Log.w(TAG, "original bytes denied for ${item.contentUri}; staging redacted copy", e)
+            originalRead = false
             context.contentResolver.openInputStream(uri)
         } ?: return null
 
@@ -165,7 +276,7 @@ object UploadStaging {
             part.delete()
             throw e
         }
-        return target
+        return StagedFile(target, isOriginal = stagedUploadIsOriginal(requireOriginal, originalRead))
     }
 
     /** Deletes [path] if it is a staged copy (never a camera-roll file). */
