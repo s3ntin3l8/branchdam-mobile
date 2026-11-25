@@ -36,6 +36,8 @@ object TrashSyncObserver {
      * re-enqueueing delete events for items lingering in the recycle bin
      * (up to 30 days). Newly handled URIs are added to [processed], which
      * is persisted, and entries that have left the bin are dropped from it.
+     * A delete event the engine refuses (it is not open yet) leaves the URI
+     * unrecorded, so the next pass retries it.
      *
      * If the item was an intentional offload (Free Up Space), suppression
      * is applied. Otherwise, enqueues EVENT_NODE_DELETED to remove the
@@ -75,6 +77,11 @@ object TrashSyncObserver {
      * calls injected for unit tests. Returns the number of delete events
      * enqueued.
      *
+     * An item whose delete event could not be enqueued (the engine is not
+     * open yet) is NOT recorded in [processed]: it stays in the recycle
+     * bin, so the next pass tries again instead of dropping the event for
+     * good.
+     *
      * The URIs handled in this pass are recorded in [processed] with one
      * write after the loop (in a finally, so items handled before an
      * exception are still recorded), not one write per item.
@@ -107,11 +114,12 @@ object TrashSyncObserver {
 
                 if (enqueueDelete(item.contentUri)) {
                     eventsEnqueued++
+                    handled.add(item.contentUri)
                 }
-
-                // Mark processed regardless of enqueue success to avoid
-                // silent infinite retry loops.
-                handled.add(item.contentUri)
+                // A delete event that could not be enqueued (the engine is
+                // not open yet) leaves the item unrecorded on purpose: the
+                // next pass retries it. Recording it would mark the event
+                // as sent although it never reached the queue.
             }
         } finally {
             processed.addAll(handled)

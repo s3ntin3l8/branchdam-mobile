@@ -285,13 +285,19 @@ class MediaStoreObserver(
                         localId = childLocalID
                     )
                     if (queueId > 0L) {
-                        EngineHolder.enqueueLineageEvent(
+                        val eventId = EngineHolder.enqueueLineageEvent(
                             parentLocalID = item.contentUri,
                             childLocalID = childLocalID,
                             relationshipType = "MOTION_PHOTO_CONTAINS",
                             resolver = "android_motion_photo_xmp",
                             confidence = 1.00
                         )
+                        if (eventId.isEmpty()) {
+                            // The edge was not recorded (the engine is not
+                            // open yet): the micro video is enqueued, but
+                            // the edge to its parent is missing.
+                            Log.w(TAG, "motion photo lineage not recorded: ${item.contentUri} -> $childLocalID")
+                        }
                     }
                 }
             }

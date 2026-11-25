@@ -1,5 +1,6 @@
 package com.branchdam.mobile.lineage
 
+import android.util.Log
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.ui.lineage.InPhoneEditResolver
@@ -12,6 +13,8 @@ data class InPhoneEdit(
 )
 
 object EditCorrelator {
+
+    private const val TAG = "EditCorrelator"
 
     /**
      * Correlates in-phone edits (Google Photos / Luminar Neo Mobile exports in Pictures/ or DCIM/Restored)
@@ -80,19 +83,29 @@ object EditCorrelator {
      * [findInPhoneEdits] reports today) is only a guess and is NOT sent
      * here; it waits in the lineage review screen for the user to confirm
      * or reject it (see [LineageReview]). Returns the number of edges
-     * enqueued.
+     * enqueued. An edge the engine refused (it is not open yet) is not
+     * counted.
      */
     fun registerEditLineage(edits: List<InPhoneEdit>): Int {
         var count = 0
         for (edit in edits) {
             if (!LineageReview.isAutomatic(edit.confidence)) continue
-            EngineHolder.enqueueLineageEvent(
+            val eventId = EngineHolder.enqueueLineageEvent(
                 parentLocalID = edit.originalMaster.contentUri,
                 childLocalID = edit.editedDerivative.contentUri,
                 relationshipType = "DERIVED_FROM",
                 resolver = InPhoneEditResolver.format(edit.editorApp),
                 confidence = edit.confidence
             )
+            if (eventId.isEmpty()) {
+                // The edge was not recorded (the engine is not open yet):
+                // it is neither counted nor silently forgotten.
+                Log.w(
+                    TAG,
+                    "edit lineage not recorded: ${edit.originalMaster.contentUri} -> ${edit.editedDerivative.contentUri}"
+                )
+                continue
+            }
             count++
         }
         return count

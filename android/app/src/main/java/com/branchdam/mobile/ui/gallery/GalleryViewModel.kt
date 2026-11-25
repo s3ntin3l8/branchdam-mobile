@@ -360,13 +360,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 if (companion != null) {
                     companionId = UploadStaging.enqueue(context, companion)
                     if (primaryId > 0L && companionId > 0L && LineageReview.isAutomatic(item.companionConfidence)) {
-                        EngineHolder.enqueueLineageEvent(
+                        val eventId = EngineHolder.enqueueLineageEvent(
                             parentLocalID = companion.contentUri,
                             childLocalID = primary.contentUri,
                             relationshipType = "DERIVED_FROM",
                             resolver = "android_camera_pair",
                             confidence = 1.00
                         )
+                        if (eventId.isEmpty()) {
+                            // The edge was not recorded (the engine is not
+                            // open yet): the media upload still stands, but
+                            // the edge is missing.
+                            Log.w(TAG, "lineage edge not recorded: ${companion.contentUri} -> ${primary.contentUri}")
+                        }
                     }
                 }
                 if (primaryId > 0L || companionId > 0L) {
@@ -409,13 +415,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 if (primaryId > 0L && companionId > 0L &&
                     LineageReview.isAutomatic(galleryItem?.companionConfidence ?: 0.0)
                 ) {
-                    EngineHolder.enqueueLineageEvent(
+                    val eventId = EngineHolder.enqueueLineageEvent(
                         parentLocalID = companion.contentUri,
                         childLocalID = primary.contentUri,
                         relationshipType = "DERIVED_FROM",
                         resolver = "android_camera_pair",
                         confidence = 1.00
                     )
+                    if (eventId.isEmpty()) {
+                        // The edge was not recorded (the engine is not open
+                        // yet): the media upload still stands, but the edge
+                        // is missing.
+                        Log.w(TAG, "lineage edge not recorded: ${companion.contentUri} -> ${primary.contentUri}")
+                    }
                 }
             }
             val success = primaryId > 0L || companionId > 0L
@@ -506,7 +518,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         val accepted = deleteCoordinator.delete(deleterFactory(context), uris) { done ->
             for (uri in uris) {
-                if (uri in done.deleted) EngineHolder.enqueueDeleteEvent(uri)
+                if (uri !in done.deleted) continue
+                if (EngineHolder.enqueueDeleteEvent(uri).isEmpty()) {
+                    // The file is gone from the device, but the delete event
+                    // was not recorded (the engine is not open yet): the
+                    // server keeps the copy. Nothing retries it, so say so.
+                    Log.w(TAG, "delete event not recorded: $uri")
+                }
             }
             val deletedItems = items.filter { it.primaryMediaItem.contentUri in done.deleted }
             val failedItems = items.filter { it.primaryMediaItem.contentUri !in done.deleted }

@@ -1,5 +1,6 @@
 package com.branchdam.mobile.lineage
 
+import android.util.Log
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
 import kotlin.math.abs
@@ -12,6 +13,8 @@ data class LineagePair(
 )
 
 object PairDetector {
+
+    private const val TAG = "PairDetector"
 
     private val STEM_SUFFIX_REGEX = Regex(
         """(\.(RAW(-\d+)?|ORIGINAL|COVER|MP|ACTION|PORTRAIT|NIGHT|BURST\d*|TS(-\d+)*))+$""",
@@ -64,19 +67,29 @@ object PairDetector {
      * (1.00) stem-match pairs. A timestamp-proximity pair (0.95) is only a
      * guess and is NOT sent here; it waits in the lineage review screen
      * for the user to confirm or reject it (see [LineageReview]). Returns
-     * the number of edges enqueued.
+     * the number of edges enqueued. An edge the engine refused (it is not
+     * open yet) is not counted.
      */
     fun registerPairLineage(pairs: List<LineagePair>): Int {
         var count = 0
         for (pair in pairs) {
             if (!LineageReview.isAutomatic(pair.confidence)) continue
-            EngineHolder.enqueueLineageEvent(
+            val eventId = EngineHolder.enqueueLineageEvent(
                 parentLocalID = pair.masterRaw.contentUri,
                 childLocalID = pair.derivativeJpeg.contentUri,
                 relationshipType = "DERIVED_FROM",
                 resolver = pair.resolver,
                 confidence = pair.confidence
             )
+            if (eventId.isEmpty()) {
+                // The edge was not recorded (the engine is not open yet):
+                // it is neither counted nor silently forgotten.
+                Log.w(
+                    TAG,
+                    "pair lineage not recorded: ${pair.masterRaw.contentUri} -> ${pair.derivativeJpeg.contentUri}"
+                )
+                continue
+            }
             count++
         }
         return count
