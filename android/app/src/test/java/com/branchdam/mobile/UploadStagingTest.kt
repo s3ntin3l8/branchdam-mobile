@@ -350,16 +350,40 @@ class UploadStagingTest {
         val staged = UploadStaging.microVideoFile(context, item)
         staged.parentFile?.mkdirs()
         staged.writeText("video")
-        // Older than the orphan grace: only the grace would remove it.
-        staged.setLastModified(System.currentTimeMillis() - UploadStaging.ORPHAN_GRACE_MS - 60_000L)
 
-        val removed = UploadStaging.cleanup(context, statuses = emptyMap())
+        // Older than the orphan grace: only the grace would remove it. The
+        // age is pinned through nowMs, not through the file's timestamp, so
+        // the test cannot pass by accident when the file stays fresh.
+        val nowMs = System.currentTimeMillis() + 2 * UploadStaging.ORPHAN_GRACE_MS
+        val removed = UploadStaging.cleanup(context, statuses = emptyMap(), nowMs = nowMs)
 
         assertEquals("no status means no safe answer: nothing may be reaped", 0, removed)
         assertTrue(
             "the staged micro video must survive an engine outage: it may be the only copy",
             staged.exists(),
         )
+    }
+
+    @Test
+    fun staleStagedCopiesAreReapedWhenTheEngineAnswers() {
+        val context = stagingContext()
+        val item = imageItem(id = 42L)
+        val stale = UploadStaging.microVideoFile(context, item)
+        stale.parentFile?.mkdirs()
+        stale.writeText("video")
+
+        // The engine answered, but no upload row references this copy: only
+        // the orphan grace keeps it, so the grace must also let it go. The
+        // guard must not fail closed forever.
+        val nowMs = System.currentTimeMillis() + 2 * UploadStaging.ORPHAN_GRACE_MS
+        val removed = UploadStaging.cleanup(
+            context,
+            statuses = mapOf("/elsewhere/other.jpg" to "PENDING"),
+            nowMs = nowMs,
+        )
+
+        assertEquals(1, removed)
+        assertFalse("an unreferenced staged copy must be reaped once it is older than the grace", stale.exists())
     }
 
     @Test

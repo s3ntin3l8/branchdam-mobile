@@ -221,6 +221,13 @@ func (q *Queue) GetMediaStatus(localID string) (string, error) {
 
 // GetAllMediaStatuses returns a map of localID/localPath/filename/srcPathHash -> status
 // ("COMPLETED", "PENDING", "IN_PROGRESS", "FAILED", "OFFLOADED") for all items in local_media_state and upload_queue.
+//
+// A failed upload_queue read is an error, not a partial map: the
+// upload_queue rows carry the local_path keys a shell looks a staged copy
+// up by, so a map without them makes every staged copy look unreferenced,
+// and a shell that reaps unreferenced copies then deletes the only copy of
+// a pending upload. A failed local_media_state read only costs the
+// per-item keys, so it stays best effort.
 func (q *Queue) GetAllMediaStatuses() (map[string]string, error) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -229,37 +236,38 @@ func (q *Queue) GetAllMediaStatuses() (map[string]string, error) {
 
 	// 1. Query upload_queue for all upload items
 	rows, err := q.db.Query(`SELECT source_path_hash, local_path, target_filename, blake3_hash, status FROM upload_queue ORDER BY id ASC`)
-	if err == nil {
-		for rows.Next() {
-			var srcHash, localPath, filename, blake3Hash, statusStr string
-			if err := rows.Scan(&srcHash, &localPath, &filename, &blake3Hash, &statusStr); err == nil {
-				st := "NOT_ENQUEUED"
-				switch UploadStatus(statusStr) {
-				case UploadCompleted:
-					st = "COMPLETED"
-				case UploadInProgress:
-					st = "IN_PROGRESS"
-				case UploadPending:
-					st = "PENDING"
-				case UploadFailed:
-					st = "FAILED"
-				}
-				if srcHash != "" {
-					result[srcHash] = st
-				}
-				if localPath != "" {
-					result[localPath] = st
-				}
-				if filename != "" {
-					result[filename] = st
-				}
-				if blake3Hash != "" {
-					result[blake3Hash] = st
-				}
+	if err != nil {
+		return nil, fmt.Errorf("query upload queue failed: %w", err)
+	}
+	for rows.Next() {
+		var srcHash, localPath, filename, blake3Hash, statusStr string
+		if err := rows.Scan(&srcHash, &localPath, &filename, &blake3Hash, &statusStr); err == nil {
+			st := "NOT_ENQUEUED"
+			switch UploadStatus(statusStr) {
+			case UploadCompleted:
+				st = "COMPLETED"
+			case UploadInProgress:
+				st = "IN_PROGRESS"
+			case UploadPending:
+				st = "PENDING"
+			case UploadFailed:
+				st = "FAILED"
+			}
+			if srcHash != "" {
+				result[srcHash] = st
+			}
+			if localPath != "" {
+				result[localPath] = st
+			}
+			if filename != "" {
+				result[filename] = st
+			}
+			if blake3Hash != "" {
+				result[blake3Hash] = st
 			}
 		}
-		rows.Close()
 	}
+	rows.Close()
 
 	// 2. Query local_media_state
 	rowsState, err := q.db.Query(`SELECT local_id, node_uuid, blake3_hash, is_offloaded FROM local_media_state`)

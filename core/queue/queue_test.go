@@ -416,6 +416,27 @@ func TestMediaStateAndGetMediaStatus(t *testing.T) {
 	}
 }
 
+// TestGetAllMediaStatusesFailsWhenTheUploadQueueCannotBeRead: a map that
+// silently lost the upload_queue rows would lack the local_path keys a
+// shell looks a staged copy up by, so every staged copy would look
+// unreferenced -- and a shell that reaps unreferenced copies would then
+// delete the only copy of a pending upload. The read must fail instead,
+// so the shell knows it has no answer.
+func TestGetAllMediaStatusesFailsWhenTheUploadQueueCannotBeRead(t *testing.T) {
+	q := newTestQueue(t)
+
+	q.mu.Lock()
+	_, err := q.db.Exec(`DROP TABLE upload_queue`)
+	q.mu.Unlock()
+	if err != nil {
+		t.Fatalf("drop upload_queue: %v", err)
+	}
+
+	if _, err := q.GetAllMediaStatuses(); err == nil {
+		t.Fatal("expected an error when the upload queue cannot be read")
+	}
+}
+
 // TestEventDeferAndTerminal: a deferred event returns to PENDING without a
 // retry being counted and rotates behind never-attempted events; a terminal
 // mark ends it regardless of the retry budget and only accepts terminal
