@@ -19,6 +19,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * (primitive-only signatures that survive gobind). When the native
  * library is absent (unit tests without the AAR), all calls fall back
  * to mock values so the existing test suite keeps working.
+ *
+ * The mock fallback exists for that case only. With the library
+ * loaded but the engine not open yet (a cold start, before
+ * [initialize] finishes), nothing is recorded, so the methods below
+ * report failure -- "" / false / 0 -- instead of a mock value, the way
+ * [enqueueMedia] already does. A caller that treats a success value
+ * as "the work was done" would otherwise drop the work for good
+ * (#304).
  */
 object EngineHolder {
     private const val TAG = "EngineHolder"
@@ -47,6 +55,35 @@ object EngineHolder {
         } catch (_: Throwable) {
             nativeAvailable.set(false)
         }
+    }
+
+    /**
+     * The state the holder had at startup: the native library's
+     * availability (the init block above sets it) and whether the engine
+     * was open ([isInitialized] starts false). [resetStateForTest] puts
+     * both back.
+     */
+    private val nativeLibraryAvailable: Boolean = nativeAvailable.get()
+    private val initializedAtStartup: Boolean = isInitialized
+
+    /**
+     * Puts the holder into a chosen state so a test can exercise the
+     * "the native library is loaded, but the engine is not open yet"
+     * branch. [nativeAvailable] mirrors the library being loadable and
+     * [initialized] mirrors [initialize] having completed. Tests reset
+     * the holder with [resetStateForTest] when they are done.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun setStateForTest(nativeAvailable: Boolean, initialized: Boolean) {
+        this.nativeAvailable.set(nativeAvailable)
+        isInitialized = initialized
+    }
+
+    /** Restores the state the holder had at startup. */
+    @androidx.annotation.VisibleForTesting
+    internal fun resetStateForTest() {
+        nativeAvailable.set(nativeLibraryAvailable)
+        isInitialized = initializedAtStartup
     }
 
     fun initialize(
@@ -124,6 +161,12 @@ object EngineHolder {
         }
     }
 
+    /**
+     * Records a lineage edge between two local media items. Returns the
+     * event's UUID, or "" when nothing was recorded -- the engine is not
+     * open yet, or the call failed. An empty result means "not done":
+     * the caller must not treat the edge as recorded.
+     */
     fun enqueueLineageEvent(
         parentLocalID: String,
         childLocalID: String,
@@ -131,7 +174,8 @@ object EngineHolder {
         resolver: String = "android_camera_pair",
         confidence: Double = 1.00,
     ): String {
-        if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
+        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
+        if (!isInitialized) return ""
         return try {
             queryExecutor.submit(Callable {
                 Branchdam.bindingEnqueueLineageEvent(parentLocalID, childLocalID, relationshipType, resolver, confidence)
@@ -142,8 +186,15 @@ object EngineHolder {
         }
     }
 
+    /**
+     * Records a delete event for [localID]. Returns the event's UUID, or
+     * "" when nothing was recorded -- the engine is not open yet, or the
+     * call failed. An empty result means "not done": the caller must not
+     * treat the delete as sent.
+     */
     fun enqueueDeleteEvent(localID: String): String {
-        if (!nativeAvailable.get() || !isInitialized) return java.util.UUID.randomUUID().toString()
+        if (!nativeAvailable.get()) return java.util.UUID.randomUUID().toString()
+        if (!isInitialized) return ""
         return try {
             queryExecutor.submit(Callable { Branchdam.bindingEnqueueDeleteEvent(localID) }).get()
         } catch (t: Throwable) {
@@ -213,7 +264,8 @@ object EngineHolder {
     }
 
     fun getMediaStatus(localID: String): String {
-        if (!nativeAvailable.get() || !isInitialized) return mockMediaStatusMap[localID] ?: "NOT_ENQUEUED"
+        if (!nativeAvailable.get()) return mockMediaStatusMap[localID] ?: "NOT_ENQUEUED"
+        if (!isInitialized) return "NOT_ENQUEUED"
         return try {
             queryExecutor.submit(Callable { Branchdam.bindingGetMediaStatus(localID) }).get()
         } catch (t: Throwable) {
@@ -223,7 +275,8 @@ object EngineHolder {
     }
 
     fun getAllMediaStatuses(): Map<String, String> {
-        if (!nativeAvailable.get() || !isInitialized) return mockMediaStatusMap
+        if (!nativeAvailable.get()) return mockMediaStatusMap
+        if (!isInitialized) return emptyMap()
         return try {
             val jsonStr = queryExecutor.submit(Callable { Branchdam.bindingGetAllMediaStatuses() }).get()
             if (jsonStr.isNullOrEmpty() || jsonStr == "{}") return emptyMap()
@@ -242,7 +295,8 @@ object EngineHolder {
     }
 
     fun countPendingUploads(): Long {
-        if (!nativeAvailable.get() || !isInitialized) return mockPendingUploadsCount
+        if (!nativeAvailable.get()) return mockPendingUploadsCount
+        if (!isInitialized) return 0L
         return try {
             queryExecutor.submit(Callable { Branchdam.bindingCountPendingUploads() }).get()
         } catch (t: Throwable) {
@@ -311,8 +365,14 @@ object EngineHolder {
     @androidx.annotation.VisibleForTesting
     internal var mockPendingUploadsCount: Long = 0L
 
+    /**
+     * Records the offloaded flag for [localID]. Returns true only when the
+     * flag was written: with the engine not open yet the call fails and
+     * reports false, so the caller knows the flag is still stale.
+     */
     fun setMediaOffloaded(localID: String, isOffloaded: Boolean): Boolean {
-        if (!nativeAvailable.get() || !isInitialized) return true
+        if (!nativeAvailable.get()) return true
+        if (!isInitialized) return false
         return try {
             queryExecutor.submit(Callable {
                 Branchdam.bindingSetMediaOffloaded(localID, isOffloaded)
@@ -325,7 +385,8 @@ object EngineHolder {
     }
 
     fun fetchNamingTemplate(): String {
-        if (!nativeAvailable.get() || !isInitialized) return MOCK_NAMING_TEMPLATE
+        if (!nativeAvailable.get()) return MOCK_NAMING_TEMPLATE
+        if (!isInitialized) return ""
         return try {
             queryExecutor.submit(Callable { Branchdam.bindingFetchNamingTemplate() }).get()
         } catch (t: Throwable) {

@@ -255,6 +255,69 @@ class TrashSyncObserverTest {
     }
 
     @Test
+    fun testAnItemIsNotRecordedWhileTheEngineIsNotOpen() {
+        val images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val item = trashed(images, 7)
+        val store = ProcessedTrashStore(prefs)
+
+        // The native library is loaded, but the engine is not open yet:
+        // the delete event is not recorded, so the item must not be
+        // marked as processed.
+        EngineHolder.setStateForTest(nativeAvailable = true, initialized = false)
+        try {
+            val count = TrashSyncObserver.processNewlyTrashed(
+                items = listOf(item),
+                processed = store,
+                isOffloaded = EngineHolder::isMediaOffloaded,
+                enqueueDelete = { uri -> EngineHolder.enqueueDeleteEvent(uri).isNotEmpty() },
+            )
+
+            assertEquals(0, count)
+            assertFalse(
+                "an item whose delete event was not recorded must not be marked as processed",
+                item.contentUri in store
+            )
+        } finally {
+            EngineHolder.resetStateForTest()
+        }
+    }
+
+    @Test
+    fun testAnItemNotEnqueuedIsRetriedOnTheNextPass() {
+        val images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val item = trashed(images, 8)
+        val store = ProcessedTrashStore(prefs)
+
+        EngineHolder.setStateForTest(nativeAvailable = true, initialized = false)
+        val first = try {
+            TrashSyncObserver.processNewlyTrashed(
+                items = listOf(item),
+                processed = store,
+                isOffloaded = EngineHolder::isMediaOffloaded,
+                enqueueDelete = { uri -> EngineHolder.enqueueDeleteEvent(uri).isNotEmpty() },
+            )
+        } finally {
+            // The holder is a process-wide singleton: put it back even
+            // when the assertions below fail.
+            EngineHolder.resetStateForTest()
+        }
+
+        assertEquals(0, first)
+        assertFalse(item.contentUri in store)
+
+        // The next pass finds the item unprocessed and sends the delete.
+        val second = TrashSyncObserver.processNewlyTrashed(
+            items = listOf(item),
+            processed = store,
+            isOffloaded = EngineHolder::isMediaOffloaded,
+            enqueueDelete = { uri -> EngineHolder.enqueueDeleteEvent(uri).isNotEmpty() },
+        )
+
+        assertEquals(1, second)
+        assertTrue(item.contentUri in store)
+    }
+
+    @Test
     fun testAddAllKeepsInsertionOrderAndTheBound() {
         val store = ProcessedTrashStore(prefs, maxEntries = 3)
         store.add("content://a/1")

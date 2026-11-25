@@ -1,6 +1,7 @@
 package com.branchdam.mobile.triage
 
 import android.content.Context
+import android.util.Log
 import com.branchdam.mobile.EngineHolder
 
 data class SafeSpaceResult(
@@ -35,6 +36,8 @@ data class ReclaimPlan(
 )
 
 object SafeSpaceManager {
+
+    private const val TAG = "SafeSpaceManager"
 
     /**
      * Phase 1 of a reclaim: run the engine-owned atomic reclaim gate
@@ -110,6 +113,9 @@ object SafeSpaceManager {
      * a stale flag would make the engine treat it as intentionally
      * offloaded forever (PR #54 leak).
      *
+     * A rollback the engine refuses (it is not open yet) leaves the flag
+     * stale; it is logged, because nothing retries it for us.
+     *
      * @param setOffloaded test seam; defaults to
      *   [EngineHolder.setMediaOffloaded].
      */
@@ -126,8 +132,10 @@ object SafeSpaceManager {
             if (candidate.uri in deletedUris) {
                 reclaimedCount++
                 freedBytes += candidate.sizeBytes
-            } else {
-                setOffloaded(candidate.uri, false)
+            } else if (!setOffloaded(candidate.uri, false)) {
+                // The flag was not rolled back: the item is still on the
+                // device and still marked as offloaded.
+                Log.w(TAG, "offloaded flag rollback failed: ${candidate.uri}")
             }
         }
         return SafeSpaceResult(
