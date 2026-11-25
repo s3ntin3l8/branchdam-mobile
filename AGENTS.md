@@ -39,19 +39,35 @@ This repo's non-obvious correctness invariants are in `.claude/skills/branchdam-
 - `core/client/testdata/contract/` is synced from a branchDAM checkout with `make contract-sync BRANCHDAM=<checkout>`. If detect-secrets then flags a fixture, refresh it with `detect-secrets scan --baseline .secrets.baseline`.
 - A sqlite or modernc libc bump requires `scripts/update-libc-overlay.sh <version>`. `make lint` fails while the `third_party/` overlay lags `go.mod`.
 - Read `CONTRIBUTING.md` ("Regenerating Screenshots") before running `make screenshots` or `make screenshots-landing`, which need an emulator and a sibling `../branchDAM`.
+- **Skill and reviewer exist twice:** `.claude/skills/<n>/SKILL.md` ↔ `.agents/skills/<n>/SKILL.md` and `.claude/agents/<n>.md` ↔ `.agents/skills/<n>/SKILL.md` (same body; Claude Code reads `.claude/`, the other CLIs read `.agents/`). Edit both together; `scripts/check-agent-mirrors.sh` (pre-commit) fails on drift.
 
 ## Commands
 
 ```sh
-# Pre-PR Gates & Testing
-make check           # lint + core tests (no Android build)
-make test            # Run go core unit tests
-make lint            # pre-commit check + go vet
-make android         # Assemble Android debug build
-make ios-test        # iOS XCTests (macOS only); builds ios/Frameworks/branchdam.xcframework first if missing or stale
+make check                # lint (pre-commit, both Go modules) + Go tests; iOS XCTests only on macOS; no Android
+make test                 # Go tests, both modules
+make lint                 # pre-commit hooks + libc-overlay check
+make android-test         # Android unit tests + release Kotlin compile (needs the AAR)
+make android              # Android debug APK
+make mobile-build         # gomobile AAR + xcframework (-android / -ios for one; NDK / macOS)
+make ios-test             # iOS XCTests (macOS only); builds the xcframework if missing or stale
+make contract-sync BRANCHDAM=<checkout>   # refresh core/client/testdata/contract from branchDAM
 ```
 
-Also: `make android-test` (Android unit tests + release Kotlin compile), `make mobile-build` (AAR + xcframework), `make contract-sync`.
+## Platform folders and cross-boundary changes
+
+`android/AGENTS.md` and `ios/AGENTS.md` hold the shell-specific rules (build prerequisites, reclaim delete path, key
+store, strings, background work). Claude Code and Codex load them when you work in that folder; read the other one
+too when a change touches both shells.
+
+A change to the gomobile surface (a `Binding*` signature, an `Error.Code`, a baseline field, a `KeyStore` method)
+breaks the shells silently, because the Go tests pass on their own. Do it as one change:
+
+1. Change Go (root package and/or `core/`) with its tests.
+2. Rebuild the bindings: `make mobile-build-android` (and `-ios` on macOS).
+3. Update **both** callers, Kotlin under `android/` and Swift under `ios/`, and their tests.
+4. Run `make check` and `make android-test`. On Linux, Swift is unverified locally: say so in the PR and rely on CI's
+   "Mobile CI (Android & iOS)" check.
 
 ## Architecture & Responsibilities
 
@@ -67,10 +83,6 @@ Also: `make android-test` (Android unit tests + release Kotlin compile), `make m
 2. **Cryptographic Checksum Verification:** Full hashes are computed using BLAKE3-256 (64 hex characters) before upload, sent in `X-Blake3-Hash` with a single streamed body of fixed `Content-Length`, and the server's returned `blake3Hash` must match.
 3. **Safe Storage Reclaim:** a local original is deleted only when `node-status` reports the node found, `verified`, on `TIER3_MASTER_ARCHIVE`, live (`ACTIVE`/`HIDDEN`), with a `fullHash` equal to the BLAKE3 in `queue.db` (gates checked in that order; first failure is the reason shown), **and** the item's current size/mtime still match the baseline recorded at enqueue. Any missing hash or baseline keeps the file; every race fails toward keeping (#217, #229). Gate order, error mapping and shell rules: skill §1.
 4. **Lineage Precision:** DNG RAW + Ultra HDR JPEG pairs and Motion Photos emit `EVENT_EDGE_ATTACHED` with `confidence: 1.00`, automatically. Anything below 1.00 (timestamp-proximity pairs, in-phone edits) is never auto-emitted: the core answers `REVIEW_REQUIRED`, the pair waits in the lineage review screen, and the user's confirm or reject is stored in `queue.db` (`lineage_review`). A confirmed edge keeps its original confidence.
-
-## iOS first run
-
-`BranchDAMApp` shows `WelcomeView` only until onboarding is done: `OnboardingState` (`BranchDamKeys.onboardingCompleted`, written when access is granted or **Set Up Later** is tapped) or an already `.authorized`/`.limited` photo status skips it. On `.denied`/`.restricted` the Welcome screen shows the banner's wording and an **Open Settings** button instead of the grant button. The banner's Grant action reports the re-read status to `ContentView` so the banner clears at once.
 
 ## Rotated API keys: store, then switch, fall back once
 

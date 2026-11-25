@@ -97,10 +97,10 @@ docs/superpowers/
 !.claude/skills/
 !.claude/agents/
 
-# Agent worktrees
+# Older worktree location
 .worktrees/
 
-# Developer worktrees (per AGENTS.md make wt convention)
+# Agent worktrees: one per branch under .wt/<name> (AGENTS.md Workflow Conventions)
 .wt/
 
 # Kotlin compiler daemon state (written by Gradle builds)

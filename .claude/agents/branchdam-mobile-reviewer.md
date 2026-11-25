@@ -20,6 +20,7 @@ Procedure:
    - Events and lineage: section 4.
    - FFI surface, error codes, key store: section 5.
    - Versions, strings, contract fixtures, libc overlay, the two Go modules: section 6.
+   - Anything under `android/` or `ios/`: also apply that folder's `AGENTS.md` (shell-specific build prerequisites, delete path, key store, strings). For a gomobile-surface change, check the root AGENTS.md's cross-boundary steps: both shells updated, and say so plainly if Swift could not be compiled.
 3. Read surrounding code and the existing tests before you claim a violation. Follow callers across the Go/Kotlin/Swift boundary when a contract changes (error codes, Binding signatures, baseline fields).
 4. Check that the change adds or updates tests for the behaviour it alters. Reclaim gates, uploader responses and queue migrations all have dedicated tests in `core/engine`, `core/client`, `core/queue` and the root package.
 5. If useful, run `make check` (lint plus Go tests; on Linux iOS is skipped). Report failures verbatim.
