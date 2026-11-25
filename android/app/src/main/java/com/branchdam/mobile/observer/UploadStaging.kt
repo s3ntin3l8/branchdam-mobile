@@ -215,7 +215,6 @@ object UploadStaging {
     }
 
     /**
-    /**
      * Where the micro video of the motion photo [item] is staged: in the
      * staging dir, so [cleanup] removes it once the engine reports the
      * upload COMPLETED/OFFLOADED (or after the orphan grace period), and

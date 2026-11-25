@@ -366,7 +366,7 @@ class UploadStagingTest {
 
     @Test
     fun staleStagedCopiesAreReapedWhenTheEngineAnswers() {
-        val context = stagingContext()
+        val context = stagingContext(ByteArray(0))
         val item = imageItem(id = 42L)
         val stale = UploadStaging.microVideoFile(context, item)
         stale.parentFile?.mkdirs()
