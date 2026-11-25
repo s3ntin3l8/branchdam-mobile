@@ -33,7 +33,7 @@ Android shell (Kotlin, Jetpack Compose, WorkManager) over the gomobile-bound Go 
   photo's video child is `<uri>/microvideo`. Trash, lineage, reclaim and status all join on them.
 - **Staged files must survive a restart:** the engine reopens the enqueued path at sync time, possibly after process
   death. Enqueue a real file under `noBackupFilesDir` (`UploadStaging`, `OtgStaging`), never a content URI, a
-  `/proc/self/fd` path or `cacheDir`, and delete it only once the row is COMPLETED/OFFLOADED.
+  `/proc/self/fd` path or `cacheDir` (motion-photo videos still use `cacheDir`: #308), and delete it only once the row is COMPLETED/OFFLOADED.
 - **Upload source:** when the original can't be staged, `UploadStaging.pathForUpload` falls back to a location-redacted
   copy. Such an upload must not carry a reclaim baseline (skill §1; not yet enforced, #303).
 - **Camera-roll cursor** (`NewMediaIntake`): advance only past items whose upload row or `pending_import` row is
