@@ -35,11 +35,10 @@ This repo's non-obvious correctness invariants are in `.claude/skills/branchdam-
 - The gomobile artifacts (`android/app/libs/branchdam.aar`, `ios/Frameworks/branchdam.xcframework`) are gitignored, so a fresh worktree has neither. `make mobile-build` (or `-android` / `-ios`) builds them and needs an NDK. `make ios-test` builds the xcframework itself when it is missing or stale.
 - **PR titles / commit subjects:** release-please parses the squash-merge subject on `main`. An unprefixed subject, including a bracketed task-ID prefix like `[T2-7]`, is silently skipped with no error (see `CHANGELOG.md` `## [0.5.0]`). When a PR has exactly one commit, GitHub uses that commit's subject, not the PR title.
 - release-please bumps `version` in `branchdam.go` and `CFBundleShortVersionString` in `ios/BranchDAM/Info.plist`. Root tests fail if either drifts from `.release-please-manifest.json`, so never bump them by hand.
-- The review bot is Hermes (`s3ntin3l8-hermes[bot]`, `.github/workflows/hermes.yml`). It auto-reviews every non-draft same-repo PR on open; request reviews as the Workflow Conventions describe. Every inline thread must be replied to and resolved before merge.
+- The review bot is Hermes (`s3ntin3l8-hermes[bot]`, `.github/workflows/hermes.yml`). It auto-reviews every non-draft same-repo PR on open, except `mullion/task-*` branches (Task Master runs its own review there, `hermes.yml`); request reviews as the Workflow Conventions describe. Every inline thread must be replied to and resolved before merge.
 - `core/client/testdata/contract/` is synced from a branchDAM checkout with `make contract-sync BRANCHDAM=<checkout>`. If detect-secrets then flags a fixture, refresh it with `detect-secrets scan --baseline .secrets.baseline`.
 - A sqlite or modernc libc bump requires `scripts/update-libc-overlay.sh <version>`. `make lint` fails while the `third_party/` overlay lags `go.mod`.
 - Read `CONTRIBUTING.md` ("Regenerating Screenshots") before running `make screenshots` or `make screenshots-landing`, which need an emulator and a sibling `../branchDAM`.
-- **Skill and reviewer exist twice:** `.claude/skills/<n>/SKILL.md` ↔ `.agents/skills/<n>/SKILL.md` and `.claude/agents/<n>.md` ↔ `.agents/skills/<n>/SKILL.md` (same body; Claude Code reads `.claude/`, the other CLIs read `.agents/`). Edit both together; `scripts/check-agent-mirrors.sh` (pre-commit) fails on drift.
 
 ## Commands
 

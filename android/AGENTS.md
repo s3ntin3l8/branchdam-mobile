@@ -12,7 +12,7 @@ Android shell (Kotlin, Jetpack Compose, WorkManager) over the gomobile-bound Go 
 - `make android-test` (`testDebugUnitTest` + `compileReleaseKotlin`) is the Android gate; `make check` does not run
   it. `make android` assembles a debug APK.
 - CI additionally checks 16 KB ELF alignment of the `.so` files inside the AAR (`verify-elf-alignment`). The NDK
-  version (`25.1.8937393`) is pinned in `ci.yml` and `mobile-bind.yml`; change all of them together.
+  version (`25.1.8937393`) is pinned in `ci.yml`, `mobile-bind.yml` and `release-please.yml`; change all of them together.
 
 ## Rules
 
