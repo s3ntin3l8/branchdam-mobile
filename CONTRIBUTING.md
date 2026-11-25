@@ -14,7 +14,7 @@ Process rules (branching off `origin/main`, worktrees, Conventional Commits titl
 This repo runs automated code review via **Hermes**.
 - On PR open or ready for review, Hermes reviews changes automatically.
 - Every inline review thread must be replied to and resolved before merge.
-- Agents request re-reviews through the Mullion review relay (see `AGENTS.md`). Humans comment:
+- Agents request reviews through the Mullion review relay (see `AGENTS.md`). Humans comment:
   ```
   @s3ntin3l8-hermes Review
   ```
