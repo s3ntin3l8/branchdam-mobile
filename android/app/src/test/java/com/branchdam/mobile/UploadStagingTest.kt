@@ -2,8 +2,8 @@ package com.branchdam.mobile
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.pm.PackageManager
 import android.database.Cursor
-import android.net.Uri
 import android.provider.MediaStore
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.observer.UploadPath
@@ -23,6 +23,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
+import org.mockito.ArgumentMatchers.anyInt
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -216,6 +218,49 @@ class UploadStagingTest {
         assertTrue("the interrupted copy must be removed", staged.isEmpty())
     }
 
+    @Test
+    fun aProviderThatOpensNoStreamStagesNothing() {
+        // The provider answered with no stream, so no bytes were read:
+        // nothing may be staged, and the original can never be claimed.
+        val context = stagingContext(ByteArray(0))
+
+        val staged = UploadStaging.stage(context, testItem(), requireOriginal = true, openOriginal = { null })
+
+        assertNull("no stream means nothing was read, so nothing is staged", staged)
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun aFailedCopyFallsBackToTheRedactedDataPath() {
+        // The copy fails halfway, so the staged copy is discarded and the
+        // API 30+ DATA path is used instead. FUSE reads it, but the
+        // location metadata is redacted: the upload is not the original.
+        val context = redactedUploadContext { FailingInputStream() }
+
+        val upload = UploadStaging.pathForUpload(context, testItem())
+
+        assertNotNull("the DATA path is readable on API 30+", upload)
+        assertFalse("a failed copy is never the original", upload!!.isOriginal)
+        assertEquals(testItem().filePath, upload.path)
+    }
+
+    @Test
+    fun aRedactedStageIsNotTheOriginalThroughPathForUpload() {
+        // API 34 without ACCESS_MEDIA_LOCATION: the staged copy holds the
+        // redacted bytes, so pathForUpload must report it as such.
+        val bytes = byteArrayOf(1, 2, 3)
+        val context = redactedUploadContext { ByteArrayInputStream(bytes) }
+
+        val upload = UploadStaging.pathForUpload(context, testItem())
+
+        assertNotNull(upload)
+        assertFalse("staged without ACCESS_MEDIA_LOCATION: not the original", upload!!.isOriginal)
+        assertTrue(
+            "the upload must point at the staged copy",
+            upload.path.startsWith(UploadStaging.stagingDir(context).absolutePath),
+        )
+    }
+
     // --- what the engine is told about the item (#303) ---
 
     @Test
@@ -340,6 +385,27 @@ class UploadStagingTest {
         val context = mock<Context>()
         whenever(context.contentResolver).thenReturn(resolver)
         whenever(context.noBackupFilesDir).thenReturn(temporaryFolder.newFolder("staging"))
+        return context
+    }
+
+    /**
+     * A context whose content resolver serves a fresh stream from [stream]
+     * on every open and whose ACCESS_MEDIA_LOCATION permission is denied,
+     * so the upload source is STAGE_REDACTED.
+     */
+    private fun redactedUploadContext(stream: () -> InputStream?): Context {
+        val resolver = Mockito.mock(
+            ContentResolver::class.java,
+            Answer { invocation ->
+                if (invocation.method.name == "openInputStream") stream() else null
+            },
+        )
+
+        val context = mock<Context>()
+        whenever(context.contentResolver).thenReturn(resolver)
+        whenever(context.noBackupFilesDir).thenReturn(temporaryFolder.newFolder())
+        whenever(context.checkPermission(anyString(), anyInt(), anyInt()))
+            .thenReturn(PackageManager.PERMISSION_DENIED)
         return context
     }
 

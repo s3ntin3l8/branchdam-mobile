@@ -254,9 +254,10 @@ object ImportConfirmationNotifier {
 
     /**
      * Queues [items] for upload; returns how many were queued. With a
-     * Context each item goes through [UploadStaging], which reads its
-     * original (unredacted) bytes on API 29+, as auto-import does.
-     * Without one (unit tests) the recorded DATA path is enqueued.
+     * Context each item goes through [UploadStaging], which reads the
+     * original bytes where the platform allows it (on API 29+ that needs
+     * ACCESS_MEDIA_LOCATION), as auto-import does. Without one (unit
+     * tests) the recorded DATA path is enqueued.
      */
     private fun importItems(context: Context?, items: List<PendingImport>): Int {
         var queued = 0

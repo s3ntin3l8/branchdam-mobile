@@ -242,6 +242,10 @@ object UploadStaging {
         val input = try {
             if (requireOriginal) {
                 val stream = openOriginal(uri)
+                // A provider that answers with no stream read no bytes:
+                // the original was not read, so it cannot be reported as
+                // the original.
+                if (stream == null) return null
                 originalRead = true
                 stream
             } else {
