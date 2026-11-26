@@ -200,6 +200,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
     @discardableResult
     func runBackgroundSync(
         isOnCellular: Bool? = nil,
+        queue: DispatchQueue = .global(qos: .background),
         complete: @escaping @Sendable (Bool) -> Void,
         cancel: @escaping @Sendable () -> Void
     ) -> @Sendable () -> Void {
@@ -231,7 +232,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
         let batch = Int32(readBatchSize())
         let runBatch = runSyncBatch
         let sweep = afterBatchSweep
-        DispatchQueue.global(qos: .background).async {
+        queue.async {
             let outcome = runBatch(timeout, batch)
             Self.recordOutcome(outcome)
             switch outcome {

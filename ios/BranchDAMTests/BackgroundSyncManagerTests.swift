@@ -236,6 +236,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
 
         let expire = manager.runBackgroundSync(
             isOnCellular: false,
+            queue: .global(qos: .userInitiated),
             complete: { success in calls.record("complete(\(success))") },
             cancel: { calls.record("cancel") }
         )
@@ -282,6 +283,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
 
         let expire = manager.runBackgroundSync(
             isOnCellular: false,
+            queue: .global(qos: .userInitiated),
             complete: { success in calls.record("complete(\(success))") },
             cancel: { calls.record("cancel") }
         )
@@ -356,6 +358,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
 
         manager.runBackgroundSync(
             isOnCellular: false,
+            queue: .global(qos: .userInitiated),
             complete: { success in calls.record("complete(\(success))") },
             cancel: { calls.record("cancel") }
         )
