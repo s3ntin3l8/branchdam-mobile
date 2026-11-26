@@ -49,6 +49,21 @@ public struct QrPairingView: View {
 
     public init() {}
 
+    /// Clears any stale auth-failure banner and kicks off both an immediate
+    /// sync (mirroring Android's SettingsViewModel.connect) and the periodic
+    /// background schedule + catch-up camera-roll scan.
+    static func handlePostConnect(
+        defaults: UserDefaults = .standard,
+        scheduleSync: () -> Void = { BackgroundSyncManager.shared.scheduleBackgroundSync() },
+        triggerSync: () -> Void = { BackgroundSyncManager.shared.triggerImmediateSync() },
+        scanChanges: () -> Void = { PhotoKitObserver.shared.scanForChanges() }
+    ) {
+        defaults.removeObject(forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
+        scheduleSync()
+        triggerSync()
+        scanChanges()
+    }
+
     public var body: some View {
         NavigationStack {
             Form {
@@ -281,11 +296,7 @@ private struct ConnectionSettingsView: View {
             )
             isConnected = connected
             if connected {
-                // First background sync for the newly paired device, and a
-                // catch-up scan: the launch-time scan skipped discovery
-                // while the engine was not open yet.
-                BackgroundSyncManager.shared.scheduleBackgroundSync()
-                PhotoKitObserver.shared.scanForChanges()
+                QrPairingView.handlePostConnect()
                 namingTemplate = await BranchDamCoreBridge.shared.fetchNamingTemplateAsync() ?? ""
             } else {
                 namingTemplate = ""

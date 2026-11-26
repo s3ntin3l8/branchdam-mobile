@@ -60,11 +60,11 @@ public enum BranchDamKeys: String {
     case syncOnBatteryOnly = "branchdam_sync_on_battery_only"
 
     /// Number of items to process per sync batch. Passed to
-    /// `BranchDamCoreBridge.syncBatch` by `BackgroundSyncManager`.
+    /// `BranchDamCoreBridge.syncBatchOutcome` by `BackgroundSyncManager`.
     case uploadBatchSize = "branchdam_upload_batch_size"
 
     /// Maximum seconds to wait for a sync batch to complete. Passed to
-    /// `BranchDamCoreBridge.syncBatch` by `BackgroundSyncManager`.
+    /// `BranchDamCoreBridge.syncBatchOutcome` by `BackgroundSyncManager`.
     case syncTimeoutSecs = "branchdam_sync_timeout_secs"
 
     /// Debounce window (milliseconds) for PhotoKit change callbacks.
@@ -96,6 +96,12 @@ public enum BranchDamKeys: String {
     /// `WelcomeView`, read by `BranchDAMApp` to skip the screen on launch.
     /// iOS only: Android's onboarding is a separate flow.
     case onboardingCompleted = "branchdam_onboarding_completed"
+
+    /// Timestamp (seconds since epoch) when a sync batch failed with
+    /// `AUTH_FAILED`. Written by `BackgroundSyncManager.recordOutcome`,
+    /// removed on the next successful batch, and read by
+    /// `SyncStatusViewModel` to prompt the user to re-pair.
+    case syncAuthFailedAt = "branchdam_sync_auth_failed_at"
 }
 
 extension BranchDamKeys {
@@ -113,5 +119,6 @@ extension BranchDamKeys {
         public static let OBSERVER_LAST_SCANNED_TIMESTAMP = "branchdam_observer_last_scanned_timestamp"
         public static let THEME_MODE = "branchdam_theme_mode"
         public static let LAST_SYNC_TIME = "branchdam_last_sync_time"
+        public static let SYNC_AUTH_FAILED_AT = "branchdam_sync_auth_failed_at"
     }
 }

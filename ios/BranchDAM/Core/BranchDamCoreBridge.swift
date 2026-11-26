@@ -5,6 +5,32 @@ import Photos
 import branchdam
 #endif
 
+private let coreErrorCodePattern = try! NSRegularExpression(pattern: "branchdam: ([A-Z][A-Z0-9_]*):")
+
+/// Extracts the core's error code from a gomobile error description.
+/// The core's errors render as `branchdam: <CODE>: <message>`; anything
+/// else yields nil.
+public func coreErrorCode(_ message: String) -> String? {
+    let range = NSRange(message.startIndex..<message.endIndex, in: message)
+    guard let match = coreErrorCodePattern.firstMatch(in: message, range: range),
+          match.numberOfRanges > 1,
+          let codeRange = Range(match.range(at: 1), in: message) else {
+        return nil
+    }
+    return String(message[codeRange])
+}
+
+/// Well-known error codes returned by the Go core (root `branchdam.go`).
+public enum CoreErrorCodes {
+    public static let authFailed = "AUTH_FAILED"
+}
+
+/// Outcome of a single `syncBatchOutcome` call.
+public enum SyncBatchOutcome: Equatable, Sendable {
+    case success(uploaded: Int32, eventsSent: Int32)
+    case failed(code: String?)
+}
+
 public struct SafeSpaceCandidateVerdict: Codable, Equatable {
     public let localId: String
     public let nodeUuid: String
@@ -76,7 +102,7 @@ final class KeychainRotatedKeyStore: NSObject, branchdam.KeyStoreProtocol {
 /// a sequence number channel), so the synchronous methods below dispatch
 /// onto private queues and wait:
 ///
-/// - `syncQueue` (serial) runs `syncBatch`, which can hold it for the whole
+/// - `syncQueue` (serial) runs `syncBatchOutcome`, which can hold it for the whole
 ///   batch timeout.
 /// - `queryQueue` (concurrent) runs every other engine call, so queue
 ///   counts, statuses and enqueues never wait behind an upload batch.
@@ -375,11 +401,10 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #endif
     }
 
-    public func syncBatch(timeoutSecs: Int32 = 120, batchSize: Int32 = 10) -> (uploaded: Int32, eventsSent: Int32) {
+    public func syncBatchOutcome(timeoutSecs: Int32 = 120, batchSize: Int32 = 10) -> SyncBatchOutcome {
         #if canImport(branchdam)
-        guard isInitialized else { return (0, 0) }
-        var uploaded: Int32 = 0
-        var eventsSent: Int32 = 0
+        guard isInitialized else { return .failed(code: nil) }
+        var outcome: SyncBatchOutcome = .failed(code: nil)
         syncQueue.sync {
             do {
                 let resStr = try branchdam.bindingSyncBatch(Int64(timeoutSecs), Int64(batchSize))
@@ -387,16 +412,20 @@ public class BranchDamCoreBridge: @unchecked Sendable {
                 if parts.count == 2,
                    let u = Int32(parts[0]),
                    let e = Int32(parts[1]) {
-                    uploaded = u
-                    eventsSent = e
+                    outcome = .success(uploaded: u, eventsSent: e)
+                } else {
+                    outcome = .success(uploaded: 0, eventsSent: 0)
                 }
             } catch {
                 NSLog("syncBatch failed: %@", String(describing: error))
+                let code = coreErrorCode(error.localizedDescription)
+                    ?? coreErrorCode(String(describing: error))
+                outcome = .failed(code: code)
             }
         }
-        return (uploaded, eventsSent)
+        return outcome
         #else
-        return (0, 0)
+        return .success(uploaded: 0, eventsSent: 0)
         #endif
     }
 

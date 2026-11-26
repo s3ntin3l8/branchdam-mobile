@@ -24,9 +24,27 @@ public class BackgroundSyncManager: @unchecked Sendable {
     /// Runs one sync batch through the engine. A seam (internal, so only
     /// `@testable` tests can swap it) so a test can run a batch without
     /// the native engine. Read once per sync, on the calling thread.
-    var runSyncBatch: @Sendable (_ timeoutSecs: Int32, _ batchSize: Int32) -> (uploaded: Int32, eventsSent: Int32) = {
+    var runSyncBatch: @Sendable (_ timeoutSecs: Int32, _ batchSize: Int32) -> SyncBatchOutcome = {
         timeoutSecs, batchSize in
-        BranchDamCoreBridge.shared.syncBatch(timeoutSecs: timeoutSecs, batchSize: batchSize)
+        BranchDamCoreBridge.shared.syncBatchOutcome(timeoutSecs: timeoutSecs, batchSize: batchSize)
+    }
+
+    /// Persists whether the server rejected this device's credentials:
+    /// records `syncAuthFailedAt` on `AUTH_FAILED`, removes it on
+    /// `.success`, and leaves it untouched for other failures.
+    static func recordOutcome(
+        _ outcome: SyncBatchOutcome,
+        defaults: UserDefaults = .standard,
+        now: Date = Date()
+    ) {
+        switch outcome {
+        case .success:
+            defaults.removeObject(forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
+        case .failed(code: CoreErrorCodes.authFailed):
+            defaults.set(now.timeIntervalSince1970, forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
+        case .failed:
+            break
+        }
     }
 
     /// Runs after every sync batch, immediate or background: reaps the
@@ -50,7 +68,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
     private var pathUsesCellular = false
 
     // Uploads run inside the Go engine (its own net/http client, driven
-    // by syncBatch); there is no background URLSession. The one this
+    // by syncBatchOutcome); there is no background URLSession. The one this
     // class used to create was never used for any transfer.
     private init() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
@@ -123,10 +141,18 @@ public class BackgroundSyncManager: @unchecked Sendable {
         let runBatch = runSyncBatch
         let sweep = afterBatchSweep
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = runBatch(timeout, batch)
-            AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
-            sweep()
-            completion?(result.uploaded > 0 || result.eventsSent > 0)
+            let outcome = runBatch(timeout, batch)
+            Self.recordOutcome(outcome)
+            switch outcome {
+            case .success(let uploaded, let eventsSent):
+                AppleSyncLogger.shared.logSync(uploaded: uploaded, events: eventsSent)
+                sweep()
+                completion?(uploaded > 0 || eventsSent > 0)
+            case .failed(let code):
+                AppleSyncLogger.shared.log("Sync batch failed: \(code ?? "unknown")")
+                sweep()
+                completion?(false)
+            }
         }
     }
 
@@ -180,8 +206,14 @@ public class BackgroundSyncManager: @unchecked Sendable {
         let runBatch = runSyncBatch
         let sweep = afterBatchSweep
         DispatchQueue.global(qos: .background).async {
-            let result = runBatch(timeout, batch)
-            AppleSyncLogger.shared.logSync(uploaded: result.uploaded, events: result.eventsSent)
+            let outcome = runBatch(timeout, batch)
+            Self.recordOutcome(outcome)
+            switch outcome {
+            case .success(let uploaded, let eventsSent):
+                AppleSyncLogger.shared.logSync(uploaded: uploaded, events: eventsSent)
+            case .failed(let code):
+                AppleSyncLogger.shared.log("Background sync batch failed: \(code ?? "unknown")")
+            }
             sweep()
             tracker.completeOnce {
                 task.setTaskCompleted(success: true)

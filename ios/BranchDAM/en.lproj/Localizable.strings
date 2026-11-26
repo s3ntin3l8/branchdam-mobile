@@ -225,6 +225,8 @@
 "Sync cancelled by user" = "Sync cancelled by user";
 "Reset %lld failed uploads to pending" = "Reset %lld failed uploads to pending";
 "Never" = "Never";
+"Re-pair this device" = "Re-pair this device";
+"The server rejected this device's credentials. Pair again with a new QR code in Settings to resume syncing." = "The server rejected this device's credentials. Pair again with a new QR code in Settings to resume syncing.";
 
 /* Lineage review (LineageViewModel) */
 "Failed to confirm lineage pair (engine unavailable)" = "Failed to confirm lineage pair (engine unavailable)";

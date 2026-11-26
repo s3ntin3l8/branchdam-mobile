@@ -105,7 +105,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
         let calls = SyncCallRecorder()
         manager.runSyncBatch = { _, _ in
             calls.record("batch")
-            return (uploaded: 1, eventsSent: 0)
+            return .success(uploaded: 1, eventsSent: 0)
         }
         manager.afterBatchSweep = { calls.record("sweep") }
 
@@ -131,7 +131,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
         let calls = SyncCallRecorder()
         manager.runSyncBatch = { _, _ in
             calls.record("batch")
-            return (uploaded: 0, eventsSent: 0)
+            return .success(uploaded: 0, eventsSent: 0)
         }
         manager.afterBatchSweep = { calls.record("sweep") }
 
@@ -140,6 +140,65 @@ final class BackgroundSyncManagerTests: XCTestCase {
         wait(for: [skipped], timeout: 15.0)
 
         XCTAssertEqual(calls.calls, [])
+    }
+
+    // MARK: - AUTH_FAILED outcome recording (#306)
+
+    func testRecordOutcomeSetsAndClearsAuthFailedTimestamp() {
+        let suiteName = "BackgroundSyncManagerTests.recordOutcome.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let key = BranchDamKeys.syncAuthFailedAt.rawValue
+        let t1 = Date(timeIntervalSince1970: 1_000)
+        let t2 = Date(timeIntervalSince1970: 2_000)
+
+        BackgroundSyncManager.recordOutcome(.failed(code: CoreErrorCodes.authFailed), defaults: defaults, now: t1)
+        XCTAssertEqual(defaults.double(forKey: key), 1_000)
+
+        // Other failures leave the recorded AUTH_FAILED timestamp untouched.
+        BackgroundSyncManager.recordOutcome(.failed(code: "NETWORK_ERROR"), defaults: defaults, now: t2)
+        XCTAssertEqual(defaults.double(forKey: key), 1_000)
+        BackgroundSyncManager.recordOutcome(.failed(code: nil), defaults: defaults, now: t2)
+        XCTAssertEqual(defaults.double(forKey: key), 1_000)
+
+        // A later success clears the key.
+        BackgroundSyncManager.recordOutcome(.success(uploaded: 0, eventsSent: 0), defaults: defaults, now: t2)
+        XCTAssertNil(defaults.object(forKey: key))
+
+        // Non-auth failures when unset do not set the key.
+        BackgroundSyncManager.recordOutcome(.failed(code: "NETWORK_ERROR"), defaults: defaults, now: t2)
+        XCTAssertNil(defaults.object(forKey: key))
+    }
+
+    func testTriggerImmediateSyncAuthFailedStoresSyncAuthFailedAt() {
+        let manager = BackgroundSyncManager.shared
+        let savedBatch = manager.runSyncBatch
+        let savedSweep = manager.afterBatchSweep
+        let key = BranchDamKeys.syncAuthFailedAt.rawValue
+        let savedAuthFailedAt = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        defer {
+            manager.runSyncBatch = savedBatch
+            manager.afterBatchSweep = savedSweep
+            if let savedAuthFailedAt {
+                UserDefaults.standard.set(savedAuthFailedAt, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        manager.runSyncBatch = { _, _ in .failed(code: CoreErrorCodes.authFailed) }
+        manager.afterBatchSweep = {}
+
+        let finished = expectation(description: "auth failed sync finished")
+        manager.triggerImmediateSync(isOnCellular: false) { success in
+            XCTAssertFalse(success)
+            finished.fulfill()
+        }
+        wait(for: [finished], timeout: 15.0)
+
+        XCTAssertGreaterThan(UserDefaults.standard.double(forKey: key), 0)
     }
 }
 

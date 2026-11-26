@@ -15,19 +15,23 @@ final class SyncStatusViewModel: ObservableObject {
     @Published var activeProgress: ActiveUploadProgress? = nil
     @Published var connectionDiagnosticError: String? = nil
     @Published var isTestingConnection = false
+    @Published var needsRepair = false
 
-    private static let lastSyncTimeKey = "branchdam_last_sync_time"
+    private static let lastSyncTimeKey = BranchDamKeys.lastSyncTime.rawValue
+    private let defaults: UserDefaults
     private var pollingTask: Task<Void, Never>? = nil
     private var isCancelled = false
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         refresh()
     }
 
     func refresh() {
         isEngineReady = BranchDamCoreBridge.shared.isInitialized
-        let ts = UserDefaults.standard.double(forKey: Self.lastSyncTimeKey)
+        let ts = defaults.double(forKey: Self.lastSyncTimeKey)
         lastSyncTime = ts > 0 ? Date(timeIntervalSince1970: ts) : nil
+        needsRepair = defaults.double(forKey: BranchDamKeys.syncAuthFailedAt.rawValue) > 0
         refreshQueueMetrics()
     }
 
@@ -69,8 +73,9 @@ final class SyncStatusViewModel: ObservableObject {
                 guard !self.isCancelled else { return }
                 self.stopProgressPolling()
                 let now = Date()
-                UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.lastSyncTimeKey)
+                self.defaults.set(now.timeIntervalSince1970, forKey: Self.lastSyncTimeKey)
                 self.lastSyncTime = now
+                self.needsRepair = self.defaults.double(forKey: BranchDamKeys.syncAuthFailedAt.rawValue) > 0
                 self.isSyncing = false
                 self.activeProgress = nil
 
@@ -78,6 +83,8 @@ final class SyncStatusViewModel: ObservableObject {
                 guard !self.isCancelled, !self.isSyncing else { return }
                 if success {
                     self.syncResultMessage = String(localized: "Sync completed")
+                } else if self.needsRepair {
+                    self.syncResultMessage = nil
                 } else if self.pendingCount > 0 {
                     self.syncResultMessage = String(localized: "Sync attempt failed (check connection or server)")
                 } else {
@@ -170,6 +177,26 @@ public struct SyncStatusView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    if viewModel.needsRepair {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Re-pair this device", systemImage: "exclamationmark.triangle.fill")
+                                .font(.headline)
+                                .foregroundColor(.red)
+                            Text("The server rejected this device's credentials. Pair again with a new QR code in Settings to resume syncing.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Button("Go to Settings") {
+                                NotificationCenter.default.post(name: .branchdamSwitchToSettings, object: nil)
+                            }
+                            .font(.caption.bold())
+                            .padding(.top, 2)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                    }
+
                     // Engine / Connection Status Card
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 8) {
@@ -356,6 +383,9 @@ public struct SyncStatusView: View {
                 .padding()
             }
             .navigationTitle("Sync Status")
+            .onAppear {
+                viewModel.refresh()
+            }
         }
     }
 
