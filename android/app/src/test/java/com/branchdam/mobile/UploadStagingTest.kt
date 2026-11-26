@@ -16,6 +16,7 @@ import com.branchdam.mobile.observer.stagedUploadIsOriginal
 import com.branchdam.mobile.triage.LocalFileState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -327,7 +328,152 @@ class UploadStagingTest {
         )
     }
 
+    @Test
+    fun unreferencedCopiesAreKeptWhenTheEngineCannotAnswer() {
+        val now = 10L * UploadStaging.ORPHAN_GRACE_MS
+        val stale = now - UploadStaging.ORPHAN_GRACE_MS - 1L
+        // An empty status map is what a failed or uninitialised engine
+        // returns: the status of the copy is unknown, not "no row".
+        assertFalse(
+            "an unknown status must not cost the only copy of a pending upload",
+            UploadStaging.shouldDeleteStaged("1_a.jpg", null, stale, now, engineAnswered = false),
+        )
+        assertFalse(
+            UploadStaging.shouldDeleteStaged("1_a.jpg", "NOT_ENQUEUED", stale, now, engineAnswered = false),
+        )
+    }
+
+    @Test
+    fun stagedCopiesSurviveACleanupPassWithoutAnEngineStatus() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+        val staged = UploadStaging.microVideoFile(context, item)
+        staged.parentFile?.mkdirs()
+        staged.writeText("video")
+
+        // Older than the orphan grace: only the grace would remove it. The
+        // age is pinned through nowMs, not through the file's timestamp, so
+        // the test cannot pass by accident when the file stays fresh.
+        val nowMs = System.currentTimeMillis() + 2 * UploadStaging.ORPHAN_GRACE_MS
+        val removed = UploadStaging.cleanup(context, statuses = emptyMap(), nowMs = nowMs)
+
+        assertEquals("no status means no safe answer: nothing may be reaped", 0, removed)
+        assertTrue(
+            "the staged micro video must survive an engine outage: it may be the only copy",
+            staged.exists(),
+        )
+    }
+
+    @Test
+    fun staleStagedCopiesAreReapedWhenTheEngineAnswers() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+        val stale = UploadStaging.microVideoFile(context, item)
+        stale.parentFile?.mkdirs()
+        stale.writeText("video")
+
+        // The engine answered, but no upload row references this copy: only
+        // the orphan grace keeps it, so the grace must also let it go. The
+        // guard must not fail closed forever.
+        val nowMs = System.currentTimeMillis() + 2 * UploadStaging.ORPHAN_GRACE_MS
+        val removed = UploadStaging.cleanup(
+            context,
+            statuses = mapOf("/elsewhere/other.jpg" to "PENDING"),
+            nowMs = nowMs,
+        )
+
+        assertEquals(1, removed)
+        assertFalse("an unreferenced staged copy must be reaped once it is older than the grace", stale.exists())
+    }
+
+    @Test
+    fun microVideoIsStagedInsideTheStagingDir() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+
+        val file = UploadStaging.microVideoFile(context, item)
+
+        assertEquals(
+            "the micro video must live in the staging dir, so the cleanup sweep finds it",
+            UploadStaging.stagingDir(context).absolutePath,
+            file.parentFile?.absolutePath,
+        )
+        assertEquals("42_IMG_0001.jpg_microvideo.mp4", file.name)
+    }
+
+    @Test
+    fun microVideoNamesAreUniquePerMediaStoreRow() {
+        val context = stagingContext(ByteArray(0))
+        // Same display name, different rows: the old per-stem file name
+        // made the second photo overwrite the first one's video.
+        val first = imageItem(id = 1L, displayName = "IMG_0001.jpg")
+        val second = imageItem(id = 2L, displayName = "IMG_0001.jpg")
+
+        assertNotEquals(
+            "two rows with the same display name must not share a micro video file",
+            UploadStaging.microVideoFile(context, first).name,
+            UploadStaging.microVideoFile(context, second).name,
+        )
+    }
+
+    @Test
+    fun microVideoNameDiffersFromTheStagedCopyOfTheSameItem() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+
+        assertNotEquals(
+            "the micro video must not overwrite the staged copy of the photo itself",
+            UploadStaging.stagedFileName(item),
+            UploadStaging.microVideoFile(context, item).name,
+        )
+    }
+
+    @Test
+    fun microVideoIsWrittenThroughAPartFile() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+
+        val part = UploadStaging.microVideoPartFile(context, item)
+
+        assertEquals(UploadStaging.stagingDir(context).absolutePath, part.parentFile?.absolutePath)
+        assertEquals(
+            "a crash mid-extraction must leave only a .part the cleanup reaps",
+            UploadStaging.microVideoFile(context, item).name + ".part",
+            part.name,
+        )
+    }
+
+    @Test
+    fun stagedMicroVideoIsRemovedOnceItsUploadCompleted() {
+        val context = stagingContext(ByteArray(0))
+        val item = imageItem(id = 42L)
+        val staged = UploadStaging.microVideoFile(context, item)
+        staged.parentFile?.mkdirs()
+        staged.writeText("video")
+
+        val removed = UploadStaging.cleanup(context, statuses = mapOf(staged.absolutePath to "COMPLETED"))
+
+        assertEquals(1, removed)
+        assertFalse("a completed micro video must not stay in the staging dir", staged.exists())
+    }
+
     // --- helpers ---
+
+    /**
+     * A camera-roll photo: the still a motion photo is split from. The
+     * micro video is staged next to the still's staged copy, under the
+     * same row id.
+     */
+    private fun imageItem(id: Long, displayName: String = "IMG_0001.jpg") = MediaItem(
+        id = id,
+        contentUri = "content://media/external/images/media/$id",
+        filePath = "",
+        displayName = displayName,
+        mimeType = "image/jpeg",
+        sizeBytes = 1L,
+        dateTakenUnix = 0L,
+        isRaw = false,
+    )
 
     private fun testItem(): MediaItem = MediaItem(
         id = 1L,
@@ -385,6 +531,10 @@ class UploadStagingTest {
         val context = mock<Context>()
         whenever(context.contentResolver).thenReturn(resolver)
         whenever(context.noBackupFilesDir).thenReturn(temporaryFolder.newFolder("staging"))
+        // The OTG sweep derives its legacy root from filesDir; keep it
+        // inside the test folder instead of a path relative to the
+        // working directory.
+        whenever(context.filesDir).thenReturn(temporaryFolder.newFolder("files"))
         return context
     }
 

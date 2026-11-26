@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -413,6 +415,144 @@ func TestMediaStateAndGetMediaStatus(t *testing.T) {
 	}
 	if allStatuses[localID] != "COMPLETED" {
 		t.Fatalf("expected allStatuses[%s] = COMPLETED, got %s", localID, allStatuses[localID])
+	}
+}
+
+// TestGetAllMediaStatusesFailsWhenTheUploadQueueCannotBeRead: a map that
+// silently lost the upload_queue rows would lack the local_path keys a
+// shell looks a staged copy up by, so every staged copy would look
+// unreferenced -- and a shell that reaps unreferenced copies would then
+// delete the only copy of a pending upload. The read must fail instead,
+// so the shell knows it has no answer.
+func TestGetAllMediaStatusesFailsWhenTheUploadQueueCannotBeRead(t *testing.T) {
+	q := newTestQueue(t)
+
+	q.mu.Lock()
+	_, err := q.db.Exec(`DROP TABLE upload_queue`)
+	q.mu.Unlock()
+	if err != nil {
+		t.Fatalf("drop upload_queue: %v", err)
+	}
+
+	if _, err := q.GetAllMediaStatuses(); err == nil {
+		t.Fatal("expected an error when the upload queue cannot be read")
+	}
+}
+
+// TestGetAllMediaStatusesFailsWhenAnUploadQueueRowCannotBeRead: a row the
+// driver cannot decode is a lost row -- its local_path key never reaches
+// the map, so the staged copy it names looks unreferenced. The read must
+// fail instead of handing out the partial map.
+func TestGetAllMediaStatusesFailsWhenAnUploadQueueRowCannotBeRead(t *testing.T) {
+	q := newTestQueue(t)
+
+	// A row whose local_path is NULL: the engine never writes one, and the
+	// driver cannot decode it into the string the map is built from.
+	q.mu.Lock()
+	_, err := q.db.Exec(`DROP TABLE upload_queue`)
+	if err == nil {
+		_, err = q.db.Exec(`CREATE TABLE upload_queue (
+			id INTEGER PRIMARY KEY,
+			source_path_hash TEXT,
+			local_path TEXT,
+			target_filename TEXT,
+			blake3_hash TEXT,
+			status TEXT)`)
+	}
+	if err == nil {
+		_, err = q.db.Exec(`INSERT INTO upload_queue (local_path, target_filename, status)
+			VALUES (NULL, 'broken.jpg', 'PENDING')`)
+	}
+	q.mu.Unlock()
+	if err != nil {
+		t.Fatalf("prepare unreadable row: %v", err)
+	}
+
+	statuses, err := q.GetAllMediaStatuses()
+	if err == nil {
+		t.Fatal("expected an error when an upload queue row cannot be read")
+	}
+	if len(statuses) != 0 {
+		t.Fatalf("expected no statuses alongside the error, got %v", statuses)
+	}
+}
+
+// errIterStopped is what a result set that stops half-way reports: the
+// shape an unreadable page takes mid-scan.
+var errIterStopped = errors.New("result set stopped mid-iteration")
+
+// iterStopDriver is a database/sql driver whose rows serve one row and
+// then fail, so the read of the upload queue ends early.
+type iterStopDriver struct{}
+
+func (iterStopDriver) Open(string) (driver.Conn, error) { return iterStopConn{}, nil }
+
+type iterStopConn struct{}
+
+func (iterStopConn) Prepare(string) (driver.Stmt, error) { return iterStopStmt{}, nil }
+func (iterStopConn) Close() error                        { return nil }
+func (iterStopConn) Begin() (driver.Tx, error)           { return nil, errors.New("no transactions") }
+
+type iterStopStmt struct{}
+
+func (iterStopStmt) Close() error  { return nil }
+func (iterStopStmt) NumInput() int { return -1 }
+func (iterStopStmt) Exec([]driver.Value) (driver.Result, error) {
+	return nil, errors.New("no exec")
+}
+func (iterStopStmt) Query([]driver.Value) (driver.Rows, error) { return &iterStopRows{}, nil }
+
+type iterStopRows struct{ served bool }
+
+func (r *iterStopRows) Columns() []string {
+	return []string{"source_path_hash", "local_path", "target_filename", "blake3_hash", "status"}
+}
+func (r *iterStopRows) Close() error { return nil }
+func (r *iterStopRows) Next(dest []driver.Value) error {
+	if r.served {
+		return errIterStopped
+	}
+	r.served = true
+	dest[0] = "src-hash"
+	dest[1] = "/staging/one.jpg"
+	dest[2] = "one.jpg"
+	dest[3] = "b3-one"
+	dest[4] = "PENDING"
+	return nil
+}
+
+func init() {
+	sql.Register("queue-iter-stop", iterStopDriver{})
+}
+
+// TestGetAllMediaStatusesFailsWhenTheUploadQueueStopsMidIteration: the
+// rows the iteration never reached are lost the same way as a dropped
+// table -- their local_path keys never reach the map, so every staged
+// copy would look unreferenced. The read must fail instead.
+func TestGetAllMediaStatusesFailsWhenTheUploadQueueStopsMidIteration(t *testing.T) {
+	q := newTestQueue(t)
+
+	db, err := sql.Open("queue-iter-stop", "")
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	real := q.db
+	t.Cleanup(func() { _ = real.Close() })
+	q.mu.Lock()
+	q.db = db
+	q.mu.Unlock()
+
+	statuses, err := q.GetAllMediaStatuses()
+	if err == nil {
+		t.Fatal("expected an error when the upload queue stops mid-iteration")
+	}
+	if !errors.Is(err, errIterStopped) {
+		t.Fatalf("error = %v, want it to wrap %v", err, errIterStopped)
+	}
+	if len(statuses) != 0 {
+		t.Fatalf("expected no statuses alongside the error, got %v", statuses)
 	}
 }
 

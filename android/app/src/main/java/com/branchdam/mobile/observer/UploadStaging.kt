@@ -112,6 +112,9 @@ object UploadStaging {
     private const val DIR_NAME = "upload_staging"
     private const val PART_SUFFIX = ".part"
 
+    /** Suffix of the staged micro video of a motion photo. */
+    private const val MICRO_VIDEO_SUFFIX = "_microvideo.mp4"
+
     /** An interrupted copy is abandoned after this long. */
     internal const val PART_GRACE_MS = 60L * 60L * 1000L
 
@@ -212,6 +215,27 @@ object UploadStaging {
     }
 
     /**
+     * Where the micro video of the motion photo [item] is staged: in the
+     * staging dir, so [cleanup] removes it once the engine reports the
+     * upload COMPLETED/OFFLOADED (or after the orphan grace period), and
+     * named after [stagedFileName], so two photos with the same display
+     * name in different folders never overwrite each other's video.
+     */
+    fun microVideoFile(context: Context, item: MediaItem): File =
+        File(stagingDir(context), stagedFileName(item) + MICRO_VIDEO_SUFFIX)
+
+    /**
+     * The `.part` file the micro video is written to before it is
+     * renamed onto [microVideoFile], so a crash mid-extraction leaves
+     * only a `.part` that [cleanup] already reaps.
+     */
+    fun microVideoPartFile(context: Context, item: MediaItem): File =
+        partFileOf(microVideoFile(context, item))
+
+    /** The `.part` sibling of [target]: a copy is written there first, then renamed onto [target]. */
+    private fun partFileOf(target: File): File = File(target.parentFile, target.name + PART_SUFFIX)
+
+    /**
      * Copies [item]'s bytes into the staging dir. Returns the staged file
      * and whether it holds the item's original bytes: only a successful
      * `setRequireOriginal` open does (#303).
@@ -235,7 +259,7 @@ object UploadStaging {
         val dir = stagingDir(context)
         if (!dir.exists() && !dir.mkdirs()) throw IOException("cannot create $dir")
         val target = File(dir, stagedFileName(item))
-        val part = File(dir, target.name + PART_SUFFIX)
+        val part = partFileOf(target)
 
         val uri = Uri.parse(item.contentUri)
         var originalRead = false
@@ -290,13 +314,26 @@ object UploadStaging {
     /**
      * Pure decision for [cleanup]: [status] is the engine's status for the
      * staged path (null when no upload row references it).
+     *
+     * [engineAnswered] is false when the status map came back empty:
+     * the engine is not initialised, the query threw, or the queue holds
+     * no media rows. An unknown status then means "not asked", not "no
+     * upload row": the copy may be the only one the phone holds of a
+     * pending upload, so it is kept (same guard as
+     * [OtgStaging.shouldDelete]).
      */
-    internal fun shouldDeleteStaged(fileName: String, status: String?, lastModifiedMs: Long, nowMs: Long): Boolean {
+    internal fun shouldDeleteStaged(
+        fileName: String,
+        status: String?,
+        lastModifiedMs: Long,
+        nowMs: Long,
+        engineAnswered: Boolean = true,
+    ): Boolean {
         val age = nowMs - lastModifiedMs
         return when {
             fileName.endsWith(PART_SUFFIX) -> age > PART_GRACE_MS
             status == "COMPLETED" || status == "OFFLOADED" -> true
-            status == null || status == "NOT_ENQUEUED" -> age > ORPHAN_GRACE_MS
+            status == null || status == "NOT_ENQUEUED" -> engineAnswered && age > ORPHAN_GRACE_MS
             // PENDING / IN_PROGRESS / FAILED: the bytes are still needed
             // for the upload or its retry.
             else -> false
@@ -308,16 +345,23 @@ object UploadStaging {
      * ones. Called after each sync batch. Also sweeps the OTG card
      * staging area (see [OtgStaging]) with the same status map. Returns
      * how many were removed.
+     *
+     * An empty [statuses] map means the status of every staged copy is
+     * unknown (the engine is not initialised, the query threw, or the
+     * queue holds no media rows). Nothing is reaped then: a copy whose
+     * row is still PENDING may be the only copy of that upload.
      */
     fun cleanup(
         context: Context,
         statuses: Map<String, String> = EngineHolder.getAllMediaStatuses(),
         nowMs: Long = System.currentTimeMillis(),
     ): Int {
+        val engineAnswered = statuses.isNotEmpty()
         var removed = 0
         for (file in stagingDir(context).listFiles().orEmpty()) {
             if (!file.isFile) continue
-            if (shouldDeleteStaged(file.name, statuses[file.absolutePath], file.lastModified(), nowMs) && file.delete()) {
+            val status = statuses[file.absolutePath]
+            if (shouldDeleteStaged(file.name, status, file.lastModified(), nowMs, engineAnswered) && file.delete()) {
                 removed++
             }
         }
