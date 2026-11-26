@@ -491,7 +491,7 @@ type iterStopConn struct{}
 
 func (iterStopConn) Prepare(string) (driver.Stmt, error) { return iterStopStmt{}, nil }
 func (iterStopConn) Close() error                        { return nil }
-func (iterStopConn) Begin() (driver.Tx, error)            { return nil, errors.New("no transactions") }
+func (iterStopConn) Begin() (driver.Tx, error)           { return nil, errors.New("no transactions") }
 
 type iterStopStmt struct{}
 
