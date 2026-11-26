@@ -137,4 +137,28 @@ final class QrPairingViewTests: XCTestCase {
         XCTAssertEqual(a, b)
         XCTAssertNotEqual(a, c)
     }
+
+    @MainActor func testHandlePostConnectClearsSyncAuthFailedAtAndTriggersSync() {
+        let suiteName = "QrPairingViewTests.handlePostConnect.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(1_700_000_000.0, forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
+
+        var scheduled = false
+        var triggered = false
+        var scanned = false
+
+        QrPairingView.handlePostConnect(
+            defaults: defaults,
+            scheduleSync: { scheduled = true },
+            triggerSync: { triggered = true },
+            scanChanges: { scanned = true }
+        )
+
+        XCTAssertNil(defaults.object(forKey: BranchDamKeys.syncAuthFailedAt.rawValue))
+        XCTAssertTrue(scheduled)
+        XCTAssertTrue(triggered)
+        XCTAssertTrue(scanned)
+    }
 }

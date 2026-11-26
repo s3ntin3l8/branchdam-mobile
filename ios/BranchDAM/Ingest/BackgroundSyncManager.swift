@@ -40,7 +40,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
         switch outcome {
         case .success:
             defaults.removeObject(forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
-        case .failed(code: "AUTH_FAILED"):
+        case .failed(code: CoreErrorCodes.authFailed):
             defaults.set(now.timeIntervalSince1970, forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
         case .failed:
             break

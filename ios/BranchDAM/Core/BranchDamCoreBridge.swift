@@ -20,6 +20,11 @@ public func coreErrorCode(_ message: String) -> String? {
     return String(message[codeRange])
 }
 
+/// Well-known error codes returned by the Go core (root `branchdam.go`).
+public enum CoreErrorCodes {
+    public static let authFailed = "AUTH_FAILED"
+}
+
 /// Outcome of a single `syncBatchOutcome` call.
 public enum SyncBatchOutcome: Equatable, Sendable {
     case success(uploaded: Int32, eventsSent: Int32)
@@ -422,15 +427,6 @@ public class BranchDamCoreBridge: @unchecked Sendable {
         #else
         return .success(uploaded: 0, eventsSent: 0)
         #endif
-    }
-
-    public func syncBatch(timeoutSecs: Int32 = 120, batchSize: Int32 = 10) -> (uploaded: Int32, eventsSent: Int32) {
-        switch syncBatchOutcome(timeoutSecs: timeoutSecs, batchSize: batchSize) {
-        case .success(let uploaded, let eventsSent):
-            return (uploaded, eventsSent)
-        case .failed:
-            return (0, 0)
-        }
     }
 
     public func isMediaOffloaded(localID: String) -> Bool {

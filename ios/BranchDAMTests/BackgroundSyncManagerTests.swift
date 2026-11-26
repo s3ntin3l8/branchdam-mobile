@@ -153,7 +153,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
         let t1 = Date(timeIntervalSince1970: 1_000)
         let t2 = Date(timeIntervalSince1970: 2_000)
 
-        BackgroundSyncManager.recordOutcome(.failed(code: "AUTH_FAILED"), defaults: defaults, now: t1)
+        BackgroundSyncManager.recordOutcome(.failed(code: CoreErrorCodes.authFailed), defaults: defaults, now: t1)
         XCTAssertEqual(defaults.double(forKey: key), 1_000)
 
         // Other failures leave the recorded AUTH_FAILED timestamp untouched.
@@ -188,7 +188,7 @@ final class BackgroundSyncManagerTests: XCTestCase {
             }
         }
 
-        manager.runSyncBatch = { _, _ in .failed(code: "AUTH_FAILED") }
+        manager.runSyncBatch = { _, _ in .failed(code: CoreErrorCodes.authFailed) }
         manager.afterBatchSweep = {}
 
         let finished = expectation(description: "auth failed sync finished")

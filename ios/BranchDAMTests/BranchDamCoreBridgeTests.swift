@@ -257,7 +257,7 @@ final class BranchDamCoreBridgeTests: XCTestCase {
     func testCoreErrorCodeParsesOnlyPrefixedCoreCodes() {
         XCTAssertEqual(
             coreErrorCode("branchdam: AUTH_FAILED: server rejected credentials (401)"),
-            "AUTH_FAILED"
+            CoreErrorCodes.authFailed
         )
         XCTAssertEqual(
             coreErrorCode("go.Error: branchdam: CONTEXT_CANCELED: sync uploads cancelled"),

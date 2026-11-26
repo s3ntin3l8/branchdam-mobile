@@ -60,11 +60,11 @@ public enum BranchDamKeys: String {
     case syncOnBatteryOnly = "branchdam_sync_on_battery_only"
 
     /// Number of items to process per sync batch. Passed to
-    /// `BranchDamCoreBridge.syncBatch` by `BackgroundSyncManager`.
+    /// `BranchDamCoreBridge.syncBatchOutcome` by `BackgroundSyncManager`.
     case uploadBatchSize = "branchdam_upload_batch_size"
 
     /// Maximum seconds to wait for a sync batch to complete. Passed to
-    /// `BranchDamCoreBridge.syncBatch` by `BackgroundSyncManager`.
+    /// `BranchDamCoreBridge.syncBatchOutcome` by `BackgroundSyncManager`.
     case syncTimeoutSecs = "branchdam_sync_timeout_secs"
 
     /// Debounce window (milliseconds) for PhotoKit change callbacks.
