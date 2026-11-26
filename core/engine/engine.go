@@ -78,6 +78,9 @@ type Engine struct {
 	// hashSizeLimit overrides maxEnqueueFileBytes; tests only.
 	hashSizeLimit int64
 
+	// markUploadComplete overrides e.q.MarkUploadComplete; tests only.
+	markUploadComplete func(id int64, nodeUUID string) error
+
 	activeMu         sync.Mutex
 	activeUpload     *ActiveUploadProgress
 	lastProgressTime time.Time
@@ -783,22 +786,35 @@ func (e *Engine) refreshChangedUpload(file *os.File, item *queue.UploadItem) (*q
 
 // preScreen asks the server whether it already holds item's content (by
 // hash) and, if so, completes the row with that node and reports true so
-// the payload is not streamed. Any error means "not known": upload anyway.
-func (e *Engine) preScreen(ctx context.Context, item *queue.UploadItem) bool {
+// the payload is not streamed. A non-nil error means the server reported
+// a match but MarkUploadComplete failed (the row was released back to
+// PENDING). Otherwise any check error means "not known": upload anyway.
+func (e *Engine) preScreen(ctx context.Context, item *queue.UploadItem) (bool, error) {
 	if e.c == nil {
-		return false
+		return false, nil
 	}
 	checkRes, checkErr := e.c.CheckContent(ctx, item.FastHash, item.Blake3Hash)
 	if checkErr != nil || !checkRes.Found || checkRes.NodeUUID == "" {
-		return false
+		return false, nil
 	}
 	slog.Info("engine: background sync pre-screen dedup — content already exists on server",
 		"nodeUUID", checkRes.NodeUUID, "localPath", item.LocalPath)
-	_ = e.q.MarkUploadComplete(item.ID, checkRes.NodeUUID)
+	markComplete := e.q.MarkUploadComplete
+	if e.markUploadComplete != nil {
+		markComplete = e.markUploadComplete
+	}
+	if err := markComplete(item.ID, checkRes.NodeUUID); err != nil {
+		// Hand the row back so the next sync asks again instead of
+		// stranding it IN_PROGRESS.
+		slog.Warn("engine: failed to mark prescreened upload complete; row released",
+			"id", item.ID, "nodeUUID", checkRes.NodeUUID, "err", err)
+		e.releaseUploads([]*queue.UploadItem{item})
+		return false, err
+	}
 	if err := e.q.UpdateLocalMediaNodeUUID(item.Blake3Hash, checkRes.NodeUUID); err != nil {
 		slog.Warn("engine: failed to update local media state nodeUUID", "blake3", item.Blake3Hash, "err", err)
 	}
-	return true
+	return true, nil
 }
 
 // uploadPendingItem attempts to open, re-check, pre-screen and stream
@@ -810,7 +826,9 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 	// server may still already hold what was hashed at enqueue.
 	info, statErr := os.Stat(item.LocalPath)
 	if statErr != nil {
-		if e.preScreen(ctx, item) {
+		if done, err := e.preScreen(ctx, item); err != nil {
+			return uploadFailed, err
+		} else if done {
 			return uploadCompleted, nil
 		}
 		_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file stat failed: %v", statErr), p.MaxRetries)
@@ -825,7 +843,9 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 	// not block on a FIFO, so the check comes first, and the open is
 	// non-blocking where the platform supports it.
 	if !info.Mode().IsRegular() {
-		if e.preScreen(ctx, item) {
+		if done, err := e.preScreen(ctx, item); err != nil {
+			return uploadFailed, err
+		} else if done {
 			return uploadCompleted, nil
 		}
 		notRegular := &client.ClientError{
@@ -838,7 +858,9 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 
 	file, openErr := os.OpenFile(item.LocalPath, os.O_RDONLY|openFlagsNonblock, 0)
 	if openErr != nil {
-		if e.preScreen(ctx, item) {
+		if done, err := e.preScreen(ctx, item); err != nil {
+			return uploadFailed, err
+		} else if done {
 			return uploadCompleted, nil
 		}
 		_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file open failed: %v", openErr), p.MaxRetries)
@@ -860,14 +882,18 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 	// the window the pre-open check cannot see.
 	opened, openedStatErr := file.Stat()
 	if openedStatErr != nil {
-		if e.preScreen(ctx, item) {
+		if done, err := e.preScreen(ctx, item); err != nil {
+			return uploadFailed, err
+		} else if done {
 			return uploadCompleted, nil
 		}
 		_ = e.q.MarkUploadFailed(item.ID, fmt.Sprintf("file stat failed: %v", openedStatErr), p.MaxRetries)
 		return uploadFailed, openedStatErr
 	}
 	if !opened.Mode().IsRegular() {
-		if e.preScreen(ctx, item) {
+		if done, err := e.preScreen(ctx, item); err != nil {
+			return uploadFailed, err
+		} else if done {
 			return uploadCompleted, nil
 		}
 		notRegular := &client.ClientError{
@@ -889,7 +915,9 @@ func (e *Engine) uploadPendingItem(ctx context.Context, item *queue.UploadItem, 
 	}
 
 	// Runs after the re-stat so it asks about the bytes on disk now.
-	if e.preScreen(ctx, item) {
+	if done, err := e.preScreen(ctx, item); err != nil {
+		return uploadFailed, err
+	} else if done {
 		return uploadCompleted, nil
 	}
 	// The batch ran out of time (or was cancelled) before the upload
