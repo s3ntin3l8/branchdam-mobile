@@ -9,6 +9,7 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.branchdam.mobile.EngineHolder
+import com.branchdam.mobile.lineage.MotionPhotoExtractor
 import com.branchdam.mobile.otg.OtgStaging
 import com.branchdam.mobile.triage.LocalFileState
 import com.branchdam.mobile.triage.queryLocalFileState
@@ -16,6 +17,22 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+
+internal typealias UploadEnqueuer = (
+    localPath: String,
+    filename: String,
+    capturedAtUnix: Long,
+    localId: String,
+    baseline: LocalFileState,
+) -> Long
+
+internal typealias LineageEnqueuer = (
+    parentLocalID: String,
+    childLocalID: String,
+    relationshipType: String,
+    resolver: String,
+    confidence: Double,
+) -> String
 
 /** Where the bytes the Go engine hashes and uploads come from. */
 enum class UploadSource {
@@ -144,13 +161,7 @@ object UploadStaging {
         context: Context,
         item: MediaItem,
         resolvePath: (Context, MediaItem) -> UploadPath? = ::pathForUpload,
-        enqueueMedia: (
-            localPath: String,
-            filename: String,
-            capturedAtUnix: Long,
-            localId: String,
-            baseline: LocalFileState,
-        ) -> Long = EngineHolder::enqueueMedia,
+        enqueueMedia: UploadEnqueuer = EngineHolder::enqueueMedia,
     ): Long {
         // Read the reclaim baseline before the bytes are copied: a change
         // in between leaves it describing the older bytes, so the reclaim
@@ -234,6 +245,50 @@ object UploadStaging {
 
     /** The `.part` sibling of [target]: a copy is written there first, then renamed onto [target]. */
     private fun partFileOf(target: File): File = File(target.parentFile, target.name + PART_SUFFIX)
+
+    /** Returns true when the child upload and lineage are queued or there is no embedded video. */
+    internal fun enqueueMicroVideo(
+        context: Context,
+        item: MediaItem,
+        skipIfAlreadyQueued: Boolean = false,
+        enqueueMedia: UploadEnqueuer = EngineHolder::enqueueMedia,
+        enqueueLineageEvent: LineageEnqueuer = EngineHolder::enqueueLineageEvent,
+    ): Boolean {
+        if (item.isVideo) return true
+        val uri = Uri.parse(item.contentUri)
+        if (!MotionPhotoExtractor.detectMotionPhoto(context, uri).isMotionPhoto) return true
+
+        val childLocalID = "${item.contentUri}/microvideo"
+        // The scan can see an item again after its confirmation row has been cleared.
+        if (skipIfAlreadyQueued && EngineHolder.getMediaStatus(childLocalID) != "NOT_ENQUEUED") return true
+
+        val videoFile = microVideoFile(context, item)
+        val partFile = microVideoPartFile(context, item)
+        val alreadyStaged = videoFile.exists()
+        val extracted = MotionPhotoExtractor.extractMicroVideo(context, uri, partFile)
+        if (!extracted || !partFile.renameTo(videoFile)) {
+            partFile.delete()
+            Log.w(TAG, "staging micro video failed for ${item.contentUri}")
+            return false
+        }
+
+        val videoFilename = item.displayName.substringBeforeLast('.') + MICRO_VIDEO_SUFFIX
+        val queueId = enqueueMedia(
+            videoFile.absolutePath, videoFilename, item.dateTakenUnix, childLocalID, LocalFileState.UNKNOWN,
+        )
+        if (queueId <= 0L) {
+            // A retry after a lineage failure may already have a row for this path.
+            if (!alreadyStaged) discardIfStaged(context, videoFile.absolutePath)
+            return false
+        }
+        val eventId = enqueueLineageEvent(
+            item.contentUri, childLocalID, "MOTION_PHOTO_CONTAINS", "android_motion_photo_xmp", 1.00,
+        )
+        if (eventId.isEmpty()) {
+            Log.w(TAG, "motion photo lineage not recorded: ${item.contentUri} -> $childLocalID")
+        }
+        return eventId.isNotEmpty()
+    }
 
     /**
      * Copies [item]'s bytes into the staging dir. Returns the staged file

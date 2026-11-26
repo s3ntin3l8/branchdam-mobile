@@ -12,7 +12,9 @@ import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.PendingImport
 import com.branchdam.mobile.R
+import com.branchdam.mobile.observer.LineageEnqueuer
 import com.branchdam.mobile.observer.MediaItem
+import com.branchdam.mobile.observer.UploadEnqueuer
 import com.branchdam.mobile.observer.UploadStaging
 import com.branchdam.mobile.receiver.ImportConfirmationReceiver
 
@@ -193,8 +195,8 @@ object ImportConfirmationNotifier {
      * [ImportConfirmationWorker], never in the broadcast receiver.
      *
      * - Import now / Later: queue each item for upload and forget its
-     *   pending row once queued (a row whose enqueue failed stays
-     *   pending). Import now syncs at once; Later leaves it to the
+     *   pending row once queued with any embedded micro video and its
+     *   lineage. Import now syncs at once; Later leaves it to the
      *   periodic sync.
      * - Skip: suppress each item so no later scan offers it again.
      *
@@ -259,11 +261,17 @@ object ImportConfirmationNotifier {
      * ACCESS_MEDIA_LOCATION), as auto-import does. Without one (unit
      * tests) the recorded DATA path is enqueued.
      */
-    private fun importItems(context: Context?, items: List<PendingImport>): Int {
+    internal fun importItems(
+        context: Context?,
+        items: List<PendingImport>,
+        enqueueMedia: UploadEnqueuer = EngineHolder::enqueueMedia,
+        enqueueLineageEvent: LineageEnqueuer = EngineHolder::enqueueLineageEvent,
+    ): Int {
         var queued = 0
         for (item in items) {
+            val mediaItem = item.toMediaItem()
             val queueId = if (context != null) {
-                UploadStaging.enqueue(context, item.toMediaItem())
+                UploadStaging.enqueue(context, mediaItem, enqueueMedia = enqueueMedia)
             } else {
                 EngineHolder.enqueueMedia(
                     localPath = item.localPath,
@@ -272,9 +280,16 @@ object ImportConfirmationNotifier {
                     localId = item.localId,
                 )
             }
-            if (queueId > 0L) {
+            if (queueId <= 0L) continue
+            queued++
+            val motionPhotoComplete = context == null || UploadStaging.enqueueMicroVideo(
+                context,
+                mediaItem,
+                enqueueMedia = enqueueMedia,
+                enqueueLineageEvent = enqueueLineageEvent,
+            )
+            if (motionPhotoComplete) {
                 EngineHolder.deletePendingImport(item.localId)
-                queued++
             }
         }
         return queued

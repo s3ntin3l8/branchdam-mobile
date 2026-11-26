@@ -2,20 +2,18 @@ package com.branchdam.mobile
 
 import android.content.ContentResolver
 import android.content.Context
-import android.content.SharedPreferences
 import android.database.Cursor
 import android.net.Uri
-import android.os.Handler
 import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.observer.MediaStoreObserver
 import com.branchdam.mobile.observer.UploadStaging
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
@@ -26,7 +24,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 
 /**
- * The motion photo branch of [MediaStoreObserver]: the micro video
+ * The motion photo staging used by [MediaStoreObserver]: the micro video
  * extracted from a motion photo is staged in the upload staging dir and
  * enqueued from there.
  *
@@ -61,7 +59,7 @@ class MediaStoreObserverMotionPhotoTest {
     /**
      * A context that serves [bytes] for [uri] the way the MediaStore
      * would -- the bytes for the extraction, the size for the bounds
-     * check -- and has auto-import switched on.
+     * check.
      */
     private fun createMotionPhotoContext(uri: Uri, bytes: ByteArray): Context {
         val cursor: Cursor = mock()
@@ -75,13 +73,6 @@ class MediaStoreObserverMotionPhotoTest {
         whenever(resolver.openInputStream(eq(uri))).thenAnswer { ByteArrayInputStream(bytes) }
 
         val context: Context = mock()
-        val prefs: SharedPreferences = mock()
-        val editor: SharedPreferences.Editor = mock()
-        whenever(prefs.getLong(BranchDamKeys.OBSERVER_LAST_SCANNED_TIMESTAMP, 0L)).thenReturn(0L)
-        whenever(prefs.getBoolean(BranchDamKeys.AUTO_IMPORT_CAMERA_ROLL, false)).thenReturn(true)
-        whenever(prefs.edit()).thenReturn(editor)
-        whenever(editor.putLong(any(), any())).thenReturn(editor)
-        whenever(context.getSharedPreferences(BranchDamKeys.PREFS_NAME, Context.MODE_PRIVATE)).thenReturn(prefs)
         whenever(context.contentResolver).thenReturn(resolver)
         whenever(context.noBackupFilesDir).thenReturn(tempFolder.root)
         return context
@@ -98,17 +89,6 @@ class MediaStoreObserverMotionPhotoTest {
         isRaw = false,
     )
 
-    /**
-     * An observer with a stubbed handler: the real one starts a
-     * HandlerThread the test has no use for.
-     */
-    private fun observer(context: Context, enqueue: (String) -> Long): MediaStoreObserver =
-        MediaStoreObserver(
-            context = context,
-            handler = mock<Handler>(),
-            enqueueMedia = { localPath, _, _, _ -> enqueue(localPath) },
-        )
-
     @Test
     fun motionPhotoMicroVideoIsEnqueuedFromTheStagingDir() {
         val payload = "MICRO_VIDEO_BYTES".toByteArray(Charsets.ISO_8859_1)
@@ -118,10 +98,17 @@ class MediaStoreObserverMotionPhotoTest {
         val item = motionPhotoItem(uri, bytes.size.toLong())
 
         val enqueued = mutableListOf<String>()
-        observer(context) { path ->
-            enqueued += path
-            1L
-        }.enqueueMotionPhotoMicroVideos(listOf(item))
+        assertTrue(
+            UploadStaging.enqueueMicroVideo(
+                context,
+                item,
+                enqueueMedia = { path, _, _, _, _ ->
+                    enqueued += path
+                    1L
+                },
+                enqueueLineageEvent = { _, _, _, _, _ -> "event" },
+            ),
+        )
 
         assertEquals("the micro video must be enqueued exactly once", 1, enqueued.size)
         val stagedDir = UploadStaging.stagingDir(context)
@@ -149,7 +136,7 @@ class MediaStoreObserverMotionPhotoTest {
         val context = createMotionPhotoContext(uri, bytes)
         val item = motionPhotoItem(uri, bytes.size.toLong())
 
-        observer(context) { 0L }.enqueueMotionPhotoMicroVideos(listOf(item))
+        assertFalse(UploadStaging.enqueueMicroVideo(context, item, enqueueMedia = { _, _, _, _, _ -> 0L }))
 
         assertTrue(
             "a refused enqueue must not leave the staged copy behind",
