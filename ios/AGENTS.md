@@ -31,8 +31,7 @@ iOS shell (Swift, SwiftUI, PhotoKit, `BGProcessingTask`) over the gomobile-bound
   surfaces `needsRepair` as a "Re-pair this device" prompt linking to Settings (`QrPairingView`).
 - **Local IDs** are the bare `PHAsset.localIdentifier` (no `ph://`); a paired video child is `<id>/pairedVideo`.
 - **Background sync** is a `BGProcessingTask` (`com.branchdam.mobile.sync`) scheduled on entering the background and
-  after pairing, and rescheduled when a run completes. The expiration handler currently completes the task without
-  rescheduling (#305); any new exit path must call `scheduleBackgroundSync()`. Uploads run in the Go core's HTTP client; don't add a `URLSession`
+  after pairing, and rescheduled when a run completes or expires (#305); any new exit path must call `scheduleBackgroundSync()`. Uploads run in the Go core's HTTP client; don't add a `URLSession`
   background uploader.
 - **Staged media** lives in `Caches/staged_media` (`PhotoKitObserver.stagedMediaDirectory`), which the OS may purge
   before an upload runs (#309); keep that in mind before adding anything that relies on a staged file surviving.

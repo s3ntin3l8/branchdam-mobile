@@ -55,6 +55,11 @@ public class BackgroundSyncManager: @unchecked Sendable {
         _ = AppleOtgStaging.sweepAfterSync()
     }
 
+    /// Schedules the next background sync run. Injectable (internal, so
+    /// `@testable` tests can swap it) without invoking `BGTaskScheduler`.
+    /// Read once per sync, on the calling thread.
+    var schedule: @Sendable () -> Void = {}
+
     private static let defaultBatchSize = 10
     private static let defaultTimeoutSecs = 120
     private static let defaultIntervalMinutes = 15
@@ -71,6 +76,9 @@ public class BackgroundSyncManager: @unchecked Sendable {
     // by syncBatchOutcome); there is no background URLSession. The one this
     // class used to create was never used for any transfer.
     private init() {
+        schedule = { [weak self] in
+            self?.scheduleBackgroundSync()
+        }
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let expensive = path.isExpensive
             let cellular = path.usesInterfaceType(.cellular)
@@ -179,26 +187,44 @@ public class BackgroundSyncManager: @unchecked Sendable {
     }
 
     private func handleBackgroundSync(task: BGProcessingTask) {
+        task.expirationHandler = runBackgroundSync(
+            complete: { task.setTaskCompleted(success: $0) },
+            cancel: { BranchDamCoreBridge.shared.setCancelFlag() }
+        )
+    }
+
+    /// Runs the background sync state machine without a `BGProcessingTask` so
+    /// tests can drive all three exit paths (expiry, mobile-data skip, and
+    /// normal completion). Returns the expiration handler to install on the
+    /// task or invoke directly in tests.
+    @discardableResult
+    func runBackgroundSync(
+        isOnCellular: Bool? = nil,
+        complete: @escaping @Sendable (Bool) -> Void,
+        cancel: @escaping @Sendable () -> Void
+    ) -> @Sendable () -> Void {
         // E.4: Set the Go engine's cancel flag so in-flight HTTP transfers
         // stop promptly when iOS reclaims the background time.
         let tracker = SyncTaskTracker()
+        let scheduleNext = schedule
 
-        task.expirationHandler = {
-            BranchDamCoreBridge.shared.setCancelFlag()
+        let expirationHandler: @Sendable () -> Void = {
+            cancel()
             tracker.completeOnce {
-                task.setTaskCompleted(success: false)
+                complete(false)
+                scheduleNext()
             }
         }
 
         // BGProcessingTaskRequest can only ask for "any network"; enforce
         // the mobile-data setting here and try again at the next window.
-        guard shouldAllowImmediateSync(isOnCellular: isOnCellular) else {
+        guard shouldAllowImmediateSync(isOnCellular: isOnCellular ?? self.isOnCellular) else {
             AppleSyncLogger.shared.log("Background sync skipped: on mobile data and Sync on Mobile Data is off")
             tracker.completeOnce {
-                task.setTaskCompleted(success: true)
-                self.scheduleBackgroundSync()
+                complete(true)
+                scheduleNext()
             }
-            return
+            return expirationHandler
         }
 
         let timeout = Int32(readTimeoutSecs())
@@ -216,10 +242,12 @@ public class BackgroundSyncManager: @unchecked Sendable {
             }
             sweep()
             tracker.completeOnce {
-                task.setTaskCompleted(success: true)
-                self.scheduleBackgroundSync()
+                complete(true)
+                scheduleNext()
             }
         }
+
+        return expirationHandler
     }
 }
 

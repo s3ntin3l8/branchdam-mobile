@@ -200,6 +200,169 @@ final class BackgroundSyncManagerTests: XCTestCase {
 
         XCTAssertGreaterThan(UserDefaults.standard.double(forKey: key), 0)
     }
+
+    // MARK: - Background sync exit paths (#305)
+
+    func testBackgroundSyncExpiryCancelsCompletesFalseAndSchedulesOnce() {
+        let manager = BackgroundSyncManager.shared
+        let savedBatch = manager.runSyncBatch
+        let savedSweep = manager.afterBatchSweep
+        let savedSchedule = manager.schedule
+        let key = BranchDamKeys.syncAuthFailedAt.rawValue
+        let savedAuthFailedAt = UserDefaults.standard.object(forKey: key)
+        defer {
+            manager.runSyncBatch = savedBatch
+            manager.afterBatchSweep = savedSweep
+            manager.schedule = savedSchedule
+            if let savedAuthFailedAt {
+                UserDefaults.standard.set(savedAuthFailedAt, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        let batchStarted = expectation(description: "batch started")
+        let batchSwept = expectation(description: "batch swept")
+        let releaseBatch = DispatchSemaphore(value: 0)
+        let calls = SyncCallRecorder()
+
+        manager.runSyncBatch = { _, _ in
+            batchStarted.fulfill()
+            releaseBatch.wait()
+            return .success(uploaded: 0, eventsSent: 0)
+        }
+        manager.afterBatchSweep = { batchSwept.fulfill() }
+        manager.schedule = { calls.record("schedule") }
+
+        let expire = manager.runBackgroundSync(
+            isOnCellular: false,
+            complete: { success in calls.record("complete(\(success))") },
+            cancel: { calls.record("cancel") }
+        )
+
+        wait(for: [batchStarted], timeout: 15.0)
+        expire()
+
+        XCTAssertEqual(calls.calls, ["cancel", "complete(false)", "schedule"])
+
+        releaseBatch.signal()
+        wait(for: [batchSwept], timeout: 15.0)
+    }
+
+    func testBackgroundSyncExpiryThenBatchCompletionCompletesAndSchedulesOnce() {
+        let manager = BackgroundSyncManager.shared
+        let savedBatch = manager.runSyncBatch
+        let savedSweep = manager.afterBatchSweep
+        let savedSchedule = manager.schedule
+        let key = BranchDamKeys.syncAuthFailedAt.rawValue
+        let savedAuthFailedAt = UserDefaults.standard.object(forKey: key)
+        defer {
+            manager.runSyncBatch = savedBatch
+            manager.afterBatchSweep = savedSweep
+            manager.schedule = savedSchedule
+            if let savedAuthFailedAt {
+                UserDefaults.standard.set(savedAuthFailedAt, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        let batchStarted = expectation(description: "batch started")
+        let batchSwept = expectation(description: "batch swept")
+        let releaseBatch = DispatchSemaphore(value: 0)
+        let calls = SyncCallRecorder()
+
+        manager.runSyncBatch = { _, _ in
+            batchStarted.fulfill()
+            releaseBatch.wait()
+            return .success(uploaded: 1, eventsSent: 0)
+        }
+        manager.afterBatchSweep = { batchSwept.fulfill() }
+        manager.schedule = { calls.record("schedule") }
+
+        let expire = manager.runBackgroundSync(
+            isOnCellular: false,
+            complete: { success in calls.record("complete(\(success))") },
+            cancel: { calls.record("cancel") }
+        )
+
+        wait(for: [batchStarted], timeout: 15.0)
+        expire()
+        releaseBatch.signal()
+        wait(for: [batchSwept], timeout: 15.0)
+        // Give the background closure a moment to reach tracker.completeOnce after sweep().
+        Thread.sleep(forTimeInterval: 0.05)
+
+        XCTAssertEqual(calls.calls, ["cancel", "complete(false)", "schedule"])
+    }
+
+    func testBackgroundSyncMobileDataSkipCompletesTrueAndSchedulesOnce() {
+        let manager = BackgroundSyncManager.shared
+        manager.syncOnMobileData = false
+        let savedBatch = manager.runSyncBatch
+        let savedSweep = manager.afterBatchSweep
+        let savedSchedule = manager.schedule
+        defer {
+            manager.runSyncBatch = savedBatch
+            manager.afterBatchSweep = savedSweep
+            manager.schedule = savedSchedule
+        }
+
+        let calls = SyncCallRecorder()
+        manager.runSyncBatch = { _, _ in
+            XCTFail("batch should not run when skipped on mobile data")
+            return .success(uploaded: 0, eventsSent: 0)
+        }
+        manager.afterBatchSweep = {
+            XCTFail("sweep should not run when skipped on mobile data")
+        }
+        manager.schedule = { calls.record("schedule") }
+
+        manager.runBackgroundSync(
+            isOnCellular: true,
+            complete: { success in calls.record("complete(\(success))") },
+            cancel: { calls.record("cancel") }
+        )
+
+        XCTAssertEqual(calls.calls, ["complete(true)", "schedule"])
+    }
+
+    func testBackgroundSyncNormalCompletionCompletesTrueAndSchedulesOnce() {
+        let manager = BackgroundSyncManager.shared
+        let savedBatch = manager.runSyncBatch
+        let savedSweep = manager.afterBatchSweep
+        let savedSchedule = manager.schedule
+        let key = BranchDamKeys.syncAuthFailedAt.rawValue
+        let savedAuthFailedAt = UserDefaults.standard.object(forKey: key)
+        defer {
+            manager.runSyncBatch = savedBatch
+            manager.afterBatchSweep = savedSweep
+            manager.schedule = savedSchedule
+            if let savedAuthFailedAt {
+                UserDefaults.standard.set(savedAuthFailedAt, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        let scheduled = expectation(description: "background sync scheduled")
+        let calls = SyncCallRecorder()
+        manager.runSyncBatch = { _, _ in .success(uploaded: 1, eventsSent: 0) }
+        manager.afterBatchSweep = {}
+        manager.schedule = {
+            calls.record("schedule")
+            scheduled.fulfill()
+        }
+
+        manager.runBackgroundSync(
+            isOnCellular: false,
+            complete: { success in calls.record("complete(\(success))") },
+            cancel: { calls.record("cancel") }
+        )
+
+        wait(for: [scheduled], timeout: 15.0)
+        XCTAssertEqual(calls.calls, ["complete(true)", "schedule"])
+    }
 }
 
 /// Records the sync seams' calls in order. A separate Sendable box, because
