@@ -82,7 +82,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             self.scan(sessionRemovals: [])
         }
         lineageQueue.async {
-            Self.pruneStagedMediaDirectory()
+            Self.pruneStagedMediaDirectories()
         }
     }
 
@@ -363,8 +363,13 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
 
     public static func stagedMediaDirectory(customDir: URL? = nil) -> URL {
         if let customDir = customDir { return customDir }
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let dir = caches.appendingPathComponent("staged_media", isDirectory: true)
+        let base = (try? FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )) ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("staged_media", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             do {
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -372,7 +377,38 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                 NSLog("PhotoKitObserver: failed to create stagedMediaDirectory %@: %@", dir.path, String(describing: error))
             }
         }
+        var dirURL = dir
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? dirURL.setResourceValues(values)
         return dir
+    }
+
+    public static func legacyStagedMediaDirectory() -> URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return caches.appendingPathComponent("staged_media", isDirectory: true)
+    }
+
+    /**
+     * Sweeps both the current staged_media directory and the legacy Caches/staged_media
+     * directory, removing the legacy directory once it is empty.
+     */
+    public static func pruneStagedMediaDirectories(
+        directory: URL = stagedMediaDirectory(),
+        legacyDirectory: URL = legacyStagedMediaDirectory(),
+        maxAgeSeconds: TimeInterval = 86400 * 7,
+        statusMap: [String: String]? = nil
+    ) {
+        pruneStagedMediaDirectory(directory: directory, maxAgeSeconds: maxAgeSeconds, statusMap: statusMap)
+        let fm = FileManager.default
+        guard legacyDirectory.standardizedFileURL != directory.standardizedFileURL,
+              fm.fileExists(atPath: legacyDirectory.path) else {
+            return
+        }
+        pruneStagedMediaDirectory(directory: legacyDirectory, maxAgeSeconds: maxAgeSeconds, statusMap: statusMap)
+        if (try? fm.contentsOfDirectory(atPath: legacyDirectory.path))?.isEmpty == true {
+            try? fm.removeItem(at: legacyDirectory)
+        }
     }
 
     /**
@@ -417,7 +453,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     }
 
     /**
-     * Stages a PhotoKit asset resource to a local POSIX path inside Caches/staged_media/.
+     * Stages a PhotoKit asset resource to a local POSIX path inside Application Support/staged_media/.
      * Writes to an atomic .part file first and renames upon completion to ensure
      * incomplete/interrupted writes are never enqueued. Non-blocking async callback.
      */

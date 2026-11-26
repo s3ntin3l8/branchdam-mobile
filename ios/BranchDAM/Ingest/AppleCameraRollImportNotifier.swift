@@ -39,7 +39,7 @@ extension AssetStager {
 }
 
 /// Stages through `PhotoKitObserver.stageResourceAtomically`, the same
-/// atomic `.part`-then-rename copy into Caches/staged_media/ that
+/// atomic `.part`-then-rename copy into Application Support/staged_media/ that
 /// auto-import has always used, under the same file name.
 public struct PhotoKitAssetStager: AssetStager {
     public init() {}
