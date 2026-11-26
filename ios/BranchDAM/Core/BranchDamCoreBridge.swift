@@ -102,7 +102,7 @@ final class KeychainRotatedKeyStore: NSObject, branchdam.KeyStoreProtocol {
 /// a sequence number channel), so the synchronous methods below dispatch
 /// onto private queues and wait:
 ///
-/// - `syncQueue` (serial) runs `syncBatch`, which can hold it for the whole
+/// - `syncQueue` (serial) runs `syncBatchOutcome`, which can hold it for the whole
 ///   batch timeout.
 /// - `queryQueue` (concurrent) runs every other engine call, so queue
 ///   counts, statuses and enqueues never wait behind an upload batch.

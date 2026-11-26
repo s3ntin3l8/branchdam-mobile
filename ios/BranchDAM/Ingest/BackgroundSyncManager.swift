@@ -68,7 +68,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
     private var pathUsesCellular = false
 
     // Uploads run inside the Go engine (its own net/http client, driven
-    // by syncBatch); there is no background URLSession. The one this
+    // by syncBatchOutcome); there is no background URLSession. The one this
     // class used to create was never used for any transfer.
     private init() {
         pathMonitor.pathUpdateHandler = { [weak self] path in

@@ -26,7 +26,8 @@ iOS shell (Swift, SwiftUI, PhotoKit, `BGProcessingTask`) over the gomobile-bound
 - **Errors:** `coreErrorCode(_:)` (`Core/BranchDamCoreBridge.swift`) parses the error code from `branchdam: <CODE>: ...`
   messages (skill §5) with the same pattern and meanings as Android; never infer anything from other message text.
   `syncBatchOutcome` returns `SyncBatchOutcome` (`.success` / `.failed(code:)`); `BackgroundSyncManager.recordOutcome`
-  writes `BranchDamKeys.syncAuthFailedAt` on `AUTH_FAILED` and clears it on `.success`, and `SyncStatusViewModel`
+  writes `BranchDamKeys.syncAuthFailedAt` on `AUTH_FAILED` and clears it on `.success`, `QrPairingView.handlePostConnect`
+  also clears it after a successful re-pair (mirroring Android's connect-triggered immediate sync), and `SyncStatusViewModel`
   surfaces `needsRepair` as a "Re-pair this device" prompt linking to Settings (`QrPairingView`).
 - **Local IDs** are the bare `PHAsset.localIdentifier` (no `ph://`); a paired video child is `<id>/pairedVideo`.
 - **Background sync** is a `BGProcessingTask` (`com.branchdam.mobile.sync`) scheduled on entering the background and
