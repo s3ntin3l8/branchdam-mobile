@@ -806,6 +806,8 @@ func (e *Engine) preScreen(ctx context.Context, item *queue.UploadItem) (bool, e
 	if err := markComplete(item.ID, checkRes.NodeUUID); err != nil {
 		// Hand the row back so the next sync asks again instead of
 		// stranding it IN_PROGRESS.
+		slog.Warn("engine: failed to mark prescreened upload complete; row released",
+			"id", item.ID, "nodeUUID", checkRes.NodeUUID, "err", err)
 		e.releaseUploads([]*queue.UploadItem{item})
 		return false, err
 	}

@@ -800,11 +800,28 @@ func TestSyncUploads_BackgroundPreScreen_MarkCompleteError(t *testing.T) {
 	if state.Status != queue.UploadPending {
 		t.Fatalf("expected row to be released back to PENDING, got %s", state.Status)
 	}
-	if state.NodeUUID != "" {
-		t.Fatalf("expected empty NodeUUID on released row, got %q", state.NodeUUID)
+	if state.LastAttemptUnix != 0 {
+		t.Fatalf("expected LastAttemptUnix 0 on released row so next sync can claim it, got %d", state.LastAttemptUnix)
 	}
 	if state.RetryCount != 0 {
 		t.Fatalf("expected RetryCount 0 on released row, got %d", state.RetryCount)
+	}
+
+	// Next sync re-claims the released row and completes it once DB writes succeed.
+	eng.markUploadComplete = nil
+	completedCount, err = eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("second SyncUploads returned unexpected error: %v", err)
+	}
+	if completedCount != 1 {
+		t.Fatalf("expected 1 completed upload on retry sync, got %d", completedCount)
+	}
+	state, err = q.GetUploadItemByBlake3Hash(item.Blake3Hash)
+	if err != nil || state == nil {
+		t.Fatalf("GetUploadItemByBlake3Hash after retry failed: %v", err)
+	}
+	if state.Status != queue.UploadCompleted {
+		t.Fatalf("expected row to be COMPLETED on retry sync, got %s", state.Status)
 	}
 }
 
