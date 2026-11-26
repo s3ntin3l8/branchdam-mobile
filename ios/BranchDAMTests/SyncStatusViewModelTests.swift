@@ -43,4 +43,22 @@ final class SyncStatusViewModelTests: XCTestCase {
         XCTAssertEqual(SyncStatusViewModel.progressItemLabel(itemIndex: 0, totalItems: 2), "Item 1 of 2")
         XCTAssertEqual(SyncStatusViewModel.progressItemLabel(itemIndex: 5, totalItems: 2), "Item 2 of 2")
     }
+
+    @MainActor
+    func testNeedsRepairReflectsSyncAuthFailedAt() {
+        let suiteName = "SyncStatusViewModelTests.needsRepair.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let vm = SyncStatusViewModel(defaults: defaults)
+        XCTAssertFalse(vm.needsRepair)
+
+        defaults.set(1_700_000_000.0, forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
+        vm.refresh()
+        XCTAssertTrue(vm.needsRepair)
+
+        defaults.removeObject(forKey: BranchDamKeys.syncAuthFailedAt.rawValue)
+        vm.refresh()
+        XCTAssertFalse(vm.needsRepair)
+    }
 }

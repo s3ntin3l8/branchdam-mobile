@@ -253,4 +253,18 @@ final class BranchDamCoreBridgeTests: XCTestCase {
         defer { _ = AppleKeychain.shared.deleteString(account: PairingCredentialStore.agentIdAccount) }
         XCTAssertEqual(credentials.resolvedAgentID(), "stored-agent")
     }
+
+    func testCoreErrorCodeParsesOnlyPrefixedCoreCodes() {
+        XCTAssertEqual(
+            coreErrorCode("branchdam: AUTH_FAILED: server rejected credentials (401)"),
+            "AUTH_FAILED"
+        )
+        XCTAssertEqual(
+            coreErrorCode("go.Error: branchdam: CONTEXT_CANCELED: sync uploads cancelled"),
+            "CONTEXT_CANCELED"
+        )
+        XCTAssertNil(coreErrorCode("connection refused"))
+        XCTAssertNil(coreErrorCode("unauthorized 401"))
+        XCTAssertNil(coreErrorCode(""))
+    }
 }

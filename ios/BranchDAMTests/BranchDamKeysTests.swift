@@ -49,6 +49,14 @@ final class BranchDamKeysTests: XCTestCase {
             BranchDamKeys.autoImportCameraRoll.rawValue,
             BranchDamKeys.Android.AUTO_IMPORT_CAMERA_ROLL
         )
+        XCTAssertEqual(
+            BranchDamKeys.syncAuthFailedAt.rawValue,
+            "branchdam_sync_auth_failed_at"
+        )
+        XCTAssertEqual(
+            BranchDamKeys.syncAuthFailedAt.rawValue,
+            BranchDamKeys.Android.SYNC_AUTH_FAILED_AT
+        )
     }
 
     override func tearDown() {

@@ -23,9 +23,11 @@ iOS shell (Swift, SwiftUI, PhotoKit, `BGProcessingTask`) over the gomobile-bound
 - **Rotated keys:** `KeychainRotatedKeyStore` (`Core/BranchDamCoreBridge.swift`) → `PairingCredentialStore.saveRotatedAPIKey`
   (`Core/AppleKeychain.swift`) must throw unless the Keychain write really happened. It runs on a Go thread; never
   block on the engine's own queue. `QrPairingView` shows the "Re-pair this device before <date>" deadline.
-- **Errors:** iOS currently inspects no core error codes (`syncBatch` swallows errors and there is no `AUTH_FAILED` →
-  re-pair handling; #306). When adding handling, parse the code from the `branchdam: <CODE>: ...` message (skill §5) with
-  the same meanings as Android; don't infer anything from other message text.
+- **Errors:** `coreErrorCode(_:)` (`Core/BranchDamCoreBridge.swift`) parses the error code from `branchdam: <CODE>: ...`
+  messages (skill §5) with the same pattern and meanings as Android; never infer anything from other message text.
+  `syncBatchOutcome` returns `SyncBatchOutcome` (`.success` / `.failed(code:)`); `BackgroundSyncManager.recordOutcome`
+  writes `BranchDamKeys.syncAuthFailedAt` on `AUTH_FAILED` and clears it on `.success`, and `SyncStatusViewModel`
+  surfaces `needsRepair` as a "Re-pair this device" prompt linking to Settings (`QrPairingView`).
 - **Local IDs** are the bare `PHAsset.localIdentifier` (no `ph://`); a paired video child is `<id>/pairedVideo`.
 - **Background sync** is a `BGProcessingTask` (`com.branchdam.mobile.sync`) scheduled on entering the background and
   after pairing, and rescheduled when a run completes. The expiration handler currently completes the task without

@@ -96,6 +96,12 @@ public enum BranchDamKeys: String {
     /// `WelcomeView`, read by `BranchDAMApp` to skip the screen on launch.
     /// iOS only: Android's onboarding is a separate flow.
     case onboardingCompleted = "branchdam_onboarding_completed"
+
+    /// Timestamp (seconds since epoch) when a sync batch failed with
+    /// `AUTH_FAILED`. Written by `BackgroundSyncManager.recordOutcome`,
+    /// removed on the next successful batch, and read by
+    /// `SyncStatusViewModel` to prompt the user to re-pair.
+    case syncAuthFailedAt = "branchdam_sync_auth_failed_at"
 }
 
 extension BranchDamKeys {
@@ -113,5 +119,6 @@ extension BranchDamKeys {
         public static let OBSERVER_LAST_SCANNED_TIMESTAMP = "branchdam_observer_last_scanned_timestamp"
         public static let THEME_MODE = "branchdam_theme_mode"
         public static let LAST_SYNC_TIME = "branchdam_last_sync_time"
+        public static let SYNC_AUTH_FAILED_AT = "branchdam_sync_auth_failed_at"
     }
 }
