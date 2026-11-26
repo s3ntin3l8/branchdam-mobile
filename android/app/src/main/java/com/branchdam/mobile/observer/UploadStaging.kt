@@ -246,30 +246,51 @@ object UploadStaging {
     /** The `.part` sibling of [target]: a copy is written there first, then renamed onto [target]. */
     private fun partFileOf(target: File): File = File(target.parentFile, target.name + PART_SUFFIX)
 
-    /** Returns true when the child upload and lineage are queued or there is no embedded video. */
+    internal enum class MicroVideoResult {
+        QUEUED,
+        NO_EXTRACTABLE_VIDEO,
+        RETRY,
+    }
+
     internal fun enqueueMicroVideo(
         context: Context,
         item: MediaItem,
         skipIfAlreadyQueued: Boolean = false,
         enqueueMedia: UploadEnqueuer = EngineHolder::enqueueMedia,
         enqueueLineageEvent: LineageEnqueuer = EngineHolder::enqueueLineageEvent,
-    ): Boolean {
-        if (item.isVideo) return true
-        val uri = Uri.parse(item.contentUri)
-        if (!MotionPhotoExtractor.detectMotionPhoto(context, uri).isMotionPhoto) return true
-
+    ): MicroVideoResult {
+        if (item.isVideo) return MicroVideoResult.NO_EXTRACTABLE_VIDEO
         val childLocalID = "${item.contentUri}/microvideo"
+        if (!skipIfAlreadyQueued) {
+            // A previous acceptance can have queued the video before its lineage failed.
+            // Retry the edge even if the provider can no longer serve the video bytes.
+            when (EngineHolder.getMediaStatus(childLocalID)) {
+                "PENDING", "IN_PROGRESS", "COMPLETED", "OFFLOADED" ->
+                    return enqueueMicroVideoLineage(item.contentUri, childLocalID, enqueueLineageEvent)
+            }
+        }
+        val uri = Uri.parse(item.contentUri)
+        if (!MotionPhotoExtractor.detectMotionPhoto(context, uri).isMotionPhoto) {
+            return MicroVideoResult.NO_EXTRACTABLE_VIDEO
+        }
+
         // The scan can see an item again after its confirmation row has been cleared.
-        if (skipIfAlreadyQueued && EngineHolder.getMediaStatus(childLocalID) != "NOT_ENQUEUED") return true
+        if (skipIfAlreadyQueued && EngineHolder.getMediaStatus(childLocalID) != "NOT_ENQUEUED") {
+            return MicroVideoResult.QUEUED
+        }
 
         val videoFile = microVideoFile(context, item)
         val partFile = microVideoPartFile(context, item)
         val alreadyStaged = videoFile.exists()
-        val extracted = MotionPhotoExtractor.extractMicroVideo(context, uri, partFile)
-        if (!extracted || !partFile.renameTo(videoFile)) {
+        if (!MotionPhotoExtractor.extractMicroVideo(context, uri, partFile)) {
+            partFile.delete()
+            Log.w(TAG, "extracting micro video failed for ${item.contentUri}")
+            return MicroVideoResult.NO_EXTRACTABLE_VIDEO
+        }
+        if (!partFile.renameTo(videoFile)) {
             partFile.delete()
             Log.w(TAG, "staging micro video failed for ${item.contentUri}")
-            return false
+            return MicroVideoResult.RETRY
         }
 
         val videoFilename = item.displayName.substringBeforeLast('.') + MICRO_VIDEO_SUFFIX
@@ -279,15 +300,24 @@ object UploadStaging {
         if (queueId <= 0L) {
             // A retry after a lineage failure may already have a row for this path.
             if (!alreadyStaged) discardIfStaged(context, videoFile.absolutePath)
-            return false
+            return MicroVideoResult.RETRY
         }
+        return enqueueMicroVideoLineage(item.contentUri, childLocalID, enqueueLineageEvent)
+    }
+
+    private fun enqueueMicroVideoLineage(
+        parentLocalID: String,
+        childLocalID: String,
+        enqueueLineageEvent: LineageEnqueuer,
+    ): MicroVideoResult {
         val eventId = enqueueLineageEvent(
-            item.contentUri, childLocalID, "MOTION_PHOTO_CONTAINS", "android_motion_photo_xmp", 1.00,
+            parentLocalID, childLocalID, "MOTION_PHOTO_CONTAINS", "android_motion_photo_xmp", 1.00,
         )
         if (eventId.isEmpty()) {
-            Log.w(TAG, "motion photo lineage not recorded: ${item.contentUri} -> $childLocalID")
+            Log.w(TAG, "motion photo lineage not recorded: $parentLocalID -> $childLocalID")
+            return MicroVideoResult.RETRY
         }
-        return eventId.isNotEmpty()
+        return MicroVideoResult.QUEUED
     }
 
     /**

@@ -195,7 +195,7 @@ object ImportConfirmationNotifier {
      * [ImportConfirmationWorker], never in the broadcast receiver.
      *
      * - Import now / Later: queue each item for upload and forget its
-     *   pending row once queued with any embedded micro video and its
+     *   pending row once queued with any extractable micro video and its
      *   lineage. Import now syncs at once; Later leaves it to the
      *   periodic sync.
      * - Skip: suppress each item so no later scan offers it again.
@@ -282,13 +282,15 @@ object ImportConfirmationNotifier {
             }
             if (queueId <= 0L) continue
             queued++
-            val motionPhotoComplete = context == null || UploadStaging.enqueueMicroVideo(
-                context,
-                mediaItem,
-                enqueueMedia = enqueueMedia,
-                enqueueLineageEvent = enqueueLineageEvent,
-            )
-            if (motionPhotoComplete) {
+            val microVideoResult = context?.let {
+                UploadStaging.enqueueMicroVideo(
+                    it,
+                    mediaItem,
+                    enqueueMedia = enqueueMedia,
+                    enqueueLineageEvent = enqueueLineageEvent,
+                )
+            }
+            if (microVideoResult != UploadStaging.MicroVideoResult.RETRY) {
                 EngineHolder.deletePendingImport(item.localId)
             }
         }

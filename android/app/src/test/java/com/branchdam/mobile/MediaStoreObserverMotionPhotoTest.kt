@@ -8,7 +8,6 @@ import com.branchdam.mobile.observer.MediaItem
 import com.branchdam.mobile.observer.MediaStoreObserver
 import com.branchdam.mobile.observer.UploadStaging
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -98,7 +97,8 @@ class MediaStoreObserverMotionPhotoTest {
         val item = motionPhotoItem(uri, bytes.size.toLong())
 
         val enqueued = mutableListOf<String>()
-        assertTrue(
+        assertEquals(
+            UploadStaging.MicroVideoResult.QUEUED,
             UploadStaging.enqueueMicroVideo(
                 context,
                 item,
@@ -136,7 +136,10 @@ class MediaStoreObserverMotionPhotoTest {
         val context = createMotionPhotoContext(uri, bytes)
         val item = motionPhotoItem(uri, bytes.size.toLong())
 
-        assertFalse(UploadStaging.enqueueMicroVideo(context, item, enqueueMedia = { _, _, _, _, _ -> 0L }))
+        assertEquals(
+            UploadStaging.MicroVideoResult.RETRY,
+            UploadStaging.enqueueMicroVideo(context, item, enqueueMedia = { _, _, _, _, _ -> 0L }),
+        )
 
         assertTrue(
             "a refused enqueue must not leave the staged copy behind",
