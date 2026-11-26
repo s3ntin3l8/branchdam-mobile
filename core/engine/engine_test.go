@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -744,6 +745,66 @@ func TestSyncUploads_BackgroundPreScreen(t *testing.T) {
 	}
 	if state.Status != queue.UploadCompleted || state.NodeUUID != "prescreened-node-uuid-123" {
 		t.Fatalf("unexpected upload state after background pre-screen: %+v", state)
+	}
+}
+
+func TestSyncUploads_BackgroundPreScreen_MarkCompleteError(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "engine_prescreen_err_test.db")
+	q, err := queue.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	defer q.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/agent/check-content" {
+			_ = json.NewEncoder(w).Encode(client.ContentCheckResult{
+				Found:    true,
+				NodeUUID: "prescreened-node-uuid-123",
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	c := client.New(client.Config{BaseURL: server.URL, APIKey: "k", AgentID: "a"})
+	eng := New(q, c)
+	eng.markUploadComplete = func(int64, string) error {
+		return errors.New("simulated db error")
+	}
+
+	testFilePath := filepath.Join(tempDir, "PXL_PRESCREEN_ERR.dng")
+	if err := os.WriteFile(testFilePath, []byte("prescreen bytes"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	item, err := eng.EnqueueLocalCapture(testFilePath, "PXL_PRESCREEN_ERR.dng", 1724000000, "local_uri_prescreen_err", "", "")
+	if err != nil {
+		t.Fatalf("EnqueueLocalCapture: %v", err)
+	}
+
+	completedCount, err := eng.SyncUploads(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("SyncUploads returned unexpected error: %v", err)
+	}
+	if completedCount != 0 {
+		t.Fatalf("expected 0 completed uploads when MarkUploadComplete fails, got %d", completedCount)
+	}
+
+	state, err := q.GetUploadItemByBlake3Hash(item.Blake3Hash)
+	if err != nil || state == nil {
+		t.Fatalf("GetUploadItemByBlake3Hash failed: %v", err)
+	}
+	if state.Status != queue.UploadPending {
+		t.Fatalf("expected row to be released back to PENDING, got %s", state.Status)
+	}
+	if state.NodeUUID != "" {
+		t.Fatalf("expected empty NodeUUID on released row, got %q", state.NodeUUID)
+	}
+	if state.RetryCount != 0 {
+		t.Fatalf("expected RetryCount 0 on released row, got %d", state.RetryCount)
 	}
 }
 
