@@ -221,7 +221,7 @@ class ImportConfirmationWorkerTest {
         ImportConfirmationNotifier.setAutoImportEnabled(scanContext, false)
         val observer = MediaStoreObserver(scanContext, Handler(Looper.getMainLooper()))
         try {
-            observer.scanAndEnqueueNewMedia()
+            runBlocking { observer.scanAndEnqueueNewMedia() }
 
             assertEquals(listOf(still.contentUri), ImportConfirmationNotifier.getPendingItems().map { it.localId })
             assertTrue(UploadStaging.stagingDir(scanContext).listFiles().orEmpty().isEmpty())

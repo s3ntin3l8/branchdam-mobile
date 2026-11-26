@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.provider.MediaStore
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.branchdam.mobile.BranchDamKeys
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.lineage.EditCorrelator
@@ -181,7 +182,8 @@ class MediaStoreObserver(
      * are not offered again. Then runs the lineage pipeline. Runs on
      * [Dispatchers.IO] because the caller's [scope] is bounded there.
      */
-    internal fun scanAndEnqueueNewMedia() {
+    @VisibleForTesting
+    internal suspend fun scanAndEnqueueNewMedia() {
         val autoImport = ImportConfirmationNotifier.getAutoImportEnabled(context)
         val pendingIds = if (autoImport) {
             EngineHolder.listPendingImports()?.mapTo(mutableSetOf()) { it.localId } ?: return
