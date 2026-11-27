@@ -68,6 +68,17 @@ object OtgStaging {
     /** The in-progress name a copy is written to before its atomic rename. */
     fun partFileFor(target: File): File = File(target.parentFile, target.name + PART_SUFFIX)
 
+    /** Suffix of the staged micro video extracted from a motion photo. */
+    internal const val MICRO_VIDEO_SUFFIX = "_microvideo.mp4"
+
+    /**
+     * Where the micro video of a verified OTG motion photo [stagedFile]
+     * is staged: in the same session directory so [sweep] keeps it until
+     * its upload is COMPLETED/OFFLOADED (or past [ORPHAN_GRACE_MS]).
+     */
+    fun microVideoFile(stagedFile: File): File =
+        File(stagedFile.parentFile, stagedFile.name + MICRO_VIDEO_SUFFIX)
+
     /**
      * Pure decision for [sweep]. [status] is the engine's status for the
      * staged path (null when no upload row references it). [engineAnswered]

@@ -6,6 +6,7 @@ import com.branchdam.mobile.otg.OtgIngestFileError
 import com.branchdam.mobile.otg.OtgIngestManager
 import com.branchdam.mobile.otg.OtgMediaCandidate
 import com.branchdam.mobile.otg.OtgScanResult
+import com.branchdam.mobile.otg.OtgStaging
 import com.branchdam.mobile.otg.OtgState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -858,5 +859,137 @@ class OtgIngestManagerTest {
             assertEquals(1, completed.importedCount)
             assertEquals(20L, completed.totalBytes)
         }
+    }
+
+    private fun otgMotionPhotoBytes(payload: ByteArray): ByteArray {
+        val xmp = "http://ns.google.com/photos/1.0/camera/ GCamera:MicroVideo=\"1\" " +
+            "GCamera:MicroVideoOffset=\"${payload.size}\" padding"
+        return xmp.toByteArray(Charsets.ISO_8859_1) + ByteArray(2048) { 0x20 } + payload
+    }
+
+    @Test
+    fun testConfirmImport_motionPhotoQueuesStillAndMicroVideoFromVerifiedCopy() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_MOTION")
+        val dcim = File(root, "DCIM").apply { mkdirs() }
+        val payload = "OTG_MICRO_VIDEO".toByteArray(Charsets.ISO_8859_1)
+        val motionBytes = otgMotionPhotoBytes(payload)
+        val source = File(dcim, "PXL_0001.jpg").apply { writeBytes(motionBytes) }
+        val stageDir = tempFolder.newFolder("otg_stage_motion")
+
+        val enqueuedStills = mutableListOf<Pair<String, File>>()
+        val enqueuedVideos = mutableListOf<Triple<String, String, String>>()
+        val lineageEvents = mutableListOf<Triple<String, String, String>>()
+        val statuses = mutableMapOf<String, String>()
+
+        val manager = OtgIngestManager(
+            scope = this,
+            ioDispatcher = testDispatcher,
+            hashProvider = OtgHashProvider { _, _ -> Pair("a".repeat(64), "") },
+            enqueuer = OtgEnqueuer { stagedFile, candidate ->
+                enqueuedStills += Pair(candidate.localId, stagedFile)
+                1L
+            },
+            mediaStatusProvider = { localId -> statuses[localId] ?: "NOT_ENQUEUED" },
+            microVideoEnqueuer = { localPath, filename, _, localId ->
+                enqueuedVideos += Triple(localId, filename, localPath)
+                statuses[localId] = "PENDING"
+                2L
+            },
+            lineageEnqueuer = { parent, child, rel, _, confidence ->
+                assertEquals(1.00, confidence, 0.001)
+                lineageEvents += Triple(parent, child, rel)
+                "evt-1"
+            },
+        )
+
+        val candidate = candidateFor(source, "DCIM/PXL_0001.jpg")
+        manager.confirmImport(
+            scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidate)),
+            destinationDir = stageDir,
+        )
+
+        val completed = manager.state.value as OtgState.Completed
+        assertEquals(1, completed.importedCount)
+        assertTrue(completed.fileErrors.isEmpty())
+
+        // Simulate unplugging the SD card: both staged files must remain readable.
+        assertTrue(root.deleteRecursively())
+
+        val expectedChildId = "${candidate.localId}/microvideo"
+        assertEquals(1, enqueuedStills.size)
+        assertEquals(candidate.localId, enqueuedStills[0].first)
+        val stagedStill = enqueuedStills[0].second
+        assertTrue(stagedStill.exists())
+        assertEquals(motionBytes.size.toLong(), stagedStill.length())
+
+        assertEquals(1, enqueuedVideos.size)
+        assertEquals(expectedChildId, enqueuedVideos[0].first)
+        assertEquals("PXL_0001_microvideo.mp4", enqueuedVideos[0].second)
+        val stagedVideo = File(enqueuedVideos[0].third)
+        assertEquals(OtgStaging.microVideoFile(stagedStill).absolutePath, stagedVideo.absolutePath)
+        assertTrue(stagedVideo.exists())
+        assertEquals("OTG_MICRO_VIDEO", stagedVideo.readText(Charsets.ISO_8859_1))
+
+        assertEquals(
+            listOf(Triple(candidate.localId, expectedChildId, "MOTION_PHOTO_CONTAINS")),
+            lineageEvents,
+        )
+
+        // Repeat import of the same motion photo must not create a duplicate video upload row.
+        val sourceAgain = File(dcim, "PXL_0001.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(motionBytes)
+            setLastModified(candidate.lastModifiedUnix * 1000L)
+        }
+        val candidateAgain = candidate.copy(uri = sourceAgain.absolutePath)
+        statuses["${candidateAgain.localId}/microvideo"] = "PENDING"
+        manager.confirmImport(
+            scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidateAgain)),
+            destinationDir = tempFolder.newFolder("otg_stage_motion_repeat"),
+        )
+        assertEquals("repeat import must not enqueue a duplicate video row", 1, enqueuedVideos.size)
+    }
+
+    @Test
+    fun testConfirmImport_ordinaryStillProducesOneUploadAndNoVideoStagingFile() = runTest(testDispatcher) {
+        val root = tempFolder.newFolder("SD_CARD_STILL")
+        val dcim = File(root, "DCIM").apply { mkdirs() }
+        val source = File(dcim, "IMG_0002.jpg").apply { writeBytes("PLAIN_JPEG".toByteArray(Charsets.ISO_8859_1)) }
+        val stageDir = tempFolder.newFolder("otg_stage_still")
+
+        var stillCount = 0
+        var videoCount = 0
+        var lineageCount = 0
+
+        val manager = OtgIngestManager(
+            scope = this,
+            ioDispatcher = testDispatcher,
+            hashProvider = OtgHashProvider { _, _ -> Pair("a".repeat(64), "") },
+            enqueuer = OtgEnqueuer { _, _ ->
+                stillCount++
+                1L
+            },
+            microVideoEnqueuer = { _, _, _, _ ->
+                videoCount++
+                2L
+            },
+            lineageEnqueuer = { _, _, _, _, _ ->
+                lineageCount++
+                "evt"
+            },
+        )
+
+        manager.confirmImport(
+            scanResult = OtgScanResult("CARD", root.absolutePath, listOf(candidateFor(source, "DCIM/IMG_0002.jpg"))),
+            destinationDir = stageDir,
+        )
+
+        val completed = manager.state.value as OtgState.Completed
+        assertEquals(1, completed.importedCount)
+        assertEquals(1, stillCount)
+        assertEquals(0, videoCount)
+        assertEquals(0, lineageCount)
+        val stagedFiles = stageDir.walk().filter { it.isFile }.map { it.name }.toList()
+        assertEquals(listOf("IMG_0002.jpg"), stagedFiles)
     }
 }

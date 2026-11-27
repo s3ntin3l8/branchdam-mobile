@@ -30,11 +30,13 @@ Android shell (Kotlin, Jetpack Compose, WorkManager) over the gomobile-bound Go 
   yet, return the failure value (0 / `""` / `false`), as `enqueueMedia` does. Returning a fake UUID or `true` makes
   callers (e.g. `TrashSyncObserver`) mark the item processed and the event is lost. (Three methods still do this: #304.)
 - **Local IDs** are `ContentUris.withAppendedId(<collection the row came from>, id)` (Images or Video); a motion
-  photo's video child is `<uri>/microvideo`. Trash, lineage, reclaim and status all join on them.
+  photo's video child is `<stillLocalId>/microvideo` (`<uri>/microvideo` for MediaStore items,
+  `<uri>#<size>-<mtime>/microvideo` for OTG items). Trash, lineage, reclaim and status all join on them.
 - **Staged files must survive a restart:** the engine reopens the enqueued path at sync time, possibly after process
   death. Enqueue a real file under `noBackupFilesDir` (`UploadStaging`, `OtgStaging`), never a content URI, a
-  `/proc/self/fd` path or `cacheDir`. Motion-photo videos use `UploadStaging` too (#308). Delete a staged file
-  referenced by an upload row only once the row is COMPLETED/OFFLOADED.
+  `/proc/self/fd` path or `cacheDir`. Motion-photo videos use `UploadStaging` (#308) or, for OTG, `OtgStaging`
+  extracted from the verified copy. Delete a staged file referenced by an upload row only once the row is
+  COMPLETED/OFFLOADED.
 - **Upload source:** when the original can't be staged, `UploadStaging.pathForUpload` falls back to a location-redacted
   copy. Such an upload must not carry a reclaim baseline (skill §1; not yet enforced, #303).
 - **Camera-roll cursor** (`NewMediaIntake`): advance only past items whose upload row or `pending_import` row is

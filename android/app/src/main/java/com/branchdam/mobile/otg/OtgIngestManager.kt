@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.annotation.StringRes
 import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.R
+import com.branchdam.mobile.observer.UploadStaging
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -141,6 +142,27 @@ class OtgIngestManager(
     private val hashObserver: OtgHashObserver? = null,
     private val hashProvider: OtgHashProvider = DefaultOtgHashProvider(),
     private val enqueuer: OtgEnqueuer = DefaultOtgEnqueuer(),
+    private val mediaStatusProvider: (String) -> String = EngineHolder::getMediaStatus,
+    private val microVideoEnqueuer: (
+        localPath: String,
+        filename: String,
+        capturedAtUnix: Long,
+        localId: String,
+    ) -> Long = { localPath, filename, capturedAtUnix, localId ->
+        EngineHolder.enqueueMedia(
+            localPath = localPath,
+            filename = filename,
+            capturedAtUnix = capturedAtUnix,
+            localId = localId,
+        )
+    },
+    private val lineageEnqueuer: (
+        parentLocalID: String,
+        childLocalID: String,
+        relationshipType: String,
+        resolver: String,
+        confidence: Double,
+    ) -> String = EngineHolder::enqueueLineageEvent,
 ) {
     private val _state = MutableStateFlow<OtgState>(OtgState.Idle)
     val state: StateFlow<OtgState> = _state.asStateFlow()
@@ -417,9 +439,31 @@ class OtgIngestManager(
             Log.w(TAG, "enqueue failed for ${candidate.fileName}", e)
             0L
         }
-        if (id > 0L) return null
-        stagedFile.delete()
-        return text(R.string.otg_error_enqueue_failed, ENQUEUE_FAILED)
+        if (id <= 0L) {
+            stagedFile.delete()
+            return text(R.string.otg_error_enqueue_failed, ENQUEUE_FAILED)
+        }
+        enqueueMicroVideoIfPresent(stagedFile, candidate)
+        return null
+    }
+
+    /**
+     * Extracts and queues the embedded micro video from the verified
+     * [stagedFile] when [candidate] is a motion photo still, linking it to
+     * [OtgMediaCandidate.localId] via `MOTION_PHOTO_CONTAINS`.
+     */
+    private fun enqueueMicroVideoIfPresent(stagedFile: File, candidate: OtgMediaCandidate) {
+        if (candidate.isVideo) return
+        UploadStaging.enqueueMicroVideo(
+            stagedFile = stagedFile,
+            parentLocalID = candidate.localId,
+            childLocalID = "${candidate.localId}/microvideo",
+            displayName = candidate.fileName,
+            capturedAtUnix = candidate.lastModifiedUnix,
+            enqueueMedia = microVideoEnqueuer,
+            enqueueLineageEvent = lineageEnqueuer,
+            statusProvider = mediaStatusProvider,
+        )
     }
 
     /**

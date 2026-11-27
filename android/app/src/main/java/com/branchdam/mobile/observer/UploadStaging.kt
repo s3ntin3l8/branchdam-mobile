@@ -17,6 +17,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.CancellationException
 
 internal typealias UploadEnqueuer = (
     localPath: String,
@@ -258,51 +259,130 @@ object UploadStaging {
         skipIfAlreadyQueued: Boolean = false,
         enqueueMedia: UploadEnqueuer = EngineHolder::enqueueMedia,
         enqueueLineageEvent: LineageEnqueuer = EngineHolder::enqueueLineageEvent,
+        statusProvider: (String) -> String = EngineHolder::getMediaStatus,
     ): MicroVideoResult {
         if (item.isVideo) return MicroVideoResult.NO_EXTRACTABLE_VIDEO
-        val childLocalID = "${item.contentUri}/microvideo"
+        val uri = Uri.parse(item.contentUri)
+        return enqueueMicroVideoCore(
+            parentLocalID = item.contentUri,
+            childLocalID = "${item.contentUri}/microvideo",
+            videoFile = microVideoFile(context, item),
+            partFile = microVideoPartFile(context, item),
+            videoFilename = item.displayName.substringBeforeLast('.') + MICRO_VIDEO_SUFFIX,
+            capturedAtUnix = item.dateTakenUnix,
+            skipIfAlreadyQueued = skipIfAlreadyQueued,
+            statusProvider = statusProvider,
+            detectMotionPhoto = { MotionPhotoExtractor.detectMotionPhoto(context, uri).isMotionPhoto },
+            extractMicroVideo = { partFile -> MotionPhotoExtractor.extractMicroVideo(context, uri, partFile) },
+            discardUnreferencedVideoFile = { videoFile -> discardIfStaged(context, videoFile.absolutePath) },
+            enqueueVideo = { localPath, filename, capturedAtUnix, localId ->
+                enqueueMedia(localPath, filename, capturedAtUnix, localId, LocalFileState.UNKNOWN)
+            },
+            enqueueLineageEvent = enqueueLineageEvent,
+        )
+    }
+
+    /**
+     * Overload for already-staged files (such as verified OTG copies) that
+     * extract their micro video next to [stagedFile] under `OtgStaging`.
+     */
+    internal fun enqueueMicroVideo(
+        stagedFile: File,
+        parentLocalID: String,
+        childLocalID: String,
+        displayName: String,
+        capturedAtUnix: Long,
+        enqueueMedia: (
+            localPath: String,
+            filename: String,
+            capturedAtUnix: Long,
+            localId: String,
+        ) -> Long,
+        enqueueLineageEvent: LineageEnqueuer = EngineHolder::enqueueLineageEvent,
+        statusProvider: (String) -> String = EngineHolder::getMediaStatus,
+    ): MicroVideoResult {
+        val videoFile = OtgStaging.microVideoFile(stagedFile)
+        return enqueueMicroVideoCore(
+            parentLocalID = parentLocalID,
+            childLocalID = childLocalID,
+            videoFile = videoFile,
+            partFile = OtgStaging.partFileFor(videoFile),
+            videoFilename = displayName.substringBeforeLast('.') + OtgStaging.MICRO_VIDEO_SUFFIX,
+            capturedAtUnix = capturedAtUnix,
+            skipIfAlreadyQueued = false,
+            statusProvider = statusProvider,
+            detectMotionPhoto = { MotionPhotoExtractor.detectMotionPhoto(stagedFile).isMotionPhoto },
+            extractMicroVideo = { partFile -> MotionPhotoExtractor.extractMicroVideo(stagedFile, partFile) },
+            discardUnreferencedVideoFile = { file -> file.delete() },
+            enqueueVideo = enqueueMedia,
+            enqueueLineageEvent = enqueueLineageEvent,
+        )
+    }
+
+    private fun enqueueMicroVideoCore(
+        parentLocalID: String,
+        childLocalID: String,
+        videoFile: File,
+        partFile: File,
+        videoFilename: String,
+        capturedAtUnix: Long,
+        skipIfAlreadyQueued: Boolean,
+        statusProvider: (String) -> String,
+        detectMotionPhoto: () -> Boolean,
+        extractMicroVideo: (File) -> Boolean,
+        discardUnreferencedVideoFile: (File) -> Unit,
+        enqueueVideo: (
+            localPath: String,
+            filename: String,
+            capturedAtUnix: Long,
+            localId: String,
+        ) -> Long,
+        enqueueLineageEvent: LineageEnqueuer,
+    ): MicroVideoResult {
         if (!skipIfAlreadyQueued) {
             // A previous acceptance can have queued the video before its lineage failed.
             // Retry the edge even if the provider can no longer serve the video bytes.
-            when (EngineHolder.getMediaStatus(childLocalID)) {
+            when (statusProvider(childLocalID)) {
                 "PENDING", "IN_PROGRESS", "COMPLETED", "OFFLOADED" ->
-                    return enqueueMicroVideoLineage(item.contentUri, childLocalID, enqueueLineageEvent)
+                    return enqueueMicroVideoLineage(parentLocalID, childLocalID, enqueueLineageEvent)
             }
         }
-        val uri = Uri.parse(item.contentUri)
-        if (!MotionPhotoExtractor.detectMotionPhoto(context, uri).isMotionPhoto) {
+        if (!detectMotionPhoto()) {
             return MicroVideoResult.NO_EXTRACTABLE_VIDEO
         }
 
         // The scan can see an item again after its confirmation row has been cleared.
-        if (skipIfAlreadyQueued && EngineHolder.getMediaStatus(childLocalID) != "NOT_ENQUEUED") {
+        if (skipIfAlreadyQueued && statusProvider(childLocalID) != "NOT_ENQUEUED") {
             return MicroVideoResult.QUEUED
         }
 
-        val videoFile = microVideoFile(context, item)
-        val partFile = microVideoPartFile(context, item)
         val alreadyStaged = videoFile.exists()
-        if (!MotionPhotoExtractor.extractMicroVideo(context, uri, partFile)) {
+        if (!extractMicroVideo(partFile)) {
             partFile.delete()
-            Log.w(TAG, "extracting micro video failed for ${item.contentUri}")
+            Log.w(TAG, "extracting micro video failed for $parentLocalID")
             return MicroVideoResult.NO_EXTRACTABLE_VIDEO
         }
         if (!partFile.renameTo(videoFile)) {
             partFile.delete()
-            Log.w(TAG, "staging micro video failed for ${item.contentUri}")
+            Log.w(TAG, "staging micro video failed for $parentLocalID")
             return MicroVideoResult.RETRY
         }
 
-        val videoFilename = item.displayName.substringBeforeLast('.') + MICRO_VIDEO_SUFFIX
-        val queueId = enqueueMedia(
-            videoFile.absolutePath, videoFilename, item.dateTakenUnix, childLocalID, LocalFileState.UNKNOWN,
-        )
+        val queueId = try {
+            enqueueVideo(videoFile.absolutePath, videoFilename, capturedAtUnix, childLocalID)
+        } catch (ce: CancellationException) {
+            if (!alreadyStaged) discardUnreferencedVideoFile(videoFile)
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "micro video enqueue failed for $parentLocalID", e)
+            0L
+        }
         if (queueId <= 0L) {
             // A retry after a lineage failure may already have a row for this path.
-            if (!alreadyStaged) discardIfStaged(context, videoFile.absolutePath)
+            if (!alreadyStaged) discardUnreferencedVideoFile(videoFile)
             return MicroVideoResult.RETRY
         }
-        return enqueueMicroVideoLineage(item.contentUri, childLocalID, enqueueLineageEvent)
+        return enqueueMicroVideoLineage(parentLocalID, childLocalID, enqueueLineageEvent)
     }
 
     private fun enqueueMicroVideoLineage(
@@ -310,9 +390,16 @@ object UploadStaging {
         childLocalID: String,
         enqueueLineageEvent: LineageEnqueuer,
     ): MicroVideoResult {
-        val eventId = enqueueLineageEvent(
-            parentLocalID, childLocalID, "MOTION_PHOTO_CONTAINS", "android_motion_photo_xmp", 1.00,
-        )
+        val eventId = try {
+            enqueueLineageEvent(
+                parentLocalID, childLocalID, "MOTION_PHOTO_CONTAINS", "android_motion_photo_xmp", 1.00,
+            )
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "motion photo lineage failed: $parentLocalID -> $childLocalID", e)
+            ""
+        }
         if (eventId.isEmpty()) {
             Log.w(TAG, "motion photo lineage not recorded: $parentLocalID -> $childLocalID")
             return MicroVideoResult.RETRY

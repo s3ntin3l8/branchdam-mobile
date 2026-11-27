@@ -212,7 +212,12 @@ class MediaStoreObserver(
         if (result.enqueued.isNotEmpty()) {
             // Pending items get their micro videos only when accepted.
             for (item in result.enqueued) {
-                UploadStaging.enqueueMicroVideo(context, item, skipIfAlreadyQueued = true)
+                UploadStaging.enqueueMicroVideo(
+                    context,
+                    item,
+                    skipIfAlreadyQueued = true,
+                    statusProvider = EngineHolder::getMediaStatus,
+                )
             }
             SyncScheduler.triggerImmediateSync(context)
         }
