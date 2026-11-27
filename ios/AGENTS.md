@@ -33,8 +33,9 @@ iOS shell (Swift, SwiftUI, PhotoKit, `BGProcessingTask`) over the gomobile-bound
 - **Background sync** is a `BGProcessingTask` (`com.branchdam.mobile.sync`) scheduled on entering the background and
   after pairing, and rescheduled when a run completes or expires (#305); any new exit path must call `scheduleBackgroundSync()`. Uploads run in the Go core's HTTP client; don't add a `URLSession`
   background uploader.
-- **Staged media** lives in `Caches/staged_media` (`PhotoKitObserver.stagedMediaDirectory`), which the OS may purge
-  before an upload runs (#309); keep that in mind before adding anything that relies on a staged file surviving.
+- **Staged media** lives in `Application Support/staged_media` (`PhotoKitObserver.stagedMediaDirectory`) with
+  `isExcludedFromBackup = true` (#309); `PhotoKitObserver.pruneStagedMediaDirectories` also sweeps the legacy
+  `Caches/staged_media` directory and removes it once empty.
 - **Camera-roll observation** advances its persisted position (PhotoKit change token, else a creation-date cursor)
   only after new assets are staged in the core's `pending_import` table.
 

@@ -81,4 +81,70 @@ final class PhotoKitObserverTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: failedFile.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: completedFile.path))
     }
+
+    func testStagedMediaDirectoryIsInApplicationSupportAndExcludedFromBackup() throws {
+        let dir = PhotoKitObserver.stagedMediaDirectory()
+        let path = dir.standardizedFileURL.path
+        XCTAssertTrue(path.contains("/Library/Application Support/"), path)
+        XCTAssertFalse(path.contains("/Library/Caches/"), path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.path))
+        let excluded = try dir.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup
+        XCTAssertEqual(excluded, true)
+    }
+
+    func testPruneStagedMediaDirectories_SweepsNewAndLegacyAndRemovesEmptyLegacy() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let newDir = root.appendingPathComponent("new", isDirectory: true)
+        let legacyDir = root.appendingPathComponent("legacy", isDirectory: true)
+        try fm.createDirectory(at: newDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: legacyDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let newPending = newDir.appendingPathComponent("pending.mov")
+        let newCompleted = newDir.appendingPathComponent("completed.mov")
+        let legacyPending = legacyDir.appendingPathComponent("legacy_pending.mov")
+        let legacyCompleted = legacyDir.appendingPathComponent("legacy_completed.mov")
+
+        for url in [newPending, newCompleted, legacyPending, legacyCompleted] {
+            try "data".write(to: url, atomically: true, encoding: .utf8)
+        }
+
+        let initialStatuses: [String: String] = [
+            newPending.path: "PENDING",
+            newCompleted.path: "COMPLETED",
+            legacyPending.path: "PENDING",
+            legacyCompleted.path: "COMPLETED"
+        ]
+
+        PhotoKitObserver.pruneStagedMediaDirectories(
+            directory: newDir,
+            legacyDirectory: legacyDir,
+            maxAgeSeconds: -1,
+            statusMap: initialStatuses
+        )
+
+        XCTAssertTrue(fm.fileExists(atPath: newPending.path))
+        XCTAssertFalse(fm.fileExists(atPath: newCompleted.path))
+        XCTAssertTrue(fm.fileExists(atPath: legacyPending.path))
+        XCTAssertFalse(fm.fileExists(atPath: legacyCompleted.path))
+        XCTAssertTrue(fm.fileExists(atPath: legacyDir.path))
+
+        let finalStatuses: [String: String] = [
+            newPending.path: "PENDING",
+            legacyPending.path: "COMPLETED"
+        ]
+
+        PhotoKitObserver.pruneStagedMediaDirectories(
+            directory: newDir,
+            legacyDirectory: legacyDir,
+            maxAgeSeconds: -1,
+            statusMap: finalStatuses
+        )
+
+        XCTAssertTrue(fm.fileExists(atPath: newPending.path))
+        XCTAssertFalse(fm.fileExists(atPath: legacyPending.path))
+        XCTAssertFalse(fm.fileExists(atPath: legacyDir.path))
+        XCTAssertTrue(fm.fileExists(atPath: newDir.path))
+    }
 }

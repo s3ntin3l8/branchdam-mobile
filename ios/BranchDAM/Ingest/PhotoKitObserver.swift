@@ -82,7 +82,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
             self.scan(sessionRemovals: [])
         }
         lineageQueue.async {
-            Self.pruneStagedMediaDirectory()
+            Self.pruneStagedMediaDirectories()
         }
     }
 
@@ -363,8 +363,19 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
 
     public static func stagedMediaDirectory(customDir: URL? = nil) -> URL {
         if let customDir = customDir { return customDir }
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let dir = caches.appendingPathComponent("staged_media", isDirectory: true)
+        let dir: URL
+        do {
+            let base = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            dir = base.appendingPathComponent("staged_media", isDirectory: true)
+        } catch {
+            NSLog("PhotoKitObserver: failed to resolve Application Support directory, falling back to legacy Caches path: %@", String(describing: error))
+            dir = legacyStagedMediaDirectory()
+        }
         if !FileManager.default.fileExists(atPath: dir.path) {
             do {
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -372,7 +383,42 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
                 NSLog("PhotoKitObserver: failed to create stagedMediaDirectory %@: %@", dir.path, String(describing: error))
             }
         }
+        var dirURL = dir
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? dirURL.setResourceValues(values)
         return dir
+    }
+
+    public static func legacyStagedMediaDirectory() -> URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return caches.appendingPathComponent("staged_media", isDirectory: true)
+    }
+
+    /**
+     * Sweeps both the current staged_media directory and the legacy Caches/staged_media
+     * directory, removing the legacy directory once it is empty.
+     * Fails closed when the media status map cannot be loaded.
+     */
+    public static func pruneStagedMediaDirectories(
+        directory: URL = stagedMediaDirectory(),
+        legacyDirectory: URL = legacyStagedMediaDirectory(),
+        maxAgeSeconds: TimeInterval = 86400 * 7,
+        statusMap: [String: String]? = nil
+    ) {
+        guard let resolvedStatuses = statusMap ?? BranchDamCoreBridge.shared.loadAllMediaStatuses() else {
+            return
+        }
+        pruneStagedMediaDirectory(directory: directory, maxAgeSeconds: maxAgeSeconds, statusMap: resolvedStatuses)
+        let fm = FileManager.default
+        guard legacyDirectory.standardizedFileURL != directory.standardizedFileURL,
+              fm.fileExists(atPath: legacyDirectory.path) else {
+            return
+        }
+        pruneStagedMediaDirectory(directory: legacyDirectory, maxAgeSeconds: maxAgeSeconds, statusMap: resolvedStatuses)
+        if (try? fm.contentsOfDirectory(atPath: legacyDirectory.path))?.isEmpty == true {
+            try? fm.removeItem(at: legacyDirectory)
+        }
     }
 
     /**
@@ -388,8 +434,8 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey]) else { return }
 
-        // Fail closed if bridge is uninitialized and no custom statusMap is supplied
-        guard statusMap != nil || BranchDamCoreBridge.shared.isInitialized else {
+        // Fail closed if bridge is uninitialized or status map cannot be loaded unless custom statusMap is supplied
+        guard let activeStatuses = statusMap ?? BranchDamCoreBridge.shared.loadAllMediaStatuses() else {
             // Still reap orphaned .part files even if bridge is uninitialized
             for file in files where file.pathExtension == "part" {
                 try? fm.removeItem(at: file)
@@ -398,7 +444,6 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
         }
 
         let now = Date()
-        let activeStatuses = statusMap ?? BranchDamCoreBridge.shared.getAllMediaStatuses()
 
         for file in files {
             if file.pathExtension == "part" {
@@ -417,7 +462,7 @@ public class PhotoKitObserver: NSObject, PHPhotoLibraryChangeObserver, @unchecke
     }
 
     /**
-     * Stages a PhotoKit asset resource to a local POSIX path inside Caches/staged_media/.
+     * Stages a PhotoKit asset resource to a local POSIX path inside Application Support/staged_media/.
      * Writes to an atomic .part file first and renames upon completion to ensure
      * incomplete/interrupted writes are never enqueued. Non-blocking async callback.
      */

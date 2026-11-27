@@ -39,7 +39,7 @@ extension AssetStager {
 }
 
 /// Stages through `PhotoKitObserver.stageResourceAtomically`, the same
-/// atomic `.part`-then-rename copy into Caches/staged_media/ that
+/// atomic `.part`-then-rename copy into Application Support/staged_media/ that
 /// auto-import has always used, under the same file name.
 public struct PhotoKitAssetStager: AssetStager {
     public init() {}
@@ -355,8 +355,9 @@ public final class AppleCameraRollImportNotifier: @unchecked Sendable {
     }
 
     /// How many assets are staged at once. Each is a full-size copy into
-    /// Caches, so a large backlog (a first scan, or rows a killed process
-    /// left) is worked through a few at a time rather than all at once.
+    /// Application Support/staged_media/, so a large backlog (a first scan, or
+    /// rows a killed process left) is worked through a few at a time rather than
+    /// all at once.
     static let importChunkSize = 4
 
     /// Imports [items] a chunk at a time; [completion] (on `queue`) gets
