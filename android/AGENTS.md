@@ -28,7 +28,7 @@ Android shell (Kotlin, Jetpack Compose, WorkManager) over the gomobile-bound Go 
   `VERIFIED_REQUIRED` is an ineligible verdict. Don't match on any other part of the message.
 - **`EngineHolder` mocks only when `!nativeAvailable`.** When the native library is loaded but the engine isn't open
   yet, return the failure value (0 / `""` / `false`), as `enqueueMedia` does. Returning a fake UUID or `true` makes
-  callers (e.g. `TrashSyncObserver`) mark the item processed and the event is lost. (Three methods still do this: #304.)
+  callers (e.g. `TrashSyncObserver`) mark the item processed and the event is lost.
 - **Local IDs** are `ContentUris.withAppendedId(<collection the row came from>, id)` (Images or Video); a motion
   photo's video child is `<stillLocalId>/microvideo` (`<uri>/microvideo` for MediaStore items,
   `<uri>#<size>-<mtime>/microvideo` for OTG items). Trash, lineage, reclaim and status all join on them.
