@@ -352,30 +352,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(ioDispatcher) {
             var successCount = 0
             for (item in itemsToUpload) {
-                val primary = item.primaryMediaItem
-                val companion = item.companionMediaItem
-
-                val primaryId = UploadStaging.enqueue(context, primary)
-                var companionId = 0L
-                if (companion != null) {
-                    companionId = UploadStaging.enqueue(context, companion)
-                    if (primaryId > 0L && companionId > 0L && LineageReview.isAutomatic(item.companionConfidence)) {
-                        val eventId = EngineHolder.enqueueLineageEvent(
-                            parentLocalID = companion.contentUri,
-                            childLocalID = primary.contentUri,
-                            relationshipType = "DERIVED_FROM",
-                            resolver = "android_camera_pair",
-                            confidence = 1.00
-                        )
-                        if (eventId.isEmpty()) {
-                            // The edge was not recorded (the engine is not
-                            // open yet): the media upload still stands, but
-                            // the edge is missing.
-                            Log.w(TAG, "lineage edge not recorded: ${companion.contentUri} -> ${primary.contentUri}")
-                        }
-                    }
-                }
-                if (primaryId > 0L || companionId > 0L) {
+                if (enqueueGalleryItem(context, item)) {
                     successCount++
                 }
             }
@@ -398,8 +375,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun uploadItem(context: Context, mediaItem: MediaItem, onComplete: (Boolean) -> Unit) {
         val galleryItem = _items.value.find { it.primaryMediaItem.id == mediaItem.id || it.companionMediaItem?.id == mediaItem.id }
-        val primary = galleryItem?.primaryMediaItem ?: mediaItem
-        val companion = galleryItem?.companionMediaItem
+            ?: GalleryItem(primaryMediaItem = mediaItem)
+        val primary = galleryItem.primaryMediaItem
 
         viewModelScope.launch(ioDispatcher) {
             // The offload lookup is a blocking engine call: keep it off
@@ -408,29 +385,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 withContext(Dispatchers.Main) { onComplete(false) }
                 return@launch
             }
-            val primaryId = UploadStaging.enqueue(context, primary)
-            var companionId = 0L
-            if (companion != null) {
-                companionId = UploadStaging.enqueue(context, companion)
-                if (primaryId > 0L && companionId > 0L &&
-                    LineageReview.isAutomatic(galleryItem?.companionConfidence ?: 0.0)
-                ) {
-                    val eventId = EngineHolder.enqueueLineageEvent(
-                        parentLocalID = companion.contentUri,
-                        childLocalID = primary.contentUri,
-                        relationshipType = "DERIVED_FROM",
-                        resolver = "android_camera_pair",
-                        confidence = 1.00
-                    )
-                    if (eventId.isEmpty()) {
-                        // The edge was not recorded (the engine is not open
-                        // yet): the media upload still stands, but the edge
-                        // is missing.
-                        Log.w(TAG, "lineage edge not recorded: ${companion.contentUri} -> ${primary.contentUri}")
-                    }
-                }
-            }
-            val success = primaryId > 0L || companionId > 0L
+            val success = enqueueGalleryItem(context, galleryItem)
             if (success) {
                 _items.update { list ->
                     list.map { item ->
@@ -445,6 +400,41 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 onComplete(success)
             }
         }
+    }
+
+    private fun enqueueGalleryItem(context: Context, item: GalleryItem): Boolean {
+        val primary = item.primaryMediaItem
+        val companion = item.companionMediaItem
+
+        val primaryId = UploadStaging.enqueue(context, primary, enqueueMedia = enqueueMedia)
+        if (primaryId > 0L) {
+            UploadStaging.enqueueMicroVideo(
+                context,
+                primary,
+                enqueueMedia = enqueueMedia,
+                enqueueLineageEvent = enqueueLineageEvent,
+            )
+        }
+        var companionId = 0L
+        if (companion != null) {
+            companionId = UploadStaging.enqueue(context, companion, enqueueMedia = enqueueMedia)
+            if (primaryId > 0L && companionId > 0L && LineageReview.isAutomatic(item.companionConfidence)) {
+                val eventId = enqueueLineageEvent(
+                    companion.contentUri,
+                    primary.contentUri,
+                    "DERIVED_FROM",
+                    "android_camera_pair",
+                    1.00,
+                )
+                if (eventId.isEmpty()) {
+                    // The edge was not recorded (the engine is not open
+                    // yet): the media upload still stands, but the edge
+                    // is missing.
+                    Log.w(TAG, "lineage edge not recorded: ${companion.contentUri} -> ${primary.contentUri}")
+                }
+            }
+        }
+        return primaryId > 0L || companionId > 0L
     }
 
     fun getItemById(id: Long): GalleryItem? {
@@ -573,5 +563,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         @androidx.annotation.VisibleForTesting
         internal var deleterFactory: (Context) -> MediaStoreDeleter = { MediaStoreDeleter.forContext(it) }
+
+        @androidx.annotation.VisibleForTesting
+        internal var enqueueMedia: com.branchdam.mobile.observer.UploadEnqueuer = EngineHolder::enqueueMedia
+
+        @androidx.annotation.VisibleForTesting
+        internal var enqueueLineageEvent: com.branchdam.mobile.observer.LineageEnqueuer = EngineHolder::enqueueLineageEvent
     }
 }

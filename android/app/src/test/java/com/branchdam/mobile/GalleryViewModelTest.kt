@@ -9,7 +9,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.branchdam.mobile.BranchDamKeys
+import com.branchdam.mobile.EngineHolder
 import com.branchdam.mobile.observer.MediaItem
+import com.branchdam.mobile.observer.UploadStaging
 import com.branchdam.mobile.triage.MediaStoreDeleter
 import com.branchdam.mobile.ui.gallery.GalleryItem
 import com.branchdam.mobile.ui.gallery.GalleryViewModel
@@ -69,6 +71,9 @@ class GalleryViewModelTest {
         GalleryViewModel.ioDispatcher = Dispatchers.IO
         GalleryViewModel.defaultDispatcher = Dispatchers.Default
         GalleryViewModel.deleterFactory = { MediaStoreDeleter.forContext(it) }
+        GalleryViewModel.enqueueMedia = EngineHolder::enqueueMedia
+        GalleryViewModel.enqueueLineageEvent = EngineHolder::enqueueLineageEvent
+        EngineHolder.mockMediaStatusMap.clear()
     }
 
     @Test
@@ -562,5 +567,202 @@ class GalleryViewModelTest {
 
         assertEquals(true, result)
         assertTrue(viewModel.items.value.isEmpty())
+    }
+
+    private fun motionPhotoBytes(payload: ByteArray): ByteArray {
+        val xmp = "http://ns.google.com/photos/1.0/camera/ GCamera:MicroVideo=\"1\" " +
+            "GCamera:MicroVideoOffset=\"${payload.size}\" padding"
+        return xmp.toByteArray(Charsets.ISO_8859_1) + ByteArray(2048) { 0x20 } + payload
+    }
+
+    private fun contextWithMockResolver(
+        files: Map<Uri, ByteArray>,
+    ): Context {
+        val app = ApplicationProvider.getApplicationContext<Context>()
+        val resolver: ContentResolver = mock()
+        for ((uri, bytes) in files) {
+            whenever(resolver.query(eq(uri), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))
+                .thenAnswer {
+                    val cursor: android.database.Cursor = mock()
+                    whenever(cursor.moveToFirst()).thenReturn(true)
+                    whenever(cursor.getLong(0)).thenReturn(bytes.size.toLong())
+                    cursor
+                }
+            whenever(resolver.openInputStream(eq(uri))).thenAnswer { java.io.ByteArrayInputStream(bytes) }
+        }
+        val spyContext = org.mockito.Mockito.spy(app)
+        whenever(spyContext.contentResolver).thenReturn(resolver)
+        return spyContext
+    }
+
+    @Test
+    fun testUploadItem_motionPhotoQueuesStillAndMicroVideoAndDeduplicatesRepeat() = runTest(testDispatcher) {
+        val payload = "GALLERY_MOTION_VIDEO".toByteArray(Charsets.ISO_8859_1)
+        val motionBytes = motionPhotoBytes(payload)
+        val motionUri = Uri.parse("content://media/external/images/media/501")
+        val context = contextWithMockResolver(mapOf(motionUri to motionBytes))
+
+        val enqueued = mutableListOf<Pair<String, String>>()
+        val lineageEvents = mutableListOf<Triple<String, String, String>>()
+        var nextQueueId = 10L
+        GalleryViewModel.enqueueMedia = { path, _, _, localId, _ ->
+            enqueued += Pair(localId, path)
+            nextQueueId++
+        }
+        GalleryViewModel.enqueueLineageEvent = { parent, child, rel, _, confidence ->
+            assertEquals(1.00, confidence, 0.001)
+            lineageEvents += Triple(parent, child, rel)
+            "evt-${lineageEvents.size}"
+        }
+
+        val item = MediaItem(
+            id = 501L,
+            contentUri = motionUri.toString(),
+            filePath = "",
+            displayName = "PXL_501.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = motionBytes.size.toLong(),
+            dateTakenUnix = 1724000000L,
+            isRaw = false,
+        )
+
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+
+        var firstResult: Boolean? = null
+        viewModel.uploadItem(context, item) { firstResult = it }
+        advanceUntilIdle()
+
+        assertEquals(true, firstResult)
+        val childLocalId = "$motionUri/microvideo"
+        assertEquals(listOf(motionUri.toString(), childLocalId), enqueued.map { it.first })
+        assertEquals(
+            UploadStaging.microVideoFile(context, item).absolutePath,
+            enqueued[1].second,
+        )
+        assertEquals("GALLERY_MOTION_VIDEO", java.io.File(enqueued[1].second).readText(Charsets.ISO_8859_1))
+        assertEquals(listOf(Triple(motionUri.toString(), childLocalId, "MOTION_PHOTO_CONTAINS")), lineageEvents)
+
+        // Repeat upload while the micro video is already queued must not create a duplicate video upload row.
+        EngineHolder.mockMediaStatusMap[childLocalId] = "PENDING"
+        enqueued.clear()
+        var secondResult: Boolean? = null
+        viewModel.uploadItem(context, item) { secondResult = it }
+        advanceUntilIdle()
+
+        assertEquals(true, secondResult)
+        assertEquals(listOf(motionUri.toString()), enqueued.map { it.first })
+    }
+
+    @Test
+    fun testUploadSelectedItems_motionPhotoWithRawPairAndOrdinaryStill() = runTest(testDispatcher) {
+        val payload = "SELECTED_MOTION_VIDEO".toByteArray(Charsets.ISO_8859_1)
+        val motionBytes = motionPhotoBytes(payload)
+        val stillBytes = "ORDINARY_JPEG".toByteArray(Charsets.ISO_8859_1)
+        val rawBytes = "RAW_DNG".toByteArray(Charsets.ISO_8859_1)
+
+        val motionUri = Uri.parse("content://media/external/images/media/601")
+        val rawUri = Uri.parse("content://media/external/images/media/602")
+        val stillUri = Uri.parse("content://media/external/images/media/603")
+        val context = contextWithMockResolver(
+            mapOf(
+                motionUri to motionBytes,
+                rawUri to rawBytes,
+                stillUri to stillBytes,
+            )
+        )
+
+        val enqueued = mutableListOf<Pair<String, String>>()
+        val lineageEvents = mutableListOf<Triple<String, String, String>>()
+        var nextQueueId = 100L
+        GalleryViewModel.enqueueMedia = { path, _, _, localId, _ ->
+            enqueued += Pair(localId, path)
+            nextQueueId++
+        }
+        GalleryViewModel.enqueueLineageEvent = { parent, child, rel, _, _ ->
+            lineageEvents += Triple(parent, child, rel)
+            "evt-${lineageEvents.size}"
+        }
+
+        val motionPrimary = MediaItem(
+            id = 601L,
+            contentUri = motionUri.toString(),
+            filePath = "",
+            displayName = "PXL_601.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = motionBytes.size.toLong(),
+            dateTakenUnix = 1724000000L,
+            isRaw = false,
+        )
+        val rawCompanion = MediaItem(
+            id = 602L,
+            contentUri = rawUri.toString(),
+            filePath = "",
+            displayName = "PXL_601.dng",
+            mimeType = "image/x-adobe-dng",
+            sizeBytes = rawBytes.size.toLong(),
+            dateTakenUnix = 1724000000L,
+            isRaw = true,
+        )
+        val ordinaryStill = MediaItem(
+            id = 603L,
+            contentUri = stillUri.toString(),
+            filePath = "",
+            displayName = "PXL_603.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = stillBytes.size.toLong(),
+            dateTakenUnix = 1724000001L,
+            isRaw = false,
+        )
+
+        val viewModel = GalleryViewModel(ApplicationProvider.getApplicationContext())
+        advanceUntilIdle()
+        viewModel.setItemsForTesting(
+            listOf(
+                GalleryItem(
+                    primaryMediaItem = motionPrimary,
+                    companionMediaItem = rawCompanion,
+                    companionConfidence = 1.00,
+                    lineageStatus = "RAW+JPEG",
+                ),
+                GalleryItem(
+                    primaryMediaItem = ordinaryStill,
+                    lineageStatus = "Unpaired",
+                ),
+            )
+        )
+        viewModel.toggleSelection(601L)
+        viewModel.toggleSelection(603L)
+
+        var selectedCount = -1
+        viewModel.uploadSelectedItems(context) { selectedCount = it }
+        advanceUntilIdle()
+
+        assertEquals(2, selectedCount)
+        val childLocalId = "$motionUri/microvideo"
+        assertEquals(
+            listOf(motionUri.toString(), childLocalId, rawUri.toString(), stillUri.toString()),
+            enqueued.map { it.first },
+        )
+        assertFalse(
+            "ordinary still must not produce a microvideo staging file",
+            UploadStaging.microVideoFile(context, ordinaryStill).exists(),
+        )
+        assertTrue(
+            lineageEvents.contains(Triple(motionUri.toString(), childLocalId, "MOTION_PHOTO_CONTAINS")),
+        )
+        assertTrue(
+            lineageEvents.contains(Triple(rawUri.toString(), motionUri.toString(), "DERIVED_FROM")),
+        )
+
+        // Repeat selection upload skips re-enqueuing the already-queued micro video.
+        EngineHolder.mockMediaStatusMap[childLocalId] = "COMPLETED"
+        enqueued.clear()
+        viewModel.toggleSelection(601L)
+        viewModel.uploadSelectedItems(context) { selectedCount = it }
+        advanceUntilIdle()
+
+        assertEquals(1, selectedCount)
+        assertEquals(listOf(motionUri.toString(), rawUri.toString()), enqueued.map { it.first })
     }
 }
