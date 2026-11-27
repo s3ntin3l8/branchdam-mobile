@@ -187,22 +187,24 @@ public class BackgroundSyncManager: @unchecked Sendable {
     }
 
     private func handleBackgroundSync(task: BGProcessingTask) {
-        task.expirationHandler = runBackgroundSync(
+        runBackgroundSync(
             complete: { task.setTaskCompleted(success: $0) },
-            cancel: { BranchDamCoreBridge.shared.setCancelFlag() }
+            cancel: { BranchDamCoreBridge.shared.setCancelFlag() },
+            install: { task.expirationHandler = $0 }
         )
     }
 
     /// Runs the background sync state machine without a `BGProcessingTask` so
     /// tests can drive all three exit paths (expiry, mobile-data skip, and
-    /// normal completion). Returns the expiration handler to install on the
-    /// task or invoke directly in tests.
+    /// normal completion). Calls `install` with the expiration handler before
+    /// starting any work, and returns the handler so tests can invoke it directly.
     @discardableResult
     func runBackgroundSync(
         isOnCellular: Bool? = nil,
         queue: DispatchQueue = .global(qos: .background),
         complete: @escaping @Sendable (Bool) -> Void,
-        cancel: @escaping @Sendable () -> Void
+        cancel: @escaping @Sendable () -> Void,
+        install: (@escaping @Sendable () -> Void) -> Void = { _ in }
     ) -> @Sendable () -> Void {
         // E.4: Set the Go engine's cancel flag so in-flight HTTP transfers
         // stop promptly when iOS reclaims the background time.
@@ -216,6 +218,7 @@ public class BackgroundSyncManager: @unchecked Sendable {
                 scheduleNext()
             }
         }
+        install(expirationHandler)
 
         // BGProcessingTaskRequest can only ask for "any network"; enforce
         // the mobile-data setting here and try again at the next window.

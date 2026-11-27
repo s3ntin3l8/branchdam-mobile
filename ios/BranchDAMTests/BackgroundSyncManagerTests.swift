@@ -281,9 +281,10 @@ final class BackgroundSyncManagerTests: XCTestCase {
         manager.afterBatchSweep = { batchSwept.fulfill() }
         manager.schedule = { calls.record("schedule") }
 
+        let queue = DispatchQueue(label: "test.backgroundSync.expiryThenCompletion", qos: .userInitiated)
         let expire = manager.runBackgroundSync(
             isOnCellular: false,
-            queue: .global(qos: .userInitiated),
+            queue: queue,
             complete: { success in calls.record("complete(\(success))") },
             cancel: { calls.record("cancel") }
         )
@@ -292,8 +293,8 @@ final class BackgroundSyncManagerTests: XCTestCase {
         expire()
         releaseBatch.signal()
         wait(for: [batchSwept], timeout: 15.0)
-        // Give the background closure a moment to reach tracker.completeOnce after sweep().
-        Thread.sleep(forTimeInterval: 0.05)
+        // Drain the serial queue so tracker.completeOnce finishes before asserting.
+        queue.sync {}
 
         XCTAssertEqual(calls.calls, ["cancel", "complete(false)", "schedule"])
     }
