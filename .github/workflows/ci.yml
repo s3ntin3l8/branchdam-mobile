@@ -108,7 +108,7 @@ jobs:
 
   test-mobile:
     name: Mobile CI (Android & iOS)
-    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@main
+    uses: s3ntin3l8/.github/.github/workflows/ci-mobile.yml@74ced3f
     with:
       java-version: '21'
       android-ndk-version: '25.1.8937393'
