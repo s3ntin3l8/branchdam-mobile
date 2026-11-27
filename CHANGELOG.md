@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.15](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.14...branchdam-mobile-v0.7.15) (2026-11-27)
+
+
+### Features
+
+* **ios:** surface AUTH_FAILED from sync and prompt to re-pair ([c46aeaf](https://github.com/s3ntin3l8/branchdam-mobile/commit/c46aeaf79c072239dfa9e59b2b846e7d1d10cf11))
+
+
+### Bug Fixes
+
+* **android:** archive motion-photo videos from gallery and OTG uploads ([d435d42](https://github.com/s3ntin3l8/branchdam-mobile/commit/d435d42b6f423cca25d45940d3616260b4b428eb))
+* **android:** archive the micro video of an accepted motion photo ([bc8e4a9](https://github.com/s3ntin3l8/branchdam-mobile/commit/bc8e4a91a7a297185481b04f9e6201e1140e2d1c))
+* **android:** EngineHolder reports success while the engine is not open ([0b42052](https://github.com/s3ntin3l8/branchdam-mobile/commit/0b42052cf5f3e8bbb6b050c5ab364e748aef74de))
+* **android:** never reclaim an original whose upload was a location-redacted copy ([d94e6f5](https://github.com/s3ntin3l8/branchdam-mobile/commit/d94e6f5fb6ff96f123b123b4d384107decc53b6f))
+* **android:** stage motion-photo micro videos with the upload staging copies ([d5a7f07](https://github.com/s3ntin3l8/branchdam-mobile/commit/d5a7f07988569b33cb6fa91e90a9fd873793a691))
+* **core:** release the row when preScreen cannot mark it complete ([01a40ef](https://github.com/s3ntin3l8/branchdam-mobile/commit/01a40ef5a3bb3d93b9dbc26a58dbe5fc7e0e09a1))
+* **ios:** reschedule background sync when the task expires ([080c331](https://github.com/s3ntin3l8/branchdam-mobile/commit/080c331cc967df25ef8ee57e57aee325862426dc))
+* **ios:** stage camera-roll media outside Caches ([d87dcc9](https://github.com/s3ntin3l8/branchdam-mobile/commit/d87dcc9914f9a17c9ecd2787d6b7551d076b46f7))
+
 ## [0.7.14](https://github.com/s3ntin3l8/branchdam-mobile/compare/branchdam-mobile-v0.7.13...branchdam-mobile-v0.7.14) (2026-11-24)
 
 
