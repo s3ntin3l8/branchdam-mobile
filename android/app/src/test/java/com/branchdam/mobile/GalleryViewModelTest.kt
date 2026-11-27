@@ -73,6 +73,7 @@ class GalleryViewModelTest {
         GalleryViewModel.deleterFactory = { MediaStoreDeleter.forContext(it) }
         GalleryViewModel.enqueueMedia = EngineHolder::enqueueMedia
         GalleryViewModel.enqueueLineageEvent = EngineHolder::enqueueLineageEvent
+        GalleryViewModel.mediaStatusProvider = EngineHolder::getMediaStatus
         EngineHolder.mockMediaStatusMap.clear()
     }
 
@@ -644,7 +645,7 @@ class GalleryViewModelTest {
         assertEquals(listOf(Triple(motionUri.toString(), childLocalId, "MOTION_PHOTO_CONTAINS")), lineageEvents)
 
         // Repeat upload while the micro video is already queued must not create a duplicate video upload row.
-        EngineHolder.mockMediaStatusMap[childLocalId] = "PENDING"
+        GalleryViewModel.mediaStatusProvider = { id -> if (id == childLocalId) "PENDING" else "NOT_ENQUEUED" }
         enqueued.clear()
         var secondResult: Boolean? = null
         viewModel.uploadItem(context, item) { secondResult = it }

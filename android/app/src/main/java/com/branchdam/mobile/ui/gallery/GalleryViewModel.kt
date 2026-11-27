@@ -413,6 +413,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 primary,
                 enqueueMedia = enqueueMedia,
                 enqueueLineageEvent = enqueueLineageEvent,
+                statusProvider = mediaStatusProvider,
             )
         }
         var companionId = 0L
@@ -569,5 +570,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         @androidx.annotation.VisibleForTesting
         internal var enqueueLineageEvent: com.branchdam.mobile.observer.LineageEnqueuer = EngineHolder::enqueueLineageEvent
+
+        @androidx.annotation.VisibleForTesting
+        internal var mediaStatusProvider: (String) -> String = EngineHolder::getMediaStatus
     }
 }

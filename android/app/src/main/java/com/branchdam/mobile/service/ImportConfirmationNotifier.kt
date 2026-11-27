@@ -288,6 +288,7 @@ object ImportConfirmationNotifier {
                     mediaItem,
                     enqueueMedia = enqueueMedia,
                     enqueueLineageEvent = enqueueLineageEvent,
+                    statusProvider = EngineHolder::getMediaStatus,
                 )
             }
             if (microVideoResult != UploadStaging.MicroVideoResult.RETRY) {
