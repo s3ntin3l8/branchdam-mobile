@@ -8,7 +8,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/uuid v1.6.0
 	github.com/zeebo/blake3 v0.2.4
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.63.0
 )
 
 // x86_64 Android seccomp fix (#211): overlays modernc.org/libc v1.80.1 to use modern *at syscalls (scripts/update-libc-overlay.sh)
