@@ -181,7 +181,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
 
     // QR code scanning via CameraX + ML Kit (bundled, no network needed).
-    val cameraxVersion = "1.4.1"
+    val cameraxVersion = "1.7.0"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
